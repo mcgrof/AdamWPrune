@@ -4,6 +4,7 @@ import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
 from torch.amp import autocast, GradScaler
+from torch.optim.lr_scheduler import CosineAnnealingLR
 import time
 import logging
 import json
@@ -36,7 +37,7 @@ parser.add_argument(
     "--optimizer",
     type=str,
     default="sgd",
-    choices=["sgd", "adam", "adamw"],
+    choices=["sgd", "adam", "adamw", "adamwadv"],
     help="Optimizer to use for training (default: sgd)",
 )
 parser.add_argument(
@@ -217,6 +218,9 @@ else:
 cost = nn.CrossEntropyLoss()
 
 # Setting the optimizer with the model parameters and learning rate
+scheduler = None
+gradient_clip_norm = None
+
 if args.optimizer == "adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     logger.info("Using Adam optimizer")
@@ -225,6 +229,25 @@ elif args.optimizer == "adamw":
         model.parameters(), lr=learning_rate, weight_decay=1e-4
     )
     logger.info("Using AdamW optimizer with weight decay=0.01")
+elif args.optimizer == "adamwadv":
+    # AdamW Advanced with all enhancements
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=learning_rate,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+        weight_decay=0.01,  # Stronger weight decay for better regularization
+        amsgrad=True,  # AMSGrad variant for better convergence
+    )
+    # Cosine annealing learning rate scheduler
+    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
+    # Gradient clipping for stability
+    gradient_clip_norm = 1.0
+    logger.info("Using AdamW Advanced optimizer with:")
+    logger.info("  - AMSGrad enabled for better convergence")
+    logger.info("  - Weight decay=0.01 for stronger regularization")
+    logger.info("  - Cosine annealing LR schedule")
+    logger.info("  - Gradient clipping norm=1.0")
 else:
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
     logger.info("Using SGD optimizer with momentum=0.9")
@@ -308,6 +331,12 @@ for epoch in range(num_epochs):
         # Backward and optimize with gradient scaling
         optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
         scaler.scale(loss).backward()
+
+        # Apply gradient clipping if enabled (for AdamWAdv)
+        if gradient_clip_norm is not None:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_norm)
+
         scaler.step(optimizer)
         scaler.update()
 
@@ -398,6 +427,12 @@ for epoch in range(num_epochs):
             else 0
         )
         training_metrics["epochs"].append(epoch_metrics)
+
+        # Step the learning rate scheduler if using AdamWAdv
+        if scheduler is not None:
+            scheduler.step()
+            current_lr = scheduler.get_last_lr()[0]
+            logger.info(f"Learning rate adjusted to: {current_lr:.6f}")
 
 total_time = time.time() - start_time
 logger.info(f"Training completed in {total_time:.2f} seconds")

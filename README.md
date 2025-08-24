@@ -29,6 +29,39 @@ Movement pruning is implemented based on the paper ["Movement Pruning: Adaptive 
 
 3. **Global Magnitude Pruning**: Uses a global threshold across all layers for balanced compression
 
+## AdamW Advanced (AdamWAdv)
+
+AdamWAdv is an enhanced version of the AdamW optimizer that includes all recommended optimizations for improved training stability and convergence. This configuration combines multiple techniques that have been shown to improve neural network training:
+
+### Features and References
+
+1. **AMSGrad**: Ensures convergence by maintaining the maximum of exponential moving average of squared gradients
+   - Reference: ["On the Convergence of Adam and Beyond"](https://arxiv.org/abs/1904.09237) (Reddi et al., 2018)
+
+2. **Cosine Annealing Learning Rate Schedule**: Smoothly reduces learning rate following a cosine curve
+   - Reference: ["SGDR: Stochastic Gradient Descent with Warm Restarts"](https://arxiv.org/abs/1608.03983) (Loshchilov & Hutter, 2017)
+
+3. **Gradient Clipping**: Prevents gradient explosions by limiting the norm of gradients
+   - Reference: ["On the difficulty of training recurrent neural networks"](https://arxiv.org/abs/1211.5063) (Pascanu et al., 2013)
+
+4. **Decoupled Weight Decay**: AdamW's core feature that decouples weight decay from gradient-based optimization
+   - Reference: ["Decoupled Weight Decay Regularization"](https://arxiv.org/abs/1711.05101) (Loshchilov & Hutter, 2019)
+
+5. **Tuned Hyperparameters**:
+   - Weight decay = 0.01 for stronger regularization
+   - β₁ = 0.9, β₂ = 0.999 (standard values)
+   - ε = 1e-8 for numerical stability
+
+### Usage
+
+```bash
+# Train with AdamW Advanced optimizer
+python train.py --optimizer adamwadv
+
+# Combine with movement pruning
+python train.py --optimizer adamwadv --pruning-method movement --target-sparsity 0.9
+```
+
 ## Install dependencies
 
 ```bash
@@ -53,14 +86,20 @@ SGD Baseline              96.24       % 1.00        x 61,750/61,750   16.39     
 SGD 50% Pruning           97.02       % 1.99        x 31,015/61,750   16.28       s
 SGD 70% Pruning           96.16       % 3.30        x 18,721/61,750   16.18       s
 SGD 90% Pruning           95.31       % 9.61        x 6,427/61,750    16.12       s
-Adam Baseline             98.90       % 1.00        x 61,750/61,750   16.34       s
-Adam 50% Pruning          98.99       % 1.99        x 31,015/61,750   16.31       s
-Adam 70% Pruning          99.19       % 3.30        x 18,721/61,750   16.17       s
-Adam 90% Pruning          98.22       % 9.61        x 6,427/61,750    16.43       s
+Adam Baseline             98.43       % 1.00        x 61,750/61,750   16.96       s
+Adam 50% Pruning          98.93       % 1.99        x 31,015/61,750   16.66       s
+Adam 70% Pruning          98.95       % 3.30        x 18,721/61,750   16.29       s
+Adam 90% Pruning          98.15       % 9.61        x 6,427/61,750    16.61       s
 AdamW Baseline            98.84       % 1.00        x 61,750/61,750   16.31       s
 AdamW 50% Pruning         98.85       % 1.99        x 31,015/61,750   16.32       s
 AdamW 70% Pruning         98.99       % 3.30        x 18,721/61,750   16.46       s
 AdamW 90% Pruning         97.97       % 9.61        x 6,427/61,750    16.45       s
+AdamWAdv Baseline         98.83       % 1.00        x 61,750/61,750   17.25       s
+AdamWAdv 50% Pruning      99.08       % 1.99        x 31,015/61,750   16.43       s
+AdamWAdv 70% Pruning      98.64       % 3.30        x 18,721/61,750   16.79       s
+AdamWAdv 90% Pruning      87.80       % 9.61        x 6,427/61,750    16.76       s
+================================================================================
+
 ================================================================================
 
 ```
@@ -92,7 +131,7 @@ python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup
 
 ### Command-Line Arguments
 
-- `--optimizer`: Optimizer to use, by default we use "SGD", other options are "adam", "adamw"
+- `--optimizer`: Optimizer to use, by default we use "SGD", other options are "adam", "adamw", "adamwadv"
 - `--pruning-method`: Pruning method to use (`none` or `movement`, default: `none`)
 - `--target-sparsity`: Target sparsity level 0.0-1.0 (default: `0.9`)
 - `--pruning-warmup`: Number of training steps before pruning starts (default: `100`)
@@ -122,6 +161,14 @@ python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup
 *Comparison of all model configurations*
 
 ![Accuracy Evolution](images/adamw-with-movement-accuracy_evolution.png)
+*Test accuracy evolution across epochs for different pruning levels*
+
+## AdamWAdv
+
+![Model Comparison](images/adamwadv-with-movement-pruning-model_comparison.png)
+*Comparison of all model configurations*
+
+![Accuracy Evolution](images/adamwadv-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
 
 ## Visualization

@@ -56,7 +56,7 @@ parser.add_argument(
     "--test-prefix",
     type=str,
     default="SGD",
-    choices=["SGD", "Adam", "AdamW"],
+    choices=["SGD", "Adam", "AdamW", "AdamWAdv"],
     help='Prefix to use for tests labels (default: "SGD")',
 )
 parser.add_argument(
@@ -99,26 +99,32 @@ fig.suptitle(
 )
 
 # Define colors for different optimizers
-sgd_colors = ["#1f77b4", "#aec7e8", "#174a7e", "#6baed6"]
-sgd_colors = ["#1f77b4", "#aec7e8", "#174a7e", "#6baed6"]
-adamw_colors = ["#ff7f0e", "#d62728"]
+sgd_colors = ["#1f77b4", "#aec7e8", "#174a7e", "#6baed6"]  # Blues
+adam_colors = ["#2ca02c", "#98df8a", "#27ae60", "#52c77e"]  # Greens
+adamw_colors = ["#ff7f0e", "#ffbb78", "#ff9800", "#ffc947"]  # Oranges
+adamwadv_colors = ["#d62728", "#ff9896", "#e74c3c", "#ffb3ba"]  # Reds
 
 
 def get_color_and_style(name):
-    if "AdamW" in name:
-        if "Baseline" in name:
-            return adamw_colors[0], "-"
-        else:
-            return adamw_colors[1], "--"
+    # Determine the optimizer type from the name
+    if "AdamWAdv" in name or "adamwadv" in name.lower():
+        colors = adamwadv_colors
+    elif "AdamW" in name or "adamw" in name.lower():
+        colors = adamw_colors
+    elif "Adam" in name or "adam" in name.lower():
+        colors = adam_colors
     else:  # SGD
-        if "Baseline" in name:
-            return sgd_colors[0], "-"
-        elif "50%" in name:
-            return sgd_colors[1], "--"
-        elif "70%" in name:
-            return sgd_colors[2], "--"
-        else:  # 90%
-            return sgd_colors[3], "--"
+        colors = sgd_colors
+
+    # Determine which variant (baseline, 50%, 70%, 90%)
+    if "Baseline" in name:
+        return colors[0], "-"
+    elif "50%" in name:
+        return colors[1], "--"
+    elif "70%" in name:
+        return colors[2], "--"
+    else:  # 90%
+        return colors[3], "--"
 
 
 # 1. Accuracy over epochs
@@ -231,7 +237,15 @@ labels = [name for name, _ in sorted_models]
 
 for i, (comp, acc, label) in enumerate(zip(compression_ratios, final_accs, labels)):
     color = get_color_and_style(label)[0]
-    marker = "o" if "SGD" in label else "s"
+    # Different markers for different optimizers
+    if "SGD" in label or "sgd" in label.lower():
+        marker = "o"
+    elif "AdamWAdv" in label or "adamwadv" in label.lower():
+        marker = "D"  # Diamond
+    elif "AdamW" in label or "adamw" in label.lower():
+        marker = "^"  # Triangle up
+    else:  # Adam
+        marker = "s"  # Square
     ax6.scatter(
         comp,
         acc,
@@ -288,7 +302,15 @@ fig2.suptitle(
 
 for name, data in sorted_models:
     color, style = get_color_and_style(name)
-    marker = "o" if "SGD" in name else "s"
+    # Different markers for different optimizers
+    if "SGD" in name or "sgd" in name.lower():
+        marker = "o"
+    elif "AdamWAdv" in name or "adamwadv" in name.lower():
+        marker = "D"  # Diamond
+    elif "AdamW" in name or "adamw" in name.lower():
+        marker = "^"  # Triangle up
+    else:  # Adam
+        marker = "s"  # Square
     ax.plot(
         data["epochs"],
         data["accuracies"],
