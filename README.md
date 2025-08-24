@@ -1,0 +1,152 @@
+# LeNet-5 with Movement Pruning
+
+This repository implements LeNet-5 for MNIST digit classification with support
+for movement pruning, an adaptive sparsity technique for model compression.
+It starts off with a basic implementation inspired by Digital Ocean's
+["Writing Lenet-5 From Scrach in Python"](https://www.digitalocean.com/community/tutorials/writing-lenet5-from-scratch-in-python)
+as a source, and then enhance it for performance and adds some more R&D
+topics.
+
+## Features
+
+- **LeNet-5 Architecture**: Classic CNN for digit recognition, with an Adam optimizer
+- **GPU Optimization**: Optimized to run on GPUs
+- **Movement Pruning**: Adaptive sparsity based on weight movements during training
+- **Logging**: Detailed training metrics and visualization support
+- **A/B/C/D Testing**: Compare multiple pruning configurations with visualization
+
+## Movement Pruning
+
+Movement pruning is implemented based on the paper ["Movement Pruning: Adaptive Sparsity by Fine-Tuning"](https://arxiv.org/abs/2005.07683) by Sanh et al. (2020). This technique achieves model compression by learning which weights to prune during training based on their movement patterns.
+
+### How It Works
+
+1. **Movement Scoring**: For each weight, compute the movement score: `S_i = W_i * (W_i - W_i^0)`
+   - Positive scores indicate weights moving away from zero (kept)
+   - Negative scores indicate weights moving towards zero (pruned)
+
+2. **Adaptive Sparsity**: Gradually increases sparsity from 0% to target level during training
+
+3. **Global Magnitude Pruning**: Uses a global threshold across all layers for balanced compression
+
+## Install dependencies
+
+```bash
+pip install torch torchvision numpy matplotlib logging json
+```
+
+## Usage
+
+### Reproduce findings and graph results
+
+```bash
+make
+```
+
+You should see something like this in less than 5 minutes:
+
+```
+Saved comprehensive comparison plot as 'model_comparison.png'
+
+================================================================================
+PERFORMANCE COMPARISON TABLE
+================================================================================
+Model                     Accuracy     Compression  Parameters      Training Time
+--------------------------------------------------------------------------------
+SGD Baseline              98.66       % 1.00        x 61,750/61,750   16.61       s
+SGD 50% Pruning           98.89       % 1.99        x 31,015/61,750   16.36       s
+SGD 70% Pruning           98.99       % 3.30        x 18,721/61,750   16.18       s
+SGD 90% Pruning           98.26       % 9.61        x 6,427/61,750    16.43       s
+================================================================================
+
+Saved accuracy evolution plot as 'accuracy_evolution.png'
+
+Plots generated successfully!
+- model_comparison.png: Comprehensive 6-panel comparison
+- accuracy_evolution.png: Detailed accuracy evolution plot
+```
+
+### Basic Training (No Pruning)
+
+```bash
+python train.py
+```
+
+### Training with Movement Pruning
+
+```bash
+# Train with 90% sparsity (default)
+python train.py --pruning-method movement
+
+# Train with custom sparsity level (50%)
+python train.py --pruning-method movement --target-sparsity 0.5
+
+# Adjust warmup steps before pruning begins
+python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup 200
+```
+
+### Command-Line Arguments
+
+- `--pruning-method`: Pruning method to use (`none` or `movement`, default: `none`)
+- `--target-sparsity`: Target sparsity level 0.0-1.0 (default: `0.9`)
+- `--pruning-warmup`: Number of training steps before pruning starts (default: `100`)
+
+## Performance Results
+
+### Model Comparison
+
+![Model Comparison](images/sgd-with-movement-pruning-model_comparison.png)
+*Comparison of all model configurations*
+
+![Accuracy Evolution](images/sgd-with-movement-accuracy_evolution.png)
+*Test accuracy evolution across epochs for different pruning levels*
+
+## Visualization
+
+### Generate Comparison Plots
+
+To generate comprehensive model comparison plots:
+
+```bash
+python plot_comparison.py
+```
+
+This creates:
+- `model_comparison.png`: 6-panel comprehensive comparison including accuracy, loss, sparsity progression, final accuracy bars, compression ratios, and accuracy vs compression trade-off
+- `accuracy_evolution.png`: Detailed accuracy evolution across training epochs
+
+### Generate Individual Training Plots
+
+To visualize individual training metrics:
+
+```bash
+python plot_training.py
+```
+
+This generates `training_plot.png` showing loss and accuracy curves over epochs.
+
+## Technical Details
+
+### Supported Layers
+- Convolutional layers (Conv2d)
+- Fully connected layers (Linear)
+
+### Pruning Schedule
+- **Warmup Phase**: No pruning for initial steps (configurable)
+- **Ramping Phase**: Linear increase from 0% to target sparsity
+- **Final Phase**: Maintain target sparsity level
+
+### Implementation Files
+- `train.py`: Main training script with pruning integration
+- `movement_pruning.py`: Movement pruning implementation
+- `plot_training.py`: Visualization utilities
+
+## Hardware Requirements
+
+- **GPU**: Any GPU with at least ~ 10 MiB of Memory
+- **Memory**: Sufficient RAM for dataset loading
+- **Storage**: ~200MB for MNIST dataset
+
+## License
+
+This implementation is provided for educational and research purposes.

@@ -9,6 +9,34 @@ import logging
 import json
 from datetime import datetime
 import os
+import argparse
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="LeNet-5 training with optional pruning")
+parser.add_argument(
+    "--pruning-method",
+    type=str,
+    default="none",
+    choices=["none", "movement"],
+    help="Pruning method to use (default: none)",
+)
+parser.add_argument(
+    "--target-sparsity",
+    type=float,
+    default=0.9,
+    help="Target sparsity for pruning (default: 0.9)",
+)
+parser.add_argument(
+    "--pruning-warmup",
+    type=int,
+    default=100,
+    help="Number of warmup steps before pruning starts (default: 100)",
+)
+args = parser.parse_args()
+
+# Conditionally import pruning module
+if args.pruning_method == "movement":
+    from movement_pruning import MovementPruning
 
 # Define relevant variables for the ML task
 batch_size = 512
@@ -17,8 +45,17 @@ learning_rate = 0.001
 num_epochs = 10
 num_workers = 16  # Use multiple workers for data loading
 
+# Movement pruning hyperparameters (when enabled)
+enable_pruning = args.pruning_method != "none"
+initial_sparsity = 0.0  # Start with no pruning
+target_sparsity = args.target_sparsity
+warmup_steps = args.pruning_warmup
+pruning_frequency = 50  # Update masks every 50 steps
+ramp_end_epoch = 8  # Reach target sparsity by epoch 8
+
 # Device will determine whether to run the training on GPU or CPU.
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # Setup logging
 log_filename = "train.log"
 logging.basicConfig(
@@ -40,6 +77,9 @@ training_metrics = {
         "learning_rate": learning_rate,
         "num_epochs": num_epochs,
         "num_workers": num_workers,
+        "pruning_method": args.pruning_method,
+        "target_sparsity": target_sparsity if enable_pruning else None,
+        "pruning_warmup": warmup_steps if enable_pruning else None,
     },
     "epochs": [],
 }
@@ -168,6 +208,31 @@ optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 # Initialize GradScaler for mixed precision training
 scaler = GradScaler("cuda")
 
+# Initialize pruning if enabled
+pruner = None
+if enable_pruning and args.pruning_method == "movement":
+    # Calculate total training steps for pruning schedule
+    total_training_steps = len(train_loader) * ramp_end_epoch
+    pruner = MovementPruning(
+        model=model,
+        initial_sparsity=initial_sparsity,
+        target_sparsity=target_sparsity,
+        warmup_steps=warmup_steps,
+        pruning_frequency=pruning_frequency,
+        ramp_end_step=total_training_steps,
+    )
+    logger.info(f"Movement pruning enabled with target sparsity: {target_sparsity}")
+    logger.info(
+        f"Pruning warmup steps: {warmup_steps}, ramp end: {total_training_steps}"
+    )
+    training_metrics["pruning"] = {
+        "method": "movement",
+        "initial_sparsity": initial_sparsity,
+        "target_sparsity": target_sparsity,
+        "warmup_steps": warmup_steps,
+        "ramp_end_step": total_training_steps,
+    }
+
 # this is defined to print how many steps are remaining when training
 total_step = len(train_loader)
 
@@ -221,6 +286,10 @@ for epoch in range(num_epochs):
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
+
+        # Apply movement pruning if enabled
+        if pruner is not None:
+            pruner.step_pruning()
 
         running_loss += loss.item()
 
@@ -280,9 +349,21 @@ for epoch in range(num_epochs):
 
         accuracy = 100 * correct / total
         epoch_time = time.time() - epoch_start
-        logger.info(
-            f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f}s, Test Accuracy: {accuracy:.2f}%"
-        )
+
+        # Log pruning statistics if enabled
+        if pruner is not None:
+            sparsity_stats = pruner.get_sparsity_stats()
+            global_sparsity = sparsity_stats["global"]["sparsity"]
+            logger.info(
+                f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f}s, "
+                f"Test Accuracy: {accuracy:.2f}%, Sparsity: {global_sparsity:.2%}"
+            )
+            epoch_metrics["sparsity"] = global_sparsity
+            epoch_metrics["sparsity_stats"] = sparsity_stats
+        else:
+            logger.info(
+                f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f}s, Test Accuracy: {accuracy:.2f}%"
+            )
 
         # Store epoch metrics
         epoch_metrics["accuracy"] = accuracy
@@ -298,6 +379,22 @@ total_time = time.time() - start_time
 logger.info(f"Training completed in {total_time:.2f} seconds")
 logger.info(f"Average time per epoch: {total_time/num_epochs:.2f} seconds")
 
+# Log final pruning statistics
+if pruner is not None:
+    final_sparsity = pruner.prune_model_final()
+    logger.info(f"Final model sparsity: {final_sparsity:.2%}")
+
+    # Count remaining parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    non_zero_params = sum((p != 0).sum().item() for p in model.parameters())
+    logger.info(f"Total parameters: {total_params:,}")
+    logger.info(f"Non-zero parameters: {non_zero_params:,}")
+    logger.info(f"Compression ratio: {total_params/non_zero_params:.2f}x")
+
+    training_metrics["final_sparsity"] = final_sparsity
+    training_metrics["total_params"] = total_params
+    training_metrics["non_zero_params"] = non_zero_params
+
 # Final metrics
 training_metrics["total_training_time"] = total_time
 training_metrics["avg_time_per_epoch"] = total_time / num_epochs
@@ -306,16 +403,18 @@ training_metrics["end_time"] = datetime.now().isoformat()
 
 # Save the model. This uses buffered IO, so we flush to measure how long
 # it takes to save with writeback incurred to the filesystem.
+model_filename = "lenet5_pruned.pth" if enable_pruning else "lenet5_optimized.pth"
 save_start_time = time.time()
-with open("lenet5_optimized.pth", "wb") as f:
+with open(model_filename, "wb") as f:
     torch.save(model.state_dict(), f)
     f.flush()
     os.fsync(f.fileno())
 training_metrics["save_time"] = time.time() - save_start_time
-training_metrics["save_size"] = os.path.getsize("lenet5_optimized.pth")
+training_metrics["save_size"] = os.path.getsize(model_filename)
 
 logger.info(
-    "Model saved as lenet5_optimized.pth (%.2f MB) in %.2fs",
+    "Model saved as %s (%.2f MB) in %.2fs",
+    model_filename,
     training_metrics["save_size"] / (1024 * 1024),
     training_metrics["save_time"],
 )
