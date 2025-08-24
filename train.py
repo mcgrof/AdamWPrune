@@ -9,8 +9,9 @@ batch_size = 512
 num_classes = 10
 learning_rate = 0.001
 num_epochs = 10
+num_workers = 16  # Use multiple workers for data loading
 
- # Device will determine whether to run the training on GPU or CPU.
+# Device will determine whether to run the training on GPU or CPU.
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 if device.type == "cuda":
@@ -49,12 +50,23 @@ test_dataset = torchvision.datasets.MNIST(
 
 
 train_loader = torch.utils.data.DataLoader(
-    dataset=train_dataset, batch_size=batch_size, shuffle=True
+    dataset=train_dataset,
+    batch_size=batch_size,
+    shuffle=True,
+    num_workers=num_workers,
+    pin_memory=True,  # Pin memory for faster GPU transfer
+    persistent_workers=True,  # Keep workers alive between epochs
+    prefetch_factor=2,  # Prefetch batches
 )
 
 
 test_loader = torch.utils.data.DataLoader(
-    dataset=test_dataset, batch_size=batch_size, shuffle=True
+    dataset=test_dataset,
+    batch_size=batch_size * 2,  # Larger batch for testing since no gradients
+    shuffle=False,  # No need to shuffle test data
+    num_workers=num_workers,
+    pin_memory=True,
+    persistent_workers=True,
 )
 
 
@@ -122,3 +134,11 @@ for epoch in range(num_epochs):
                     epoch + 1, num_epochs, i + 1, total_step, loss.item()
                 )
             )
+
+print("Training completed!")
+
+# We use persistent_workers=True to keep workers accross epochs, so to not
+# have to spawn  new ones. When we finish triajning we just need to clean up
+# persistent workers explicitly, otherwise this will delay the exit.
+del train_loader
+del test_loader
