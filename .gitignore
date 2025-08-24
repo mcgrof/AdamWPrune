@@ -1,0 +1,31 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Training outputs
+*.log
+train.log
+
+# Model checkpoints - exclude all model files
+*.pth
+*.json
+*.patch
+data/
+
+# Temporary and backup files
+*_backup.py
+*.tmp
+*.swp
+*~
+
+# Hacks and TODOs
+*.sh
+*.txt
+
+# OS files
+.DS_Store
+Thumbs.db
