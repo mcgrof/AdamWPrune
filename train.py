@@ -5,12 +5,12 @@ import torchvision
 import torchvision.transforms as transforms
 
 # Define relevant variables for the ML task
-batch_size = 64
+batch_size = 512
 num_classes = 10
 learning_rate = 0.001
 num_epochs = 10
 
-# Device will determine whether to run the training on GPU or CPU.
+ # Device will determine whether to run the training on GPU or CPU.
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Loading the dataset and preprocessing
@@ -110,7 +110,7 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if (i + 1) % 400 == 0:
+        if (i + 1) % 100 == 0:
             print(
                 "Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}".format(
                     epoch + 1, num_epochs, i + 1, total_step, loss.item()
