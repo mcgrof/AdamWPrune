@@ -56,7 +56,7 @@ parser.add_argument(
     "--test-prefix",
     type=str,
     default="SGD",
-    choices=["SGD", "Adam", "AdamW", "AdamWAdv"],
+    choices=["SGD", "Adam", "AdamW", "AdamWAdv", "AdamWSPAM"],
     help='Prefix to use for tests labels (default: "SGD")',
 )
 parser.add_argument(
@@ -95,7 +95,9 @@ sorted_models = sorted(
 # Create a comprehensive comparison figure
 fig = plt.figure(figsize=(18, 14))
 fig.suptitle(
-    "LeNet-5 Model Comparison: SGD vs Movement Pruning", fontsize=16, fontweight="bold"
+    f"LeNet-5 Model Comparison: {args.test_prefix} vs Movement Pruning",
+    fontsize=16,
+    fontweight="bold",
 )
 
 # Define colors for different optimizers
@@ -103,11 +105,14 @@ sgd_colors = ["#1f77b4", "#aec7e8", "#174a7e", "#6baed6"]  # Blues
 adam_colors = ["#2ca02c", "#98df8a", "#27ae60", "#52c77e"]  # Greens
 adamw_colors = ["#ff7f0e", "#ffbb78", "#ff9800", "#ffc947"]  # Oranges
 adamwadv_colors = ["#d62728", "#ff9896", "#e74c3c", "#ffb3ba"]  # Reds
+adamwspam_colors = ["#9467bd", "#c5b0d5", "#8c564b", "#c49c94"]  # Purples
 
 
 def get_color_and_style(name):
     # Determine the optimizer type from the name
-    if "AdamWAdv" in name or "adamwadv" in name.lower():
+    if "AdamWSPAM" in name or "adamwspam" in name.lower():
+        colors = adamwspam_colors
+    elif "AdamWAdv" in name or "adamwadv" in name.lower():
         colors = adamwadv_colors
     elif "AdamW" in name or "adamw" in name.lower():
         colors = adamw_colors
@@ -116,15 +121,15 @@ def get_color_and_style(name):
     else:  # SGD
         colors = sgd_colors
 
-    # Determine which variant (baseline, 50%, 70%, 90%)
+    # Determine which variant (baseline, 50%, 70%, 90%) with distinct line styles
     if "Baseline" in name:
-        return colors[0], "-"
+        return colors[0], "-"  # Solid line
     elif "50%" in name:
-        return colors[1], "--"
+        return colors[1], "--"  # Dashed line
     elif "70%" in name:
-        return colors[2], "--"
+        return colors[2], "-."  # Dash-dot line
     else:  # 90%
-        return colors[3], "--"
+        return colors[3], ":"  # Dotted line
 
 
 # 1. Accuracy over epochs
@@ -136,7 +141,8 @@ for name, data in sorted_models:
         data["accuracies"],
         marker="o",
         label=name,
-        linewidth=2,
+        linewidth=2.5,
+        markersize=4,
         color=color,
         linestyle=style,
     )
@@ -155,7 +161,8 @@ for name, data in sorted_models:
         data["losses"],
         marker="s",
         label=name,
-        linewidth=2,
+        linewidth=2.5,
+        markersize=4,
         color=color,
         linestyle=style,
     )
@@ -176,7 +183,8 @@ for name, data in sorted_models:
             data["sparsities"],
             marker="^",
             label=name,
-            linewidth=2,
+            linewidth=2.5,
+            markersize=4,
             color=color,
             linestyle=style,
         )
@@ -240,6 +248,8 @@ for i, (comp, acc, label) in enumerate(zip(compression_ratios, final_accs, label
     # Different markers for different optimizers
     if "SGD" in label or "sgd" in label.lower():
         marker = "o"
+    elif "AdamWSPAM" in label or "adamwspam" in label.lower():
+        marker = "*"  # Star
     elif "AdamWAdv" in label or "adamwadv" in label.lower():
         marker = "D"  # Diamond
     elif "AdamW" in label or "adamw" in label.lower():
@@ -297,7 +307,9 @@ print("=" * 80)
 # Create individual accuracy evolution plot
 fig2, ax = plt.subplots(figsize=(14, 7))
 fig2.suptitle(
-    "Test Accuracy Evolution: SGD vs Movement Pruning", fontsize=14, fontweight="bold"
+    f"Test Accuracy Evolution: {args.test_prefix} vs Movement Pruning",
+    fontsize=14,
+    fontweight="bold",
 )
 
 for name, data in sorted_models:
@@ -305,6 +317,8 @@ for name, data in sorted_models:
     # Different markers for different optimizers
     if "SGD" in name or "sgd" in name.lower():
         marker = "o"
+    elif "AdamWSPAM" in name or "adamwspam" in name.lower():
+        marker = "*"  # Star
     elif "AdamWAdv" in name or "adamwadv" in name.lower():
         marker = "D"  # Diamond
     elif "AdamW" in name or "adamw" in name.lower():
@@ -316,7 +330,8 @@ for name, data in sorted_models:
         data["accuracies"],
         marker=marker,
         label=name,
-        linewidth=2.5,
+        linewidth=3.0,
+        markersize=6,
         linestyle=style,
         color=color,
     )

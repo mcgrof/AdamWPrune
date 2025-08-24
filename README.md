@@ -62,6 +62,63 @@ python train.py --optimizer adamwadv
 python train.py --optimizer adamwadv --pruning-method movement --target-sparsity 0.9
 ```
 
+## AdamW SPAM (AdamWSPAM)
+
+AdamWSPAM incorporates Spike-Aware Pruning-Adaptive Momentum (SPAM) techniques specifically designed to handle training instabilities during neural network pruning. This optimizer detects gradient spikes and automatically resets momentum to maintain stable training.
+
+### Features and References
+
+1. **Spike Detection**: Monitors gradient norms to detect anomalous spikes
+   - Uses a simple z-score based detection (threshold = 2.0 standard deviations)
+   - Inspired by: "SPAM: Spike-Aware Adam with Momentum Reset for Stable LLM Training" (arXiv:2501.06842).
+   - Note: This repository currently implements a simplified heuristic and has not been audited for fidelity against the paper. Contributions welcome to match exact algorithmic details.
+
+### Usage
+
+Basic SPAM heuristic (current default behavior):
+
+```
+python train.py --optimizer adamwspam
+```
+
+Enable SPAM-inspired paper mechanics (per-parameter v-based clipping and periodic momentum reset):
+
+```
+# Example settings appropriate for small CNNs (MNIST)
+python train.py --optimizer adamwspam \
+  --spam-enable-clip --spam-theta 100 \
+  --spam-interval 200 --spam-warmup-steps 50
+
+# Paper-like settings (from arXiv:2501.06842, tuned for LLMs)
+python train.py --optimizer adamwspam \
+  --spam-enable-clip --spam-theta 5000 \
+  --spam-interval 500 --spam-warmup-steps 150
+```
+
+Flags:
+- `--spam-enable-clip`: Enable spike-aware clipping using Adam's second moment.
+- `--spam-theta`: Spike threshold (approx GSS), default 50.0.
+- `--spam-interval`: Periodic momentum reset in steps (0 disables), default 0.
+- `--spam-warmup-steps`: Cosine LR warmup steps after each reset, default 0.
+
+2. **Automatic Momentum Reset**: Soft reset of momentum states when spikes are detected
+   - First moment (exp_avg) multiplied by 0.5
+   - Second moment (exp_avg_sq) multiplied by 0.9
+   - Prevents gradient explosion during pruning transitions
+
+3. **All AdamWAdv Features**: Includes all enhancements from AdamWAdv
+   - AMSGrad, cosine annealing, gradient clipping, strong weight decay
+
+### Usage
+
+```bash
+# Train with AdamW SPAM optimizer
+python train.py --optimizer adamwspam
+
+# Combine with movement pruning for maximum stability
+python train.py --optimizer adamwspam --pruning-method movement --target-sparsity 0.9
+```
+
 ## Install dependencies
 
 ```bash
@@ -98,6 +155,10 @@ AdamWAdv Baseline         98.83       % 1.00        x 61,750/61,750   17.25     
 AdamWAdv 50% Pruning      99.08       % 1.99        x 31,015/61,750   16.43       s
 AdamWAdv 70% Pruning      98.64       % 3.30        x 18,721/61,750   16.79       s
 AdamWAdv 90% Pruning      87.80       % 9.61        x 6,427/61,750    16.76       s
+AdamWSPAM Baseline        99.05       % 1.00        x 61,750/61,750   17.14       s
+AdamWSPAM 50% Pruning     99.06       % 1.99        x 31,015/61,750   17.11       s
+AdamWSPAM 70% Pruning     98.90       % 3.30        x 18,721/61,750   17.35       s
+AdamWSPAM 90% Pruning     95.37       % 9.61        x 6,427/61,750    17.17       s
 ================================================================================
 
 ================================================================================
@@ -131,7 +192,7 @@ python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup
 
 ### Command-Line Arguments
 
-- `--optimizer`: Optimizer to use, by default we use "SGD", other options are "adam", "adamw", "adamwadv"
+- `--optimizer`: Optimizer to use, by default we use "SGD", other options are "adam", "adamw", "adamwadv", "adamwspam"
 - `--pruning-method`: Pruning method to use (`none` or `movement`, default: `none`)
 - `--target-sparsity`: Target sparsity level 0.0-1.0 (default: `0.9`)
 - `--pruning-warmup`: Number of training steps before pruning starts (default: `100`)
@@ -170,6 +231,15 @@ python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup
 
 ![Accuracy Evolution](images/adamwadv-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
+
+## AdamWSPAM
+
+![Model Comparison](images/adamwspam-with-movement-pruning-model_comparison.png)
+*Comparison of all model configurations*
+
+![Accuracy Evolution](images/adamwspam-with-movement-accuracy_evolution.png)
+*Test accuracy evolution across epochs for different pruning levels*
+
 
 ## Visualization
 

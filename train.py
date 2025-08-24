@@ -11,6 +11,8 @@ import json
 from datetime import datetime
 import os
 import argparse
+import numpy as np
+from collections import deque
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="LeNet-5 training with optional pruning")
@@ -37,8 +39,31 @@ parser.add_argument(
     "--optimizer",
     type=str,
     default="sgd",
-    choices=["sgd", "adam", "adamw", "adamwadv"],
+    choices=["sgd", "adam", "adamw", "adamwadv", "adamwspam"],
     help="Optimizer to use for training (default: sgd)",
+)
+parser.add_argument(
+    "--spam-theta",
+    type=float,
+    default=50.0,
+    help="SPAM spike threshold theta for approximate GSS (default: 50.0)",
+)
+parser.add_argument(
+    "--spam-interval",
+    type=int,
+    default=0,
+    help="SPAM periodic momentum reset interval in steps (0 disables)",
+)
+parser.add_argument(
+    "--spam-warmup-steps",
+    type=int,
+    default=0,
+    help="SPAM cosine warmup steps after each reset (default: 0)",
+)
+parser.add_argument(
+    "--spam-enable-clip",
+    action="store_true",
+    help="Enable SPAM spike-aware clipping using Adam's second moment",
 )
 parser.add_argument(
     "--json-output",
@@ -220,6 +245,7 @@ cost = nn.CrossEntropyLoss()
 # Setting the optimizer with the model parameters and learning rate
 scheduler = None
 gradient_clip_norm = None
+spam_state = None  # For SPAM optimizer state tracking
 
 if args.optimizer == "adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -248,6 +274,50 @@ elif args.optimizer == "adamwadv":
     logger.info("  - Weight decay=0.01 for stronger regularization")
     logger.info("  - Cosine annealing LR schedule")
     logger.info("  - Gradient clipping norm=1.0")
+elif args.optimizer == "adamwspam":
+    # AdamW with SPAM (Spike-Aware Pruning-Adaptive Momentum)
+    # Reference (for future fidelity alignment):
+    # SPAM: Spike-Aware Adam with Momentum Reset for Stable LLM Training
+    # https://arxiv.org/abs/2501.06842
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=learning_rate,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+        weight_decay=0.01,
+        amsgrad=True,
+    )
+    # Initialize SPAM state tracking
+    spam_state = {
+        "gradient_history": deque(maxlen=100),
+        "gradient_norms": deque(maxlen=100),
+        "spike_threshold": 2.0,  # Detect spikes > 2 std deviations (heuristic)
+        "spike_events": [],
+        "last_reset_step": 0,
+        "global_step": 0,
+        "momentum_reset_count": 0,
+        # SPAM fidelity options
+        "theta": args.spam_theta,
+        "interval": args.spam_interval,
+        "warmup_steps": args.spam_warmup_steps,
+        "enable_clip": args.spam_enable_clip,
+        "warmup_until": 0,
+    }
+    # Cosine annealing with SPAM awareness
+    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
+    gradient_clip_norm = 1.0
+    logger.info("Using AdamW SPAM optimizer (heuristic + SPAM-inspired options) with:")
+    logger.info("  - Spike detection (threshold=2.0 std)")
+    logger.info("  - Automatic momentum reset on spikes")
+    logger.info("  - AMSGrad for stability")
+    logger.info("  - Adaptive gradient clipping")
+    logger.info("  - Cosine annealing LR schedule")
+    if spam_state["interval"] > 0:
+        logger.info(f"  - Periodic momentum reset interval: {spam_state['interval']} steps")
+        if spam_state["warmup_steps"] > 0:
+            logger.info(f"  - Cosine warmup after reset: {spam_state['warmup_steps']} steps")
+    if spam_state["enable_clip"]:
+        logger.info(f"  - Spike-aware clipping enabled (theta={spam_state['theta']})")
 else:
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
     logger.info("Using SGD optimizer with momentum=0.9")
@@ -332,10 +402,122 @@ for epoch in range(num_epochs):
         optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
         scaler.scale(loss).backward()
 
-        # Apply gradient clipping if enabled (for AdamWAdv)
+        # Apply gradient clipping if enabled (for AdamWAdv/SPAM)
         if gradient_clip_norm is not None:
             scaler.unscale_(optimizer)
+
+            # SPAM-inspired spike-aware clipping using Adam's second moment (approximate GSS)
+            if spam_state is not None and spam_state.get("enable_clip", False):
+                theta = float(spam_state.get("theta", 50.0))
+                eps = 1e-12
+                for group in optimizer.param_groups:
+                    for p in group["params"]:
+                        if p.grad is None:
+                            continue
+                        state = optimizer.state.get(p, {})
+                        v = state.get("exp_avg_sq", None)
+                        if v is None:
+                            continue
+                        # threshold per-parameter: sqrt(theta * v)
+                        thr = (theta * (v + eps)).sqrt()
+                        g = p.grad
+                        # clip per-parameter exceeding threshold
+                        over = g.abs() > thr
+                        if over.any():
+                            g.data[over] = g.data[over].sign() * thr.data[over]
+
+            # SPAM spike detection and momentum reset
+            if spam_state is not None:
+                # Compute gradient norm for spike detection
+                total_norm = 0.0
+                for p in model.parameters():
+                    if p.grad is not None:
+                        param_norm = p.grad.data.norm(2)
+                        total_norm += param_norm.item() ** 2
+                total_norm = total_norm**0.5
+
+                # Track gradient norms (only if finite)
+                if np.isfinite(total_norm):
+                    spam_state["gradient_norms"].append(total_norm)
+                spam_state["global_step"] += 1
+
+                # Detect spikes after warmup period
+                if len(spam_state["gradient_norms"]) >= 10:
+                    history = np.array(list(spam_state["gradient_norms"])[:-1])
+                    # Filter out NaN and infinite values
+                    history = history[np.isfinite(history)]
+
+                    if len(history) > 0:
+                        mean_norm = np.mean(history)
+                        std_norm = np.std(history)
+
+                        if (
+                            std_norm > 0
+                            and np.isfinite(mean_norm)
+                            and np.isfinite(std_norm)
+                        ):
+                            z_score = (total_norm - mean_norm) / std_norm
+
+                            # Spike detected - reset momentum
+                            if z_score > spam_state["spike_threshold"] and np.isfinite(
+                                z_score
+                            ):
+                                for group in optimizer.param_groups:
+                                    for p in group["params"]:
+                                        state = optimizer.state.get(p, {})
+                                        if "exp_avg" in state:
+                                            state["exp_avg"].mul_(0.5)  # Soft reset
+                                        if "exp_avg_sq" in state:
+                                            state["exp_avg_sq"].mul_(
+                                                0.9
+                                            )  # Gentle reset
+
+                                spam_state["spike_events"].append(
+                                    spam_state["global_step"]
+                                )
+                                spam_state["momentum_reset_count"] += 1
+                                spam_state["last_reset_step"] = spam_state[
+                                    "global_step"
+                                ]
+
+                                if (i + 1) % 10 == 0:  # Log significant spikes
+                                    logger.info(
+                                        f"SPAM: Spike detected (z={z_score:.2f}), momentum reset #{spam_state['momentum_reset_count']}"
+                                    )
+
             torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_norm)
+
+        # Periodic SPAM momentum reset (first/second moments), with optional warmup
+        if spam_state is not None:
+            spam_state["global_step"] += 1
+            interval = int(spam_state.get("interval", 0))
+            if interval > 0 and spam_state["global_step"] % interval == 0:
+                for group in optimizer.param_groups:
+                    for p in group["params"]:
+                        state = optimizer.state.get(p, {})
+                        if "exp_avg" in state:
+                            state["exp_avg"].zero_()
+                        if "exp_avg_sq" in state:
+                            state["exp_avg_sq"].zero_()
+                spam_state["momentum_reset_count"] += 1
+                spam_state["last_reset_step"] = spam_state["global_step"]
+                if int(spam_state.get("warmup_steps", 0)) > 0:
+                    spam_state["warmup_until"] = spam_state["global_step"] + int(
+                        spam_state["warmup_steps"]
+                    )
+
+            # Apply cosine warmup scaling to param group lrs if within warmup window
+            warmup_until = int(spam_state.get("warmup_until", 0))
+            if warmup_until > spam_state["global_step"]:
+                remaining = warmup_until - spam_state["global_step"]
+                total = int(spam_state.get("warmup_steps", 0))
+                # cosine from small to 1.0
+                t = (total - remaining) / max(total, 1)
+                scale = 0.5 * (1 - np.cos(np.pi * t))  # 0 -> 1
+                scale = max(1e-3, float(scale))
+                for group in optimizer.param_groups:
+                    base_lr = group.get("base_lr", group["lr"])
+                    group["lr"] = base_lr * scale
 
         scaler.step(optimizer)
         scaler.update()
@@ -437,6 +619,17 @@ for epoch in range(num_epochs):
 total_time = time.time() - start_time
 logger.info(f"Training completed in {total_time:.2f} seconds")
 logger.info(f"Average time per epoch: {total_time/num_epochs:.2f} seconds")
+
+# Log SPAM statistics if using SPAM optimizer
+if spam_state is not None:
+    logger.info(f"SPAM Statistics:")
+    logger.info(f"  - Total momentum resets: {spam_state['momentum_reset_count']}")
+    logger.info(f"  - Spike events: {len(spam_state['spike_events'])}")
+    training_metrics["spam_stats"] = {
+        "momentum_resets": spam_state["momentum_reset_count"],
+        "spike_events": len(spam_state["spike_events"]),
+        "spike_steps": spam_state["spike_events"][:10],  # First 10 spikes for analysis
+    }
 
 # Log final pruning statistics
 if pruner is not None:
