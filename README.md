@@ -119,6 +119,42 @@ python train.py --optimizer adamwspam
 python train.py --optimizer adamwspam --pruning-method movement --target-sparsity 0.9
 ```
 
+## AdamWPrune (Experimental)
+
+AdamWPrune is an experimental optimizer that combines ALL previous enhancements (AdamWAdv + SPAM) and additionally uses Adam's internal optimizer states (momentum and variance) for pruning decisions. This attempts to leverage optimizer dynamics for importance estimation while keeping pruning overhead minimal.
+
+### Features and Theory
+
+1. **State-Based Pruning**: Uses Adam's exp_avg and exp_avg_sq for importance scoring
+   - Hybrid strategy: importance = |weight × exp_avg| × |weight|/sqrt(exp_avg_sq)
+   - Momentum component: Identifies weights moving strongly
+   - Stability component: Identifies weights with consistent gradients
+   - Zero additional memory overhead (reuses optimizer states)
+
+2. **All Previous Enhancements**:
+   - SPAM spike detection and momentum reset
+   - AMSGrad, cosine annealing, gradient clipping
+   - Strong weight decay (0.01)
+
+3. **Theoretical Considerations**:
+   - Optimizer states track optimization dynamics, not necessarily importance,
+     this hybrid approach that combines momentum direction with stability
+     signals.
+   - This approach is experimental and untested at scale
+   - Results may vary compared to magnitude-based pruning
+
+### Usage
+
+```bash
+# Train with AdamWPrune (experimental)
+python train.py --optimizer adamwprune
+
+# With movement pruning enabled (uses state-based pruning)
+python train.py --optimizer adamwprune --pruning-method movement --target-sparsity 0.9
+```
+
+**Note**: This is an experimental feature using a novel hybrid approach for pruning decisions.
+
 ## Install dependencies
 
 ```bash
@@ -159,8 +195,10 @@ AdamWSPAM Baseline        99.05       % 1.00        x 61,750/61,750   17.14     
 AdamWSPAM 50% Pruning     99.06       % 1.99        x 31,015/61,750   17.11       s
 AdamWSPAM 70% Pruning     98.90       % 3.30        x 18,721/61,750   17.35       s
 AdamWSPAM 90% Pruning     95.37       % 9.61        x 6,427/61,750    17.17       s
-================================================================================
-
+AdamWPrune Baseline       99.04       % 1.00        x 61,750/61,750   17.21       s
+AdamWPrune 50% Pruning    98.99       % 1.99        x 31,015/61,750   17.25       s
+AdamWPrune 70% Pruning    98.77       % 3.30        x 18,721/61,750   17.32       s
+AdamWPrune 90% Pruning    97.17       % 9.61        x 6,427/61,750    17.29       s
 ================================================================================
 
 ```
@@ -192,7 +230,7 @@ python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup
 
 ### Command-Line Arguments
 
-- `--optimizer`: Optimizer to use, by default we use "SGD", other options are "adam", "adamw", "adamwadv", "adamwspam"
+- `--optimizer`: Optimizer to use, by default we use "SGD", other options are "adam", "adamw", "adamwadv", "adamwspam", "adamwprune"
 - `--pruning-method`: Pruning method to use (`none` or `movement`, default: `none`)
 - `--target-sparsity`: Target sparsity level 0.0-1.0 (default: `0.9`)
 - `--pruning-warmup`: Number of training steps before pruning starts (default: `100`)
@@ -240,6 +278,13 @@ python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup
 ![Accuracy Evolution](images/adamwspam-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
 
+## AdamWPrune
+
+![Model Comparison](images/adamwprune-with-movement-pruning-model_comparison.png)
+*Comparison of all model configurations*
+
+![Accuracy Evolution](images/adamwprune-with-movement-accuracy_evolution.png)
+*Test accuracy evolution across epochs for different pruning levels*
 
 ## Visualization
 

@@ -56,7 +56,7 @@ parser.add_argument(
     "--test-prefix",
     type=str,
     default="SGD",
-    choices=["SGD", "Adam", "AdamW", "AdamWAdv", "AdamWSPAM"],
+    choices=["SGD", "Adam", "AdamW", "AdamWAdv", "AdamWSPAM", "AdamWPrune"],
     help='Prefix to use for tests labels (default: "SGD")',
 )
 parser.add_argument(
@@ -106,11 +106,14 @@ adam_colors = ["#2ca02c", "#98df8a", "#27ae60", "#52c77e"]  # Greens
 adamw_colors = ["#ff7f0e", "#ffbb78", "#ff9800", "#ffc947"]  # Oranges
 adamwadv_colors = ["#d62728", "#ff9896", "#e74c3c", "#ffb3ba"]  # Reds
 adamwspam_colors = ["#9467bd", "#c5b0d5", "#8c564b", "#c49c94"]  # Purples
+adamwprune_colors = ["#17becf", "#9edae5", "#bcbd22", "#dbdb8d"]  # Cyans/Yellow-greens
 
 
 def get_color_and_style(name):
     # Determine the optimizer type from the name
-    if "AdamWSPAM" in name or "adamwspam" in name.lower():
+    if "AdamWPrune" in name or "adamwprune" in name.lower():
+        colors = adamwprune_colors
+    elif "AdamWSPAM" in name or "adamwspam" in name.lower():
         colors = adamwspam_colors
     elif "AdamWAdv" in name or "adamwadv" in name.lower():
         colors = adamwadv_colors
@@ -248,6 +251,8 @@ for i, (comp, acc, label) in enumerate(zip(compression_ratios, final_accs, label
     # Different markers for different optimizers
     if "SGD" in label or "sgd" in label.lower():
         marker = "o"
+    elif "AdamWPrune" in label or "adamwprune" in label.lower():
+        marker = "P"  # Plus (filled)
     elif "AdamWSPAM" in label or "adamwspam" in label.lower():
         marker = "*"  # Star
     elif "AdamWAdv" in label or "adamwadv" in label.lower():
@@ -317,6 +322,8 @@ for name, data in sorted_models:
     # Different markers for different optimizers
     if "SGD" in name or "sgd" in name.lower():
         marker = "o"
+    elif "AdamWPrune" in name or "adamwprune" in name.lower():
+        marker = "P"  # Plus (filled)
     elif "AdamWSPAM" in name or "adamwspam" in name.lower():
         marker = "*"  # Star
     elif "AdamWAdv" in name or "adamwadv" in name.lower():

@@ -39,7 +39,7 @@ parser.add_argument(
     "--optimizer",
     type=str,
     default="sgd",
-    choices=["sgd", "adam", "adamw", "adamwadv", "adamwspam"],
+    choices=["sgd", "adam", "adamw", "adamwadv", "adamwspam", "adamwprune"],
     help="Optimizer to use for training (default: sgd)",
 )
 parser.add_argument(
@@ -246,6 +246,7 @@ cost = nn.CrossEntropyLoss()
 scheduler = None
 gradient_clip_norm = None
 spam_state = None  # For SPAM optimizer state tracking
+adamprune_state = None  # For AdamWPrune state-based pruning
 
 if args.optimizer == "adam":
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -254,7 +255,7 @@ elif args.optimizer == "adamw":
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=1e-4
     )
-    logger.info("Using AdamW optimizer with weight decay=0.01")
+    logger.info("Using AdamW optimizer with weight decay=0.0001")
 elif args.optimizer == "adamwadv":
     # AdamW Advanced with all enhancements
     optimizer = torch.optim.AdamW(
@@ -318,6 +319,65 @@ elif args.optimizer == "adamwspam":
             logger.info(f"  - Cosine warmup after reset: {spam_state['warmup_steps']} steps")
     if spam_state["enable_clip"]:
         logger.info(f"  - Spike-aware clipping enabled (theta={spam_state['theta']})")
+elif args.optimizer == "adamwprune":
+    # AdamWPrune - Experimental: All enhancements + state-based pruning
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=learning_rate,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+        weight_decay=0.01,
+        amsgrad=True,
+    )
+
+    # Initialize both SPAM and pruning state
+    spam_state = {
+        "gradient_history": deque(maxlen=100),
+        "gradient_norms": deque(maxlen=100),
+        "spike_threshold": 2.0,
+        "spike_events": [],
+        "last_reset_step": 0,
+        "global_step": 0,
+        "momentum_reset_count": 0,
+        # SPAM fidelity options
+        "theta": args.spam_theta,
+        "interval": args.spam_interval,
+        "warmup_steps": args.spam_warmup_steps,
+        "enable_clip": args.spam_enable_clip,
+        "warmup_until": 0,
+    }
+
+    # AdamWPrune specific state for state-based pruning
+    adamprune_state = {
+        "pruning_enabled": args.pruning_method == "movement",
+        "target_sparsity": (
+            args.target_sparsity if args.pruning_method == "movement" else 0
+        ),
+        "warmup_steps": args.pruning_warmup,
+        "pruning_frequency": 50,
+        "step_count": 0,
+        "masks": {},  # module -> bool mask buffer
+        "pruning_strategy": "hybrid",  # hybrid of momentum and stability
+    }
+
+    # Initialize masks for prunable layers as boolean buffers to minimize memory
+    if adamprune_state["pruning_enabled"]:
+        for _, module in model.named_modules():
+            if isinstance(module, (nn.Linear, nn.Conv2d)):
+                mask = torch.ones_like(module.weight.data, dtype=torch.bool)
+                module.register_buffer("adamprune_mask", mask)
+                adamprune_state["masks"][module] = module.adamprune_mask
+
+    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
+    gradient_clip_norm = 1.0
+
+    logger.info("Using AdamWPrune (Experimental) optimizer with:")
+    logger.info("  - All AdamWAdv + SPAM features")
+    logger.info("  - State-based pruning using Adam momentum/variance")
+    logger.info("  - Hybrid pruning strategy (momentum × stability)")
+    if adamprune_state["pruning_enabled"]:
+        logger.info(f"  - Target sparsity: {adamprune_state['target_sparsity']:.1%}")
+        logger.info(f"  - Pruning warmup: {adamprune_state['warmup_steps']} steps")
 else:
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
     logger.info("Using SGD optimizer with momentum=0.9")
@@ -327,7 +387,7 @@ scaler = GradScaler("cuda")
 
 # Initialize pruning if enabled
 pruner = None
-if enable_pruning and args.pruning_method == "movement":
+if enable_pruning and args.pruning_method == "movement" and args.optimizer != "adamwprune":
     # Calculate total training steps for pruning schedule
     total_training_steps = len(train_loader) * ramp_end_epoch
     pruner = MovementPruning(
@@ -402,7 +462,7 @@ for epoch in range(num_epochs):
         optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
         scaler.scale(loss).backward()
 
-        # Apply gradient clipping if enabled (for AdamWAdv/SPAM)
+        # Apply gradient masking (AdamWPrune) and gradient clipping if enabled
         if gradient_clip_norm is not None:
             scaler.unscale_(optimizer)
 
@@ -425,6 +485,12 @@ for epoch in range(num_epochs):
                         over = g.abs() > thr
                         if over.any():
                             g.data[over] = g.data[over].sign() * thr.data[over]
+
+            # If using AdamWPrune, zero gradients on pruned weights before clipping
+            if adamprune_state is not None and adamprune_state["pruning_enabled"]:
+                for module, mask in adamprune_state["masks"].items():
+                    if module.weight.grad is not None:
+                        module.weight.grad.data.mul_(mask.to(module.weight.grad.dtype))
 
             # SPAM spike detection and momentum reset
             if spam_state is not None:
@@ -522,8 +588,95 @@ for epoch in range(num_epochs):
         scaler.step(optimizer)
         scaler.update()
 
-        # Apply movement pruning if enabled
-        if pruner is not None:
+        # Apply AdamWPrune state-based pruning
+        if adamprune_state is not None and adamprune_state["pruning_enabled"]:
+            adamprune_state["step_count"] += 1
+
+            # Update masks based on Adam states
+            if (
+                adamprune_state["step_count"] > adamprune_state["warmup_steps"]
+                and adamprune_state["step_count"] % adamprune_state["pruning_frequency"]
+                == 0
+            ):
+
+                # Calculate current sparsity level (gradual ramp-up)
+                ramp_end_step = len(train_loader) * 8  # Ramp to target by epoch 8
+                progress = min(
+                    1.0,
+                    (adamprune_state["step_count"] - adamprune_state["warmup_steps"])
+                    / (ramp_end_step - adamprune_state["warmup_steps"]),
+                )
+                current_sparsity = adamprune_state["target_sparsity"] * progress
+
+                # Compute importance scores using Adam states
+                all_scores = []
+                for module in adamprune_state["masks"].keys():
+                    # Get Adam states for this layer
+                    state = optimizer.state.get(module.weight, {})
+                    if "exp_avg" in state and "exp_avg_sq" in state:
+                        exp_avg = state["exp_avg"]
+                        exp_avg_sq = state["exp_avg_sq"]
+
+                        # Hybrid strategy: combine momentum and stability signals
+                        # Momentum signal: weights moving strongly in one direction
+                        momentum_score = torch.abs(module.weight.data * exp_avg)
+
+                        # Stability signal: weights with consistent updates
+                        stability_score = torch.abs(module.weight.data) / (
+                            torch.sqrt(exp_avg_sq) + 1e-8
+                        )
+
+                        # Combine both signals
+                        importance = momentum_score * stability_score
+                        all_scores.append(importance.flatten())
+                    else:
+                        # Fallback to magnitude if no Adam states yet
+                        all_scores.append(torch.abs(module.weight.data).flatten())
+
+                if all_scores:
+                    all_scores = torch.cat(all_scores)
+
+                    # Find global threshold for target sparsity
+                    k = int(current_sparsity * all_scores.numel())
+                    if k > 0:
+                        threshold = torch.kthvalue(all_scores, k).values
+
+                        # Update masks
+                        for module in adamprune_state["masks"].keys():
+                            state = optimizer.state.get(module.weight, {})
+                            if "exp_avg" in state and "exp_avg_sq" in state:
+                                exp_avg = state["exp_avg"]
+                                exp_avg_sq = state["exp_avg_sq"]
+                                momentum_score = torch.abs(module.weight.data * exp_avg)
+                                stability_score = torch.abs(module.weight.data) / (
+                                    torch.sqrt(exp_avg_sq) + 1e-8
+                                )
+                                importance = momentum_score * stability_score
+                            else:
+                                importance = torch.abs(module.weight.data)
+
+                            # Update boolean mask buffer
+                            new_mask = (importance > threshold)
+                            adamprune_state["masks"][module].data = new_mask.to(torch.bool)
+
+                            # Apply mask to weights immediately
+                            module.weight.data.mul_(adamprune_state["masks"][module].to(module.weight.dtype))
+
+            # Always apply existing masks to maintain sparsity
+            elif adamprune_state["step_count"] > adamprune_state["warmup_steps"]:
+                for module in adamprune_state["masks"].keys():
+                    module.weight.data.mul_(adamprune_state["masks"][module].to(module.weight.dtype))
+
+            # Also mask optimizer states to keep pruned weights inactive
+            for module, mask in adamprune_state["masks"].items():
+                state = optimizer.state.get(module.weight, {})
+                if "exp_avg" in state:
+                    state["exp_avg"].mul_(mask.to(state["exp_avg"].dtype))
+                if "exp_avg_sq" in state:
+                    state["exp_avg_sq"].mul_(mask.to(state["exp_avg_sq"].dtype))
+
+        # Apply movement pruning if enabled (for non-AdamWPrune optimizers)
+        elif pruner is not None:
             pruner.step_pruning()
 
         running_loss += loss.item()
@@ -585,8 +738,23 @@ for epoch in range(num_epochs):
         accuracy = 100 * correct / total
         epoch_time = time.time() - epoch_start
 
+        # Log AdamWPrune sparsity if enabled
+        if adamprune_state is not None and adamprune_state["pruning_enabled"]:
+            total_params = 0
+            zero_params = 0
+            for mask in adamprune_state["masks"].values():
+                total_params += mask.numel()
+                zero_params += (mask == 0).sum().item()
+
+            global_sparsity = zero_params / total_params if total_params > 0 else 0
+            logger.info(
+                f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f}s, "
+                f"Test Accuracy: {accuracy:.2f}%, Sparsity: {global_sparsity:.2%}"
+            )
+            epoch_metrics["sparsity"] = global_sparsity
+            epoch_metrics["sparsity_stats"] = {"global": {"sparsity": global_sparsity}}
         # Log pruning statistics if enabled
-        if pruner is not None:
+        elif pruner is not None:
             sparsity_stats = pruner.get_sparsity_stats()
             global_sparsity = sparsity_stats["global"]["sparsity"]
             logger.info(
@@ -631,8 +799,31 @@ if spam_state is not None:
         "spike_steps": spam_state["spike_events"][:10],  # First 10 spikes for analysis
     }
 
+# Log final AdamWPrune statistics
+if adamprune_state is not None and adamprune_state["pruning_enabled"]:
+    # Apply final pruning
+    total_params = 0
+    zero_params = 0
+    for module, mask in adamprune_state["masks"].items():
+        module.weight.data.mul_(mask.to(module.weight.dtype))
+        total_params += mask.numel()
+        zero_params += (mask == 0).sum().item()
+
+    final_sparsity = zero_params / total_params if total_params > 0 else 0
+    logger.info(f"Final AdamWPrune sparsity: {final_sparsity:.2%}")
+
+    # Count remaining parameters
+    total_model_params = sum(p.numel() for p in model.parameters())
+    non_zero_params = sum((p != 0).sum().item() for p in model.parameters())
+    logger.info(f"Total parameters: {total_model_params:,}")
+    logger.info(f"Non-zero parameters: {non_zero_params:,}")
+    logger.info(f"Compression ratio: {total_model_params/non_zero_params:.2f}x")
+
+    training_metrics["final_sparsity"] = final_sparsity
+    training_metrics["total_params"] = total_model_params
+    training_metrics["non_zero_params"] = non_zero_params
 # Log final pruning statistics
-if pruner is not None:
+elif pruner is not None:
     final_sparsity = pruner.prune_model_final()
     logger.info(f"Final model sparsity: {final_sparsity:.2%}")
 

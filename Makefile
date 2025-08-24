@@ -3,6 +3,7 @@ TARGETS += adam-movement
 TARGETS += adamw-movement
 TARGETS += adamwadv-movement
 TARGETS += adamwspam-movement
+TARGETS += adamwprune-movement
 HELP_TARGETS :=
 
 all: $(TARGETS)
@@ -148,6 +149,35 @@ adamwspam-help-menu:
 	@echo "adamwspam-movement:       - Run tests with AdamW SPAM as a baseline"
 
 HELP_TARGETS += adamwspam-help-menu
+
+adamwprune-movement:
+	# Model A - Baseline (no pruning)
+	python train.py --optimizer adamwprune --json-output model_a_metrics.json
+
+	# Model B - 50% pruning (uses state-based pruning)
+	python train.py --optimizer adamwprune --pruning-method movement \
+		--target-sparsity 0.5 \
+		--json-output model_b_metrics.json
+
+	# Model C - 90% pruning (uses state-based pruning)
+	python train.py --optimizer adamwprune --pruning-method movement \
+		--target-sparsity 0.9 \
+		--json-output model_c_metrics.json
+
+	# Model D - 70% pruning (uses state-based pruning)
+	python train.py --optimizer adamwprune --pruning-method movement \
+		--target-sparsity 0.7 \
+		--json-output model_d_metrics.json
+
+	# Generate comparison plots
+	python plot_comparison.py --test-prefix="AdamWPrune" \
+		--compare-output adamwprune-with-movement-accuracy_evolution.png \
+		--accuracy-output adamwprune-with-movement-pruning-model_comparison.png
+
+adamwprune-help-menu:
+	@echo "adamwprune-movement:      - Run tests with AdamWPrune (experimental state-based pruning)"
+
+HELP_TARGETS += adamwprune-help-menu
 
 update-graphs:
 	mv *.png images/
