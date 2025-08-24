@@ -40,30 +40,35 @@ pip install torch torchvision numpy matplotlib logging json
 ### Reproduce findings and graph results
 
 ```bash
-make
+make sgd-movement
 ```
 
-You should see something like this in less than 5 minutes:
+You should see something like this in less than 5 minutes, we've trimmed
+the results to only show the relevant stats here:
 
 ```
-Saved comprehensive comparison plot as 'model_comparison.png'
-
-================================================================================
-PERFORMANCE COMPARISON TABLE
-================================================================================
 Model                     Accuracy     Compression  Parameters      Training Time
 --------------------------------------------------------------------------------
-SGD Baseline              98.66       % 1.00        x 61,750/61,750   16.61       s
-SGD 50% Pruning           98.89       % 1.99        x 31,015/61,750   16.36       s
-SGD 70% Pruning           98.99       % 3.30        x 18,721/61,750   16.18       s
-SGD 90% Pruning           98.26       % 9.61        x 6,427/61,750    16.43       s
+SGD Baseline              96.24       % 1.00        x 61,750/61,750   16.39       s
+SGD 50% Pruning           97.02       % 1.99        x 31,015/61,750   16.28       s
+SGD 70% Pruning           96.16       % 3.30        x 18,721/61,750   16.18       s
+SGD 90% Pruning           95.31       % 9.61        x 6,427/61,750    16.12       s
+Adam Baseline             98.90       % 1.00        x 61,750/61,750   16.34       s
+Adam 50% Pruning          98.99       % 1.99        x 31,015/61,750   16.31       s
+Adam 70% Pruning          99.19       % 3.30        x 18,721/61,750   16.17       s
+Adam 90% Pruning          98.22       % 9.61        x 6,427/61,750    16.43       s
+AdamW Baseline            98.84       % 1.00        x 61,750/61,750   16.31       s
+AdamW 50% Pruning         98.85       % 1.99        x 31,015/61,750   16.32       s
+AdamW 70% Pruning         98.99       % 3.30        x 18,721/61,750   16.46       s
+AdamW 90% Pruning         97.97       % 9.61        x 6,427/61,750    16.45       s
 ================================================================================
 
-Saved accuracy evolution plot as 'accuracy_evolution.png'
+```
 
-Plots generated successfully!
-- model_comparison.png: Comprehensive 6-panel comparison
-- accuracy_evolution.png: Detailed accuracy evolution plot
+To run all tests, use:
+
+```bash
+make
 ```
 
 ### Basic Training (No Pruning)
@@ -87,6 +92,7 @@ python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup
 
 ### Command-Line Arguments
 
+- `--optimizer`: Optimizer to use, by default we use "SGD", other options are "adam", "adamw"
 - `--pruning-method`: Pruning method to use (`none` or `movement`, default: `none`)
 - `--target-sparsity`: Target sparsity level 0.0-1.0 (default: `0.9`)
 - `--pruning-warmup`: Number of training steps before pruning starts (default: `100`)
@@ -95,10 +101,27 @@ python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup
 
 ### Model Comparison
 
+## SGD
 ![Model Comparison](images/sgd-with-movement-pruning-model_comparison.png)
 *Comparison of all model configurations*
 
 ![Accuracy Evolution](images/sgd-with-movement-accuracy_evolution.png)
+*Test accuracy evolution across epochs for different pruning levels*
+
+## Adam
+
+![Model Comparison](images/adam-with-movement-pruning-model_comparison.png)
+*Comparison of all model configurations*
+
+![Accuracy Evolution](images/adam-with-movement-accuracy_evolution.png)
+*Test accuracy evolution across epochs for different pruning levels*
+
+## AdamW
+
+![Model Comparison](images/adamw-with-movement-pruning-model_comparison.png)
+*Comparison of all model configurations*
+
+![Accuracy Evolution](images/adamw-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
 
 ## Visualization

@@ -32,6 +32,19 @@ parser.add_argument(
     default=100,
     help="Number of warmup steps before pruning starts (default: 100)",
 )
+parser.add_argument(
+    "--optimizer",
+    type=str,
+    default="sgd",
+    choices=["sgd", "adam", "adamw"],
+    help="Optimizer to use for training (default: sgd)",
+)
+parser.add_argument(
+    "--json-output",
+    type=str,
+    default="training_metrics.json",
+    help="json output file to use for stats, deafult is training_metrics.json",
+)
 args = parser.parse_args()
 
 # Conditionally import pruning module
@@ -80,6 +93,7 @@ training_metrics = {
         "pruning_method": args.pruning_method,
         "target_sparsity": target_sparsity if enable_pruning else None,
         "pruning_warmup": warmup_steps if enable_pruning else None,
+        "optimizer": args.optimizer,
     },
     "epochs": [],
 }
@@ -203,7 +217,17 @@ else:
 cost = nn.CrossEntropyLoss()
 
 # Setting the optimizer with the model parameters and learning rate
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+if args.optimizer == "adam":
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    logger.info("Using Adam optimizer")
+elif args.optimizer == "adamw":
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=learning_rate, weight_decay=1e-4
+    )
+    logger.info("Using AdamW optimizer with weight decay=0.01")
+else:
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+    logger.info("Using SGD optimizer with momentum=0.9")
 
 # Initialize GradScaler for mixed precision training
 scaler = GradScaler("cuda")
@@ -420,9 +444,9 @@ logger.info(
 )
 
 # Save metrics to JSON for plotting
-with open("training_metrics.json", "w") as f:
+with open(args.json_output, "w") as f:
     json.dump(training_metrics, f, indent=2)
-logger.info("Training metrics saved to training_metrics.json")
+logger.info(f"Training metrics saved to {args.json_output}")
 
 # Training complete
 logger.info("Training script finished successfully")

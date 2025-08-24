@@ -4,6 +4,7 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
+import argparse
 
 
 def load_metrics(filepath):
@@ -50,12 +51,34 @@ def extract_data(metrics):
     }
 
 
+parser = argparse.ArgumentParser(description="LeNet-5 training with optional pruning")
+parser.add_argument(
+    "--test-prefix",
+    type=str,
+    default="SGD",
+    choices=["SGD", "Adam", "AdamW"],
+    help='Prefix to use for tests labels (default: "SGD")',
+)
+parser.add_argument(
+    "--compare-output",
+    type=str,
+    default="model_comparison.png",
+    help="Where to output model comparison graph metrics",
+)
+parser.add_argument(
+    "--accuracy-output",
+    type=str,
+    default="accuracy_evolution.png",
+    help="Where to output model accuracy evolution graph metrics",
+)
+args = parser.parse_args()
+
 # Load all model metrics
 models = {
-    "SGD Baseline": load_metrics("model_a_metrics.json"),
-    "SGD 50% Pruning": load_metrics("model_b_metrics.json"),
-    "SGD 90% Pruning": load_metrics("model_c_metrics.json"),
-    "SGD 70% Pruning": load_metrics("model_d_metrics.json"),
+    f"{args.test_prefix} Baseline": load_metrics("model_a_metrics.json"),
+    f"{args.test_prefix} 50% Pruning": load_metrics("model_b_metrics.json"),
+    f"{args.test_prefix} 90% Pruning": load_metrics("model_c_metrics.json"),
+    f"{args.test_prefix} 70% Pruning": load_metrics("model_d_metrics.json"),
 }
 
 # Extract data for each model
@@ -77,10 +100,17 @@ fig.suptitle(
 
 # Define colors for different optimizers
 sgd_colors = ["#1f77b4", "#aec7e8", "#174a7e", "#6baed6"]
+sgd_colors = ["#1f77b4", "#aec7e8", "#174a7e", "#6baed6"]
+adamw_colors = ["#ff7f0e", "#d62728"]
 
 
 def get_color_and_style(name):
-    if "SGD" in name:
+    if "AdamW" in name:
+        if "Baseline" in name:
+            return adamw_colors[0], "-"
+        else:
+            return adamw_colors[1], "--"
+    else:  # SGD
         if "Baseline" in name:
             return sgd_colors[0], "-"
         elif "50%" in name:
@@ -225,8 +255,8 @@ ax6.grid(True, alpha=0.3)
 ax6.set_ylim([94, 100])
 
 plt.tight_layout()
-plt.savefig("model_comparison.png", dpi=150, bbox_inches="tight")
-print("Saved comprehensive comparison plot as 'model_comparison.png'")
+plt.savefig(args.compare_output, dpi=150, bbox_inches="tight")
+print(f"Saved comprehensive comparison plot as {args.compare_output}")
 
 # Create a detailed performance table
 print("\n" + "=" * 80)
@@ -280,9 +310,9 @@ ax.axhline(y=98, color="gray", linestyle=":", alpha=0.5)
 ax.text(10.5, 98, "98% accuracy threshold", fontsize=9, color="gray")
 
 plt.tight_layout()
-plt.savefig("accuracy_evolution.png", dpi=150, bbox_inches="tight")
-print("\nSaved accuracy evolution plot as 'accuracy_evolution.png'")
+plt.savefig(args.accuracy_output, dpi=150, bbox_inches="tight")
+print(f"\nSaved accuracy evolution plot as {args.accuracy_output}")
 
 print("\nPlots generated successfully!")
-print("- model_comparison.png: Comprehensive 6-panel comparison")
-print("- accuracy_evolution.png: Detailed accuracy evolution plot")
+print(f"- {args.compare_output}: Comprehensive 6-panel comparison")
+print(f"- {args.accuracy_output}: Detailed accuracy evolution plot")
