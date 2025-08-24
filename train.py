@@ -13,6 +13,12 @@ num_epochs = 10
  # Device will determine whether to run the training on GPU or CPU.
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+if device.type == "cuda":
+    print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+    print(
+        f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB"
+    )
+
 # Loading the dataset and preprocessing
 train_dataset = torchvision.datasets.MNIST(
     root="./data",
