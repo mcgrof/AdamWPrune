@@ -9,6 +9,7 @@ __pycache__/
 # Training outputs
 *.log
 train.log
+results/
 
 # Model checkpoints - exclude all model files
 *.pth

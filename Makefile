@@ -9,6 +9,7 @@ HELP_TARGETS :=
 all: $(TARGETS)
 
 sgd-movement:
+	@mkdir -p results/sgd
 	# Model A - Baseline (no pruning)
 	python train.py --json-output model_a_metrics.json
 
@@ -29,12 +30,16 @@ sgd-movement:
 		--compare-output sgd-with-movement-accuracy_evolution.png \
 		--accuracy-output sgd-with-movement-pruning-model_comparison.png
 
+	# Save results
+	@mv model_*.json results/sgd/
+
 sgd-help-menu:
 	@echo "sgd-movement:             - Run tests with SGD as a baseline"
 
 HELP_TARGETS += sgd-help-menu
 
 adam-movement:
+	@mkdir -p results/adam
 	# Model A - Baseline (no pruning)
 	python train.py --optimizer adam --json-output model_a_metrics.json
 
@@ -58,12 +63,16 @@ adam-movement:
 		--compare-output adam-with-movement-accuracy_evolution.png \
 		--accuracy-output adam-with-movement-pruning-model_comparison.png
 
+	# Save results
+	@mv model_*.json results/adam/
+
 adam-help-menu:
 	@echo "adam-movement:            - Run tests with Adam as a baseline"
 
 HELP_TARGETS += adam-help-menu
 
 adamw-movement:
+	@mkdir -p results/adamw
 	# Model A - Baseline (no pruning)
 	python train.py --optimizer adamw --json-output model_a_metrics.json
 
@@ -87,12 +96,16 @@ adamw-movement:
 		--compare-output adamw-with-movement-accuracy_evolution.png \
 		--accuracy-output adamw-with-movement-pruning-model_comparison.png
 
+	# Save results
+	@mv model_*.json results/adamw/
+
 adamw-help-menu:
 	@echo "adamw-movement:           - Run tests with AdamW as a baseline"
 
 HELP_TARGETS += adamw-help-menu
 
 adamwadv-movement:
+	@mkdir -p results/adamwadv
 	# Model A - Baseline (no pruning)
 	python train.py --optimizer adamwadv --json-output model_a_metrics.json
 
@@ -116,12 +129,16 @@ adamwadv-movement:
 		--compare-output adamwadv-with-movement-accuracy_evolution.png \
 		--accuracy-output adamwadv-with-movement-pruning-model_comparison.png
 
+	# Save results
+	@mv model_*.json results/adamwadv/
+
 adamwadv-help-menu:
 	@echo "adamwadv-movement:        - Run tests with AdamW Advanced as a baseline"
 
 HELP_TARGETS += adamwadv-help-menu
 
 adamwspam-movement:
+	@mkdir -p results/adamwspam
 	# Model A - Baseline (no pruning)
 	python train.py --optimizer adamwspam --json-output model_a_metrics.json
 
@@ -145,12 +162,16 @@ adamwspam-movement:
 		--compare-output adamwspam-with-movement-accuracy_evolution.png \
 		--accuracy-output adamwspam-with-movement-pruning-model_comparison.png
 
+	# Save results
+	@mv model_*.json results/adamwspam/
+
 adamwspam-help-menu:
 	@echo "adamwspam-movement:       - Run tests with AdamW SPAM as a baseline"
 
 HELP_TARGETS += adamwspam-help-menu
 
 adamwprune-movement:
+	@mkdir -p results/adamwprune
 	# Model A - Baseline (no pruning)
 	python train.py --optimizer adamwprune --json-output model_a_metrics.json
 
@@ -174,6 +195,9 @@ adamwprune-movement:
 		--compare-output adamwprune-with-movement-accuracy_evolution.png \
 		--accuracy-output adamwprune-with-movement-pruning-model_comparison.png
 
+	# Save results
+	@mv model_*.json results/adamwprune/
+
 adamwprune-help-menu:
 	@echo "adamwprune-movement:      - Run tests with AdamWPrune (experimental state-based pruning)"
 
@@ -186,6 +210,22 @@ update-graphs-help-menu:
 	@echo "update-graphs:            - Install new graphs to images/ dir"
 
 HELP_TARGETS += update-graphs-help-menu
+
+# Memory comparison visualization targets
+memory-comparison: sgd-movement adam-movement adamw-movement adamwadv-movement adamwspam-movement adamwprune-movement
+	@echo "Generating memory comparison visualizations..."
+	python plot_optimizer_memory_comparison.py
+	@echo "Memory comparison plots generated:"
+	@echo "  - optimizer_comparison_baseline.png"
+	@echo "  - optimizer_comparison_50_pruning.png"
+	@echo "  - optimizer_comparison_70_pruning.png"
+	@echo "  - optimizer_comparison_90_pruning.png"
+	@echo "  - memory_efficiency_summary.png"
+
+memory-comparison-help-menu:
+	@echo "memory-comparison:        - Generate memory efficiency comparison plots"
+
+HELP_TARGETS += memory-comparison-help-menu
 
 help: $(HELP_TARGETS)
 
