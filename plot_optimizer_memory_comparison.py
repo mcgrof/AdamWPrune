@@ -28,33 +28,41 @@ args = parser.parse_args()
 OPTIMIZER_CONFIGS = {
     "SGD": {
         "color": "#1f77b4",  # Blue
-        "label": "SGD",
+        "label": "SGD+Movement",
     },
     "Adam": {
         "color": "#2ca02c",  # Green
-        "label": "Adam",
+        "label": "Adam+Movement",
     },
     "AdamW": {
         "color": "#ff7f0e",  # Orange
-        "label": "AdamW",
+        "label": "AdamW+Movement",
     },
     "AdamWAdv": {
         "color": "#d62728",  # Red
-        "label": "AdamWAdv",
+        "label": "AdamWAdv+Movement",
     },
     "AdamWSPAM": {
         "color": "#9467bd",  # Purple
-        "label": "AdamWSPAM",
+        "label": "AdamWSPAM+Movement",
     },
     "AdamWPrune": {
         "color": "#17becf",  # Cyan
         "label": "AdamWPrune",
     },
+    "SGD-Magnitude": {
+        "color": "#8c564b",  # Brown
+        "label": "SGD+Magnitude",
+    },
+    "AdamW-Magnitude": {
+        "color": "#e377c2",  # Pink
+        "label": "AdamW+Magnitude",
+    },
 }
 
 # Memory accounting constants
 BYTES_PER_PARAM = 4  # float32
-BYTES_PER_BOOL = 1   # bool mask
+BYTES_PER_BOOL = 1  # bool mask
 
 # Movement pruning overhead in this repo (float32):
 # - scores (1x), initial_weights (1x), masks (1x)
@@ -73,6 +81,8 @@ def load_results_from_json():
         "adamwadv": "AdamWAdv",
         "adamwspam": "AdamWSPAM",
         "adamwprune": "AdamWPrune",
+        "sgd-magnitude": "SGD-Magnitude",
+        "adamw-magnitude": "AdamW-Magnitude",
     }
 
     # Map model files to sparsity levels
@@ -109,7 +119,9 @@ def load_results_from_json():
                     elif "final_accuracy" in data:
                         final_accuracy = data["final_accuracy"]
                     else:
-                        print(f"Warning: Could not find accuracy in {json_path}. Using default.")
+                        print(
+                            f"Warning: Could not find accuracy in {json_path}. Using default."
+                        )
                         final_accuracy = 95.0
                     # Extract parameter count from sparsity
                     if sparsity == "Baseline":
@@ -153,7 +165,7 @@ def calculate_memory_usage(optimizer, params, pruning_level):
     weights_mem = params * BYTES_PER_PARAM
 
     # Optimizer states
-    if optimizer in ("SGD",):
+    if optimizer in ("SGD", "SGD-Magnitude"):
         # No momentum used here; treat as 0 extra
         opt_states_mem = 0
     else:
@@ -166,6 +178,9 @@ def calculate_memory_usage(optimizer, params, pruning_level):
         if optimizer == "AdamWPrune":
             # bool mask per parameter when pruning is enabled
             pruning_mem += params * BYTES_PER_BOOL
+        elif "Magnitude" in optimizer:
+            # Magnitude pruning: only binary masks (float32 in this implementation)
+            pruning_mem += params * BYTES_PER_PARAM  # mask stored as float32
         else:
             # Movement pruning in this repo: scores + initial_weights + masks (all float32)
             pruning_mem += MOVEMENT_PRUNING_OVERHEAD_MULT * params * BYTES_PER_PARAM
@@ -421,4 +436,6 @@ create_memory_efficiency_summary()
 print("=" * 60)
 print("All plots generated successfully!")
 print("\nKey Insight: AdamWPrune achieves competitive accuracy while using")
-print("minimal extra memory for pruning (1 byte/param boolean mask), reusing Adam states.")
+print(
+    "minimal extra memory for pruning (1 byte/param boolean mask), reusing Adam states."
+)

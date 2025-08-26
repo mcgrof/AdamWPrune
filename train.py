@@ -20,7 +20,7 @@ parser.add_argument(
     "--pruning-method",
     type=str,
     default="none",
-    choices=["none", "movement"],
+    choices=["none", "movement", "magnitude"],
     help="Pruning method to use (default: none)",
 )
 parser.add_argument(
@@ -76,6 +76,8 @@ args = parser.parse_args()
 # Conditionally import pruning module
 if args.pruning_method == "movement":
     from movement_pruning import MovementPruning
+elif args.pruning_method == "magnitude":
+    from magnitude_pruning import MagnitudePruning
 
 # Define relevant variables for the ML task
 batch_size = 512
@@ -314,9 +316,13 @@ elif args.optimizer == "adamwspam":
     logger.info("  - Adaptive gradient clipping")
     logger.info("  - Cosine annealing LR schedule")
     if spam_state["interval"] > 0:
-        logger.info(f"  - Periodic momentum reset interval: {spam_state['interval']} steps")
+        logger.info(
+            f"  - Periodic momentum reset interval: {spam_state['interval']} steps"
+        )
         if spam_state["warmup_steps"] > 0:
-            logger.info(f"  - Cosine warmup after reset: {spam_state['warmup_steps']} steps")
+            logger.info(
+                f"  - Cosine warmup after reset: {spam_state['warmup_steps']} steps"
+            )
     if spam_state["enable_clip"]:
         logger.info(f"  - Spike-aware clipping enabled (theta={spam_state['theta']})")
 elif args.optimizer == "adamwprune":
@@ -387,18 +393,32 @@ scaler = GradScaler("cuda")
 
 # Initialize pruning if enabled
 pruner = None
-if enable_pruning and args.pruning_method == "movement" and args.optimizer != "adamwprune":
+if enable_pruning and args.optimizer != "adamwprune":
     # Calculate total training steps for pruning schedule
     total_training_steps = len(train_loader) * ramp_end_epoch
-    pruner = MovementPruning(
-        model=model,
-        initial_sparsity=initial_sparsity,
-        target_sparsity=target_sparsity,
-        warmup_steps=warmup_steps,
-        pruning_frequency=pruning_frequency,
-        ramp_end_step=total_training_steps,
-    )
-    logger.info(f"Movement pruning enabled with target sparsity: {target_sparsity}")
+
+    if args.pruning_method == "movement":
+        pruner = MovementPruning(
+            model=model,
+            initial_sparsity=initial_sparsity,
+            target_sparsity=target_sparsity,
+            warmup_steps=warmup_steps,
+            pruning_frequency=pruning_frequency,
+            ramp_end_step=total_training_steps,
+        )
+        logger.info(f"Movement pruning enabled with target sparsity: {target_sparsity}")
+    elif args.pruning_method == "magnitude":
+        pruner = MagnitudePruning(
+            model=model,
+            initial_sparsity=initial_sparsity,
+            target_sparsity=target_sparsity,
+            warmup_steps=warmup_steps,
+            pruning_frequency=pruning_frequency,
+            ramp_end_step=total_training_steps,
+        )
+        logger.info(
+            f"Magnitude pruning enabled with target sparsity: {target_sparsity}"
+        )
     logger.info(
         f"Pruning warmup steps: {warmup_steps}, ramp end: {total_training_steps}"
     )
@@ -656,16 +676,22 @@ for epoch in range(num_epochs):
                                 importance = torch.abs(module.weight.data)
 
                             # Update boolean mask buffer
-                            new_mask = (importance > threshold)
-                            adamprune_state["masks"][module].data = new_mask.to(torch.bool)
+                            new_mask = importance > threshold
+                            adamprune_state["masks"][module].data = new_mask.to(
+                                torch.bool
+                            )
 
                             # Apply mask to weights immediately
-                            module.weight.data.mul_(adamprune_state["masks"][module].to(module.weight.dtype))
+                            module.weight.data.mul_(
+                                adamprune_state["masks"][module].to(module.weight.dtype)
+                            )
 
             # Always apply existing masks to maintain sparsity
             elif adamprune_state["step_count"] > adamprune_state["warmup_steps"]:
                 for module in adamprune_state["masks"].keys():
-                    module.weight.data.mul_(adamprune_state["masks"][module].to(module.weight.dtype))
+                    module.weight.data.mul_(
+                        adamprune_state["masks"][module].to(module.weight.dtype)
+                    )
 
             # Also mask optimizer states to keep pruned weights inactive
             for module, mask in adamprune_state["masks"].items():
