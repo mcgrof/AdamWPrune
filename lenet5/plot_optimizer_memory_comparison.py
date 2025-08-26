@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+
 """
 Comprehensive optimizer comparison focusing on memory efficiency.
 Generates 4 plots: baselines, 50% pruning, 70% pruning, 90% pruning.

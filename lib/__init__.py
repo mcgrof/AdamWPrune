@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # AdamWPrune Library
 # Shared utilities for neural network training and optimization
 

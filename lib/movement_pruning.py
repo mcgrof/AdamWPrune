@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """
 Movement Pruning implementation based on the paper:
 "Movement Pruning: Adaptive Sparsity by Fine-Tuning"

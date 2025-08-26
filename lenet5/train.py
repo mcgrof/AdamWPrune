@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # Load in relevant libraries, and alias where appropriate
 import sys
 import os

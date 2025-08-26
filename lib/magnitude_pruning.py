@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """
 Magnitude Pruning implementation - the baseline pruning method.
 Prunes weights based on their absolute magnitude (smallest weights are pruned).
