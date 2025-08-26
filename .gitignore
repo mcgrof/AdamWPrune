@@ -10,12 +10,17 @@ __pycache__/
 *.log
 train.log
 results/
+*/results/
 
 # Model checkpoints - exclude all model files
 *.pth
 *.json
 *.patch
 data/
+
+# Model-specific data directories
+lenet5/data/
+resnet18/data/
 
 # Temporary and backup files
 *_backup.py

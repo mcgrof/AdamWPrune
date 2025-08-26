@@ -1,298 +1,82 @@
-TARGETS := sgd-movement
-TARGETS += adam-movement
-TARGETS += adamw-movement
-TARGETS += adamwadv-movement
-TARGETS += adamwspam-movement
-TARGETS += adamwprune-movement
-HELP_TARGETS :=
+# Top-level Makefile for AdamWPrune experiments
 
-all: $(TARGETS)
+# Default model to train
+MODEL ?= lenet5
 
+# Default target is to run memory comparison and update graphs
+all: memory-comparison update-graphs
+
+# Run memory comparison experiments for the current model
+memory-comparison:
+	@echo "Running memory comparison experiments for $(MODEL)..."
+	$(MAKE) -C $(MODEL) memory-comparison
+
+# Update graphs with latest results
+update-graphs:
+	@echo "Updating graphs for $(MODEL)..."
+	$(MAKE) -C $(MODEL) update-graphs
+
+# Clean all generated files
+clean:
+	@echo "Cleaning $(MODEL) directory..."
+	$(MAKE) -C $(MODEL) clean
+
+# Run specific optimizer experiments
 sgd-movement:
-	@mkdir -p results/sgd
-	# Model A - Baseline (no pruning)
-	python train.py --json-output model_a_metrics.json
-
-	# Model B - 50% pruning
-	python train.py --pruning-method movement --target-sparsity 0.5 \
-		--json-output model_b_metrics.json
-
-	# Model C - 90% pruning
-	python train.py --pruning-method movement --target-sparsity 0.9 \
-		--json-output model_c_metrics.json
-
-	# Model D - 70% pruning
-	python train.py --pruning-method movement --target-sparsity 0.7 \
-		--json-output model_d_metrics.json
-
-	# Generate comparison plots
-	python plot_comparison.py \
-		--compare-output sgd-with-movement-accuracy_evolution.png \
-		--accuracy-output sgd-with-movement-pruning-model_comparison.png
-
-	# Save results
-	@mv model_*.json results/sgd/
-
-sgd-help-menu:
-	@echo "sgd-movement:             - Run tests with SGD as a baseline"
-
-HELP_TARGETS += sgd-help-menu
+	$(MAKE) -C $(MODEL) sgd-movement
 
 adam-movement:
-	@mkdir -p results/adam
-	# Model A - Baseline (no pruning)
-	python train.py --optimizer adam --json-output model_a_metrics.json
-
-	# Model B - 50% pruning
-	python train.py --optimizer adam --pruning-method movement \
-		--target-sparsity 0.5 \
-		--json-output model_b_metrics.json
-
-	# Model C - 90% pruning
-	python train.py --optimizer adam --pruning-method movement \
-		--target-sparsity 0.9 \
-		--json-output model_c_metrics.json
-
-	# Model D - 70% pruning
-	python train.py --optimizer adam --pruning-method movement \
-		--target-sparsity 0.7 \
-		--json-output model_d_metrics.json
-
-	# Generate comparison plots
-	python plot_comparison.py --test-prefix="Adam" \
-		--compare-output adam-with-movement-accuracy_evolution.png \
-		--accuracy-output adam-with-movement-pruning-model_comparison.png
-
-	# Save results
-	@mv model_*.json results/adam/
-
-adam-help-menu:
-	@echo "adam-movement:            - Run tests with Adam as a baseline"
-
-HELP_TARGETS += adam-help-menu
+	$(MAKE) -C $(MODEL) adam-movement
 
 adamw-movement:
-	@mkdir -p results/adamw
-	# Model A - Baseline (no pruning)
-	python train.py --optimizer adamw --json-output model_a_metrics.json
-
-	# Model B - 50% pruning
-	python train.py --optimizer adamw --pruning-method movement \
-		--target-sparsity 0.5 \
-		--json-output model_b_metrics.json
-
-	# Model C - 90% pruning
-	python train.py --optimizer adamw --pruning-method movement \
-		--target-sparsity 0.9 \
-		--json-output model_c_metrics.json
-
-	# Model D - 70% pruning
-	python train.py --optimizer adamw --pruning-method movement \
-		--target-sparsity 0.7 \
-		--json-output model_d_metrics.json
-
-	# Generate comparison plots
-	python plot_comparison.py --test-prefix="AdamW" \
-		--compare-output adamw-with-movement-accuracy_evolution.png \
-		--accuracy-output adamw-with-movement-pruning-model_comparison.png
-
-	# Save results
-	@mv model_*.json results/adamw/
-
-adamw-help-menu:
-	@echo "adamw-movement:           - Run tests with AdamW as a baseline"
-
-HELP_TARGETS += adamw-help-menu
+	$(MAKE) -C $(MODEL) adamw-movement
 
 adamwadv-movement:
-	@mkdir -p results/adamwadv
-	# Model A - Baseline (no pruning)
-	python train.py --optimizer adamwadv --json-output model_a_metrics.json
-
-	# Model B - 50% pruning
-	python train.py --optimizer adamwadv --pruning-method movement \
-		--target-sparsity 0.5 \
-		--json-output model_b_metrics.json
-
-	# Model C - 90% pruning
-	python train.py --optimizer adamwadv --pruning-method movement \
-		--target-sparsity 0.9 \
-		--json-output model_c_metrics.json
-
-	# Model D - 70% pruning
-	python train.py --optimizer adamwadv --pruning-method movement \
-		--target-sparsity 0.7 \
-		--json-output model_d_metrics.json
-
-	# Generate comparison plots
-	python plot_comparison.py --test-prefix="AdamWAdv" \
-		--compare-output adamwadv-with-movement-accuracy_evolution.png \
-		--accuracy-output adamwadv-with-movement-pruning-model_comparison.png
-
-	# Save results
-	@mv model_*.json results/adamwadv/
-
-adamwadv-help-menu:
-	@echo "adamwadv-movement:        - Run tests with AdamW Advanced as a baseline"
-
-HELP_TARGETS += adamwadv-help-menu
+	$(MAKE) -C $(MODEL) adamwadv-movement
 
 adamwspam-movement:
-	@mkdir -p results/adamwspam
-	# Model A - Baseline (no pruning)
-	python train.py --optimizer adamwspam --json-output model_a_metrics.json
-
-	# Model B - 50% pruning
-	python train.py --optimizer adamwspam --pruning-method movement \
-		--target-sparsity 0.5 \
-		--json-output model_b_metrics.json
-
-	# Model C - 90% pruning
-	python train.py --optimizer adamwspam --pruning-method movement \
-		--target-sparsity 0.9 \
-		--json-output model_c_metrics.json
-
-	# Model D - 70% pruning
-	python train.py --optimizer adamwspam --pruning-method movement \
-		--target-sparsity 0.7 \
-		--json-output model_d_metrics.json
-
-	# Generate comparison plots
-	python plot_comparison.py --test-prefix="AdamWSPAM" \
-		--compare-output adamwspam-with-movement-accuracy_evolution.png \
-		--accuracy-output adamwspam-with-movement-pruning-model_comparison.png
-
-	# Save results
-	@mv model_*.json results/adamwspam/
-
-adamwspam-help-menu:
-	@echo "adamwspam-movement:       - Run tests with AdamW SPAM as a baseline"
-
-HELP_TARGETS += adamwspam-help-menu
+	$(MAKE) -C $(MODEL) adamwspam-movement
 
 adamwprune-movement:
-	@mkdir -p results/adamwprune
-	# Model A - Baseline (no pruning)
-	python train.py --optimizer adamwprune --json-output model_a_metrics.json
+	$(MAKE) -C $(MODEL) adamwprune-movement
 
-	# Model B - 50% pruning (uses state-based pruning)
-	python train.py --optimizer adamwprune --pruning-method movement \
-		--target-sparsity 0.5 \
-		--json-output model_b_metrics.json
-
-	# Model C - 90% pruning (uses state-based pruning)
-	python train.py --optimizer adamwprune --pruning-method movement \
-		--target-sparsity 0.9 \
-		--json-output model_c_metrics.json
-
-	# Model D - 70% pruning (uses state-based pruning)
-	python train.py --optimizer adamwprune --pruning-method movement \
-		--target-sparsity 0.7 \
-		--json-output model_d_metrics.json
-
-	# Generate comparison plots
-	python plot_comparison.py --test-prefix="AdamWPrune" \
-		--compare-output adamwprune-with-movement-accuracy_evolution.png \
-		--accuracy-output adamwprune-with-movement-pruning-model_comparison.png
-
-	# Save results
-	@mv model_*.json results/adamwprune/
-
-adamwprune-help-menu:
-	@echo "adamwprune-movement:      - Run tests with AdamWPrune (experimental state-based pruning)"
-
-HELP_TARGETS += adamwprune-help-menu
-
-# Magnitude pruning targets (baseline pruning method)
 sgd-magnitude:
-	@mkdir -p results/sgd-magnitude
-	# Model A - Baseline (no pruning)
-	python train.py --json-output model_a_metrics.json
-
-	# Model B - 50% pruning
-	python train.py --pruning-method magnitude --target-sparsity 0.5 \
-		--json-output model_b_metrics.json
-
-	# Model C - 90% pruning
-	python train.py --pruning-method magnitude --target-sparsity 0.9 \
-		--json-output model_c_metrics.json
-
-	# Model D - 70% pruning
-	python train.py --pruning-method magnitude --target-sparsity 0.7 \
-		--json-output model_d_metrics.json
-
-	# Generate comparison plots
-	python plot_comparison.py \
-		--compare-output sgd-with-magnitude-accuracy_evolution.png \
-		--accuracy-output sgd-with-magnitude-pruning-model_comparison.png
-
-	# Save results
-	@mv model_*.json results/sgd-magnitude/
-
-sgd-magnitude-help-menu:
-	@echo "sgd-magnitude:            - Run tests with SGD and magnitude pruning"
-
-HELP_TARGETS += sgd-magnitude-help-menu
+	$(MAKE) -C $(MODEL) sgd-magnitude
 
 adamw-magnitude:
-	@mkdir -p results/adamw-magnitude
-	# Model A - Baseline (no pruning)
-	python train.py --optimizer adamw --json-output model_a_metrics.json
+	$(MAKE) -C $(MODEL) adamw-magnitude
 
-	# Model B - 50% pruning
-	python train.py --optimizer adamw --pruning-method magnitude \
-		--target-sparsity 0.5 \
-		--json-output model_b_metrics.json
+# Help menu
+help:
+	@echo "AdamWPrune Experiments Makefile"
+	@echo "================================"
+	@echo ""
+	@echo "Usage: make [target] [MODEL=model_name]"
+	@echo ""
+	@echo "Available models:"
+	@echo "  lenet5            - LeNet-5 on MNIST (default)"
+	@echo ""
+	@echo "Main targets:"
+	@echo "  all               - Run memory comparison and update graphs (default)"
+	@echo "  memory-comparison - Run all optimizer experiments with memory tracking"
+	@echo "  update-graphs     - Update visualization graphs with latest results"
+	@echo "  clean            - Clean generated files"
+	@echo ""
+	@echo "Specific optimizer targets:"
+	@echo "  sgd-movement      - Run SGD with movement pruning"
+	@echo "  adam-movement     - Run Adam with movement pruning"
+	@echo "  adamw-movement    - Run AdamW with movement pruning"
+	@echo "  adamwadv-movement - Run AdamW Advanced with movement pruning"
+	@echo "  adamwspam-movement- Run AdamW SPAM with movement pruning"
+	@echo "  adamwprune-movement - Run AdamWPrune with state-based pruning"
+	@echo "  sgd-magnitude     - Run SGD with magnitude pruning"
+	@echo "  adamw-magnitude   - Run AdamW with magnitude pruning"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make                     # Run default (memory-comparison and update-graphs for lenet5)"
+	@echo "  make MODEL=lenet5        # Explicitly specify lenet5 model"
+	@echo "  make adamwprune-movement # Run AdamWPrune experiments only"
 
-	# Model C - 90% pruning
-	python train.py --optimizer adamw --pruning-method magnitude \
-		--target-sparsity 0.9 \
-		--json-output model_c_metrics.json
-
-	# Model D - 70% pruning
-	python train.py --optimizer adamw --pruning-method magnitude \
-		--target-sparsity 0.7 \
-		--json-output model_d_metrics.json
-
-	# Generate comparison plots
-	python plot_comparison.py \
-		--compare-output adamw-with-magnitude-accuracy_evolution.png \
-		--accuracy-output adamw-with-magnitude-pruning-model_comparison.png
-
-	# Save results
-	@mv model_*.json results/adamw-magnitude/
-
-adamw-magnitude-help-menu:
-	@echo "adamw-magnitude:          - Run tests with AdamW and magnitude pruning"
-
-HELP_TARGETS += adamw-magnitude-help-menu
-
-update-graphs:
-	mv *.png images/
-
-update-graphs-help-menu:
-	@echo "update-graphs:            - Install new graphs to images/ dir"
-
-HELP_TARGETS += update-graphs-help-menu
-
-# Memory comparison visualization targets
-memory-comparison: sgd-movement adam-movement adamw-movement adamwadv-movement adamwspam-movement adamwprune-movement sgd-magnitude adamw-magnitude
-	@echo "Generating memory comparison visualizations..."
-	python plot_optimizer_memory_comparison.py
-	@echo "Memory comparison plots generated:"
-	@echo "  - optimizer_comparison_baseline.png"
-	@echo "  - optimizer_comparison_50_pruning.png"
-	@echo "  - optimizer_comparison_70_pruning.png"
-	@echo "  - optimizer_comparison_90_pruning.png"
-	@echo "  - memory_efficiency_summary.png"
-
-memory-comparison-help-menu:
-	@echo "memory-comparison:        - Generate memory efficiency comparison plots"
-
-HELP_TARGETS += memory-comparison-help-menu
-
-help: $(HELP_TARGETS)
-
-clean:
-	rm -f *.json
-	rm -f *.png
+.PHONY: all memory-comparison update-graphs clean help \
+        sgd-movement adam-movement adamw-movement adamwadv-movement \
+        adamwspam-movement adamwprune-movement sgd-magnitude adamw-magnitude

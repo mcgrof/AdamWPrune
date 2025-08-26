@@ -1,4 +1,9 @@
 # Load in relevant libraries, and alias where appropriate
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 import torch.nn as nn
 import torchvision
@@ -9,10 +14,18 @@ import time
 import logging
 import json
 from datetime import datetime
-import os
 import argparse
 import numpy as np
 from collections import deque
+
+# Import shared library modules
+from lib.optimizers import (
+    create_optimizer,
+    apply_spam_gradient_processing,
+    apply_periodic_spam_reset,
+    apply_adamprune_masking,
+    update_adamprune_masks,
+)
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="LeNet-5 training with optional pruning")
@@ -75,9 +88,9 @@ args = parser.parse_args()
 
 # Conditionally import pruning module
 if args.pruning_method == "movement":
-    from movement_pruning import MovementPruning
+    from lib.movement_pruning import MovementPruning
 elif args.pruning_method == "magnitude":
-    from magnitude_pruning import MagnitudePruning
+    from lib.magnitude_pruning import MagnitudePruning
 
 # Define relevant variables for the ML task
 batch_size = 512
@@ -144,7 +157,7 @@ else:
 
 # Loading the dataset and preprocessing
 train_dataset = torchvision.datasets.MNIST(
-    root="./data",
+    root="../data",
     train=True,
     transform=transforms.Compose(
         [
@@ -158,7 +171,7 @@ train_dataset = torchvision.datasets.MNIST(
 
 
 test_dataset = torchvision.datasets.MNIST(
-    root="./data",
+    root="../data",
     train=False,
     transform=transforms.Compose(
         [
@@ -244,149 +257,16 @@ else:
 # Setting the loss function
 cost = nn.CrossEntropyLoss()
 
-# Setting the optimizer with the model parameters and learning rate
-scheduler = None
-gradient_clip_norm = None
-spam_state = None  # For SPAM optimizer state tracking
-adamprune_state = None  # For AdamWPrune state-based pruning
-
-if args.optimizer == "adam":
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    logger.info("Using Adam optimizer")
-elif args.optimizer == "adamw":
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=learning_rate, weight_decay=1e-4
+# Create optimizer using the library function
+optimizer, scheduler, gradient_clip_norm, spam_state, adamprune_state = (
+    create_optimizer(
+        model=model,
+        optimizer_type=args.optimizer,
+        learning_rate=learning_rate,
+        num_epochs=num_epochs,
+        args=args,
     )
-    logger.info("Using AdamW optimizer with weight decay=0.0001")
-elif args.optimizer == "adamwadv":
-    # AdamW Advanced with all enhancements
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=learning_rate,
-        betas=(0.9, 0.999),
-        eps=1e-8,
-        weight_decay=0.01,  # Stronger weight decay for better regularization
-        amsgrad=True,  # AMSGrad variant for better convergence
-    )
-    # Cosine annealing learning rate scheduler
-    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
-    # Gradient clipping for stability
-    gradient_clip_norm = 1.0
-    logger.info("Using AdamW Advanced optimizer with:")
-    logger.info("  - AMSGrad enabled for better convergence")
-    logger.info("  - Weight decay=0.01 for stronger regularization")
-    logger.info("  - Cosine annealing LR schedule")
-    logger.info("  - Gradient clipping norm=1.0")
-elif args.optimizer == "adamwspam":
-    # AdamW with SPAM (Spike-Aware Pruning-Adaptive Momentum)
-    # Reference (for future fidelity alignment):
-    # SPAM: Spike-Aware Adam with Momentum Reset for Stable LLM Training
-    # https://arxiv.org/abs/2501.06842
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=learning_rate,
-        betas=(0.9, 0.999),
-        eps=1e-8,
-        weight_decay=0.01,
-        amsgrad=True,
-    )
-    # Initialize SPAM state tracking
-    spam_state = {
-        "gradient_history": deque(maxlen=100),
-        "gradient_norms": deque(maxlen=100),
-        "spike_threshold": 2.0,  # Detect spikes > 2 std deviations (heuristic)
-        "spike_events": [],
-        "last_reset_step": 0,
-        "global_step": 0,
-        "momentum_reset_count": 0,
-        # SPAM fidelity options
-        "theta": args.spam_theta,
-        "interval": args.spam_interval,
-        "warmup_steps": args.spam_warmup_steps,
-        "enable_clip": args.spam_enable_clip,
-        "warmup_until": 0,
-    }
-    # Cosine annealing with SPAM awareness
-    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
-    gradient_clip_norm = 1.0
-    logger.info("Using AdamW SPAM optimizer (heuristic + SPAM-inspired options) with:")
-    logger.info("  - Spike detection (threshold=2.0 std)")
-    logger.info("  - Automatic momentum reset on spikes")
-    logger.info("  - AMSGrad for stability")
-    logger.info("  - Adaptive gradient clipping")
-    logger.info("  - Cosine annealing LR schedule")
-    if spam_state["interval"] > 0:
-        logger.info(
-            f"  - Periodic momentum reset interval: {spam_state['interval']} steps"
-        )
-        if spam_state["warmup_steps"] > 0:
-            logger.info(
-                f"  - Cosine warmup after reset: {spam_state['warmup_steps']} steps"
-            )
-    if spam_state["enable_clip"]:
-        logger.info(f"  - Spike-aware clipping enabled (theta={spam_state['theta']})")
-elif args.optimizer == "adamwprune":
-    # AdamWPrune - Experimental: All enhancements + state-based pruning
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=learning_rate,
-        betas=(0.9, 0.999),
-        eps=1e-8,
-        weight_decay=0.01,
-        amsgrad=True,
-    )
-
-    # Initialize both SPAM and pruning state
-    spam_state = {
-        "gradient_history": deque(maxlen=100),
-        "gradient_norms": deque(maxlen=100),
-        "spike_threshold": 2.0,
-        "spike_events": [],
-        "last_reset_step": 0,
-        "global_step": 0,
-        "momentum_reset_count": 0,
-        # SPAM fidelity options
-        "theta": args.spam_theta,
-        "interval": args.spam_interval,
-        "warmup_steps": args.spam_warmup_steps,
-        "enable_clip": args.spam_enable_clip,
-        "warmup_until": 0,
-    }
-
-    # AdamWPrune specific state for state-based pruning
-    adamprune_state = {
-        "pruning_enabled": args.pruning_method == "movement",
-        "target_sparsity": (
-            args.target_sparsity if args.pruning_method == "movement" else 0
-        ),
-        "warmup_steps": args.pruning_warmup,
-        "pruning_frequency": 50,
-        "step_count": 0,
-        "masks": {},  # module -> bool mask buffer
-        "pruning_strategy": "hybrid",  # hybrid of momentum and stability
-    }
-
-    # Initialize masks for prunable layers as boolean buffers to minimize memory
-    if adamprune_state["pruning_enabled"]:
-        for _, module in model.named_modules():
-            if isinstance(module, (nn.Linear, nn.Conv2d)):
-                mask = torch.ones_like(module.weight.data, dtype=torch.bool)
-                module.register_buffer("adamprune_mask", mask)
-                adamprune_state["masks"][module] = module.adamprune_mask
-
-    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
-    gradient_clip_norm = 1.0
-
-    logger.info("Using AdamWPrune (Experimental) optimizer with:")
-    logger.info("  - All AdamWAdv + SPAM features")
-    logger.info("  - State-based pruning using Adam momentum/variance")
-    logger.info("  - Hybrid pruning strategy (momentum × stability)")
-    if adamprune_state["pruning_enabled"]:
-        logger.info(f"  - Target sparsity: {adamprune_state['target_sparsity']:.1%}")
-        logger.info(f"  - Pruning warmup: {adamprune_state['warmup_steps']} steps")
-else:
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
-    logger.info("Using SGD optimizer with momentum=0.9")
+)
 
 # Initialize GradScaler for mixed precision training
 scaler = GradScaler("cuda")
@@ -486,223 +366,27 @@ for epoch in range(num_epochs):
         if gradient_clip_norm is not None:
             scaler.unscale_(optimizer)
 
-            # SPAM-inspired spike-aware clipping using Adam's second moment (approximate GSS)
-            if spam_state is not None and spam_state.get("enable_clip", False):
-                theta = float(spam_state.get("theta", 50.0))
-                eps = 1e-12
-                for group in optimizer.param_groups:
-                    for p in group["params"]:
-                        if p.grad is None:
-                            continue
-                        state = optimizer.state.get(p, {})
-                        v = state.get("exp_avg_sq", None)
-                        if v is None:
-                            continue
-                        # threshold per-parameter: sqrt(theta * v)
-                        thr = (theta * (v + eps)).sqrt()
-                        g = p.grad
-                        # clip per-parameter exceeding threshold
-                        over = g.abs() > thr
-                        if over.any():
-                            g.data[over] = g.data[over].sign() * thr.data[over]
+            # Apply AdamWPrune gradient masking
+            apply_adamprune_masking(optimizer, adamprune_state)
 
-            # If using AdamWPrune, zero gradients on pruned weights before clipping
-            if adamprune_state is not None and adamprune_state["pruning_enabled"]:
-                for module, mask in adamprune_state["masks"].items():
-                    if module.weight.grad is not None:
-                        module.weight.grad.data.mul_(mask.to(module.weight.grad.dtype))
-
-            # SPAM spike detection and momentum reset
-            if spam_state is not None:
-                # Compute gradient norm for spike detection
-                total_norm = 0.0
-                for p in model.parameters():
-                    if p.grad is not None:
-                        param_norm = p.grad.data.norm(2)
-                        total_norm += param_norm.item() ** 2
-                total_norm = total_norm**0.5
-
-                # Track gradient norms (only if finite)
-                if np.isfinite(total_norm):
-                    spam_state["gradient_norms"].append(total_norm)
-                spam_state["global_step"] += 1
-
-                # Detect spikes after warmup period
-                if len(spam_state["gradient_norms"]) >= 10:
-                    history = np.array(list(spam_state["gradient_norms"])[:-1])
-                    # Filter out NaN and infinite values
-                    history = history[np.isfinite(history)]
-
-                    if len(history) > 0:
-                        mean_norm = np.mean(history)
-                        std_norm = np.std(history)
-
-                        if (
-                            std_norm > 0
-                            and np.isfinite(mean_norm)
-                            and np.isfinite(std_norm)
-                        ):
-                            z_score = (total_norm - mean_norm) / std_norm
-
-                            # Spike detected - reset momentum
-                            if z_score > spam_state["spike_threshold"] and np.isfinite(
-                                z_score
-                            ):
-                                for group in optimizer.param_groups:
-                                    for p in group["params"]:
-                                        state = optimizer.state.get(p, {})
-                                        if "exp_avg" in state:
-                                            state["exp_avg"].mul_(0.5)  # Soft reset
-                                        if "exp_avg_sq" in state:
-                                            state["exp_avg_sq"].mul_(
-                                                0.9
-                                            )  # Gentle reset
-
-                                spam_state["spike_events"].append(
-                                    spam_state["global_step"]
-                                )
-                                spam_state["momentum_reset_count"] += 1
-                                spam_state["last_reset_step"] = spam_state[
-                                    "global_step"
-                                ]
-
-                                if (i + 1) % 10 == 0:  # Log significant spikes
-                                    logger.info(
-                                        f"SPAM: Spike detected (z={z_score:.2f}), momentum reset #{spam_state['momentum_reset_count']}"
-                                    )
+            # Apply SPAM gradient processing
+            apply_spam_gradient_processing(
+                optimizer, model, spam_state, gradient_clip_norm
+            )
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_norm)
 
-        # Periodic SPAM momentum reset (first/second moments), with optional warmup
-        if spam_state is not None:
-            spam_state["global_step"] += 1
-            interval = int(spam_state.get("interval", 0))
-            if interval > 0 and spam_state["global_step"] % interval == 0:
-                for group in optimizer.param_groups:
-                    for p in group["params"]:
-                        state = optimizer.state.get(p, {})
-                        if "exp_avg" in state:
-                            state["exp_avg"].zero_()
-                        if "exp_avg_sq" in state:
-                            state["exp_avg_sq"].zero_()
-                spam_state["momentum_reset_count"] += 1
-                spam_state["last_reset_step"] = spam_state["global_step"]
-                if int(spam_state.get("warmup_steps", 0)) > 0:
-                    spam_state["warmup_until"] = spam_state["global_step"] + int(
-                        spam_state["warmup_steps"]
-                    )
-
-            # Apply cosine warmup scaling to param group lrs if within warmup window
-            warmup_until = int(spam_state.get("warmup_until", 0))
-            if warmup_until > spam_state["global_step"]:
-                remaining = warmup_until - spam_state["global_step"]
-                total = int(spam_state.get("warmup_steps", 0))
-                # cosine from small to 1.0
-                t = (total - remaining) / max(total, 1)
-                scale = 0.5 * (1 - np.cos(np.pi * t))  # 0 -> 1
-                scale = max(1e-3, float(scale))
-                for group in optimizer.param_groups:
-                    base_lr = group.get("base_lr", group["lr"])
-                    group["lr"] = base_lr * scale
+        # Periodic SPAM momentum reset with optional warmup
+        apply_periodic_spam_reset(optimizer, spam_state)
 
         scaler.step(optimizer)
         scaler.update()
 
         # Apply AdamWPrune state-based pruning
-        if adamprune_state is not None and adamprune_state["pruning_enabled"]:
-            adamprune_state["step_count"] += 1
-
-            # Update masks based on Adam states
-            if (
-                adamprune_state["step_count"] > adamprune_state["warmup_steps"]
-                and adamprune_state["step_count"] % adamprune_state["pruning_frequency"]
-                == 0
-            ):
-
-                # Calculate current sparsity level (gradual ramp-up)
-                ramp_end_step = len(train_loader) * 8  # Ramp to target by epoch 8
-                progress = min(
-                    1.0,
-                    (adamprune_state["step_count"] - adamprune_state["warmup_steps"])
-                    / (ramp_end_step - adamprune_state["warmup_steps"]),
-                )
-                current_sparsity = adamprune_state["target_sparsity"] * progress
-
-                # Compute importance scores using Adam states
-                all_scores = []
-                for module in adamprune_state["masks"].keys():
-                    # Get Adam states for this layer
-                    state = optimizer.state.get(module.weight, {})
-                    if "exp_avg" in state and "exp_avg_sq" in state:
-                        exp_avg = state["exp_avg"]
-                        exp_avg_sq = state["exp_avg_sq"]
-
-                        # Hybrid strategy: combine momentum and stability signals
-                        # Momentum signal: weights moving strongly in one direction
-                        momentum_score = torch.abs(module.weight.data * exp_avg)
-
-                        # Stability signal: weights with consistent updates
-                        stability_score = torch.abs(module.weight.data) / (
-                            torch.sqrt(exp_avg_sq) + 1e-8
-                        )
-
-                        # Combine both signals
-                        importance = momentum_score * stability_score
-                        all_scores.append(importance.flatten())
-                    else:
-                        # Fallback to magnitude if no Adam states yet
-                        all_scores.append(torch.abs(module.weight.data).flatten())
-
-                if all_scores:
-                    all_scores = torch.cat(all_scores)
-
-                    # Find global threshold for target sparsity
-                    k = int(current_sparsity * all_scores.numel())
-                    if k > 0:
-                        threshold = torch.kthvalue(all_scores, k).values
-
-                        # Update masks
-                        for module in adamprune_state["masks"].keys():
-                            state = optimizer.state.get(module.weight, {})
-                            if "exp_avg" in state and "exp_avg_sq" in state:
-                                exp_avg = state["exp_avg"]
-                                exp_avg_sq = state["exp_avg_sq"]
-                                momentum_score = torch.abs(module.weight.data * exp_avg)
-                                stability_score = torch.abs(module.weight.data) / (
-                                    torch.sqrt(exp_avg_sq) + 1e-8
-                                )
-                                importance = momentum_score * stability_score
-                            else:
-                                importance = torch.abs(module.weight.data)
-
-                            # Update boolean mask buffer
-                            new_mask = importance > threshold
-                            adamprune_state["masks"][module].data = new_mask.to(
-                                torch.bool
-                            )
-
-                            # Apply mask to weights immediately
-                            module.weight.data.mul_(
-                                adamprune_state["masks"][module].to(module.weight.dtype)
-                            )
-
-            # Always apply existing masks to maintain sparsity
-            elif adamprune_state["step_count"] > adamprune_state["warmup_steps"]:
-                for module in adamprune_state["masks"].keys():
-                    module.weight.data.mul_(
-                        adamprune_state["masks"][module].to(module.weight.dtype)
-                    )
-
-            # Also mask optimizer states to keep pruned weights inactive
-            for module, mask in adamprune_state["masks"].items():
-                state = optimizer.state.get(module.weight, {})
-                if "exp_avg" in state:
-                    state["exp_avg"].mul_(mask.to(state["exp_avg"].dtype))
-                if "exp_avg_sq" in state:
-                    state["exp_avg_sq"].mul_(mask.to(state["exp_avg_sq"].dtype))
+        update_adamprune_masks(optimizer, adamprune_state, train_loader, epoch)
 
         # Apply movement pruning if enabled (for non-AdamWPrune optimizers)
-        elif pruner is not None:
+        if pruner is not None:
             pruner.step_pruning()
 
         running_loss += loss.item()
