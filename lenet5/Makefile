@@ -268,7 +268,7 @@ adamw-magnitude-help-menu:
 HELP_TARGETS += adamw-magnitude-help-menu
 
 update-graphs:
-	mv *.png images/
+	mv *.png ../images/
 
 update-graphs-help-menu:
 	@echo "update-graphs:            - Install new graphs to images/ dir"
