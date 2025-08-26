@@ -1,0 +1,213 @@
+# SPDX-License-Identifier: MIT
+# AdamWPrune Configuration
+
+mainmenu "AdamWPrune v1.0.0 - Neural Network Training Configuration"
+
+menu "General Configuration"
+
+config BATCH_SIZE
+	int "Batch size for training"
+	default 512
+	range 32 2048
+	help
+	  Batch size for training. Larger batch sizes can speed up training
+	  but require more GPU memory. Default is 512.
+
+config NUM_EPOCHS
+	int "Number of training epochs"
+	default 10
+	range 1 1000
+	help
+	  Number of epochs to train the model. Default is 10.
+
+config LEARNING_RATE
+	string "Learning rate"
+	default "0.001"
+	help
+	  Initial learning rate for training. Default is 0.001.
+
+config NUM_WORKERS
+	int "Number of data loader workers"
+	default 16
+	range 0 32
+	help
+	  Number of parallel workers for data loading. Set to 0 to disable
+	  multiprocessing. Default is 16.
+
+config DEVICE
+	string "Device for training"
+	default "cuda"
+	help
+	  Device to use for training. Can be "cuda" for GPU or "cpu" for CPU.
+	  Default is "cuda" which will automatically fall back to CPU if no
+	  GPU is available.
+
+config DATA_DIR
+	string "Data directory path"
+	default "data"
+	help
+	  Path to the directory where datasets will be stored/loaded.
+	  Default is "data" in the project root.
+
+config OUTPUT_DIR
+	string "Output directory for results"
+	default "results"
+	help
+	  Directory where training results, models, and metrics will be saved.
+	  Default is "results".
+
+config JSON_OUTPUT
+	string "JSON metrics output filename"
+	default "training_metrics.json"
+	help
+	  Filename for saving training metrics in JSON format.
+	  Default is "training_metrics.json".
+
+endmenu
+
+source "Kconfig.models"
+source "Kconfig.optimizers"
+source "Kconfig.pruning"
+
+menu "Advanced Options"
+
+config COMPILE_MODEL
+	bool "Enable torch.compile() for model optimization"
+	default y
+	depends on DEVICE = "cuda"
+	help
+	  Enable PyTorch 2.0+ torch.compile() for faster execution.
+	  Only available when using CUDA device.
+
+config MIXED_PRECISION
+	bool "Enable mixed precision training (AMP)"
+	default y
+	depends on DEVICE = "cuda"
+	help
+	  Enable Automatic Mixed Precision (AMP) training for faster
+	  training and reduced memory usage on GPUs.
+
+config GPU_WARMUP
+	bool "Enable GPU warmup"
+	default y
+	depends on DEVICE = "cuda"
+	help
+	  Perform GPU warmup iterations before training to ensure
+	  consistent timing measurements.
+
+config PIN_MEMORY
+	bool "Pin memory for data loading"
+	default y
+	depends on DEVICE = "cuda"
+	help
+	  Pin memory for faster GPU transfer during data loading.
+
+config PERSISTENT_WORKERS
+	bool "Keep data loader workers persistent"
+	default y
+	depends on NUM_WORKERS > 0
+	help
+	  Keep data loader workers alive between epochs to reduce overhead.
+
+config PREFETCH_FACTOR
+	int "Prefetch factor for data loading"
+	default 2
+	range 1 10
+	depends on NUM_WORKERS > 0
+	help
+	  Number of batches to prefetch per worker. Default is 2.
+
+
+config SAVE_CHECKPOINT
+	bool "Save model checkpoints"
+	default y
+	help
+	  Save model checkpoints during training.
+
+config CHECKPOINT_INTERVAL
+	int "Checkpoint save interval (epochs)"
+	default 1
+	range 1 100
+	depends on SAVE_CHECKPOINT
+	help
+	  Save checkpoints every N epochs. Default is 1.
+
+endmenu
+
+menu "Test Matrix"
+
+config TEST_RESULTS_DIR
+	string "Test results directory for graph generation"
+	default ""
+	help
+	  Specify the test matrix results directory to use for generating graphs.
+	  Leave empty to use the most recent test_matrix_results_* directory.
+	  Example: test_matrix_results_20250826_181029
+
+config AUTO_GENERATE_GRAPHS
+	bool "Automatically generate graphs after test matrix"
+	default y
+	help
+	  Automatically generate comparison graphs for each optimizer after
+	  completing the test matrix run.
+
+config PARALLEL_JOBS
+	int "Number of parallel training jobs"
+	default 1
+	range 1 50
+	help
+	  Number of training jobs to run in parallel. Each job uses minimal
+	  GPU memory (~50-100MB for LeNet-5), so multiple jobs can run
+	  simultaneously on high-memory GPUs. Recommended: 1-4 for <16GB GPU,
+	  8-20 for 24-48GB GPU, up to 50 for very large GPUs.
+
+config MAX_GPU_MEMORY_PERCENT
+	int "Maximum GPU memory usage percentage"
+	default 90
+	range 50 95
+	depends on PARALLEL_JOBS > 1
+	help
+	  Maximum percentage of GPU memory to use for parallel training.
+	  The system will automatically limit concurrent jobs to stay within
+	  this threshold. Default is 90%.
+
+config PARALLEL_BATCH_SIZE
+	int "Batch size for parallel jobs"
+	default 256
+	range 32 1024
+	depends on PARALLEL_JOBS > 1
+	help
+	  Batch size to use when running parallel jobs. Smaller batch sizes
+	  reduce memory usage per job, allowing more parallel execution.
+	  Default is 256 (half of normal batch size).
+
+endmenu
+
+menu "Debugging"
+
+config DEBUG
+	bool "Enable debug mode"
+	default n
+	help
+	  Enable debug mode with verbose logging and additional checks.
+
+config VERBOSE
+	bool "Enable verbose output"
+	default y
+	help
+	  Enable verbose output during training.
+
+config LOG_LEVEL
+	string "Logging level"
+	default "INFO"
+	help
+	  Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+	  Default is INFO.
+
+config PROFILE
+	bool "Enable profiling"
+	default n
+	help
+	  Enable performance profiling during training.
+
+endmenu

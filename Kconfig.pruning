@@ -1,0 +1,417 @@
+# SPDX-License-Identifier: MIT
+# Pruning Configuration
+
+menu "Pruning Configuration"
+
+# Main pruning mode selection
+choice
+	prompt "Pruning Mode"
+	default PRUNING_MODE_MULTIPLE
+	help
+	  Select how to configure pruning:
+	  - None: No pruning (baseline training)
+	  - Single: Use one specific pruning method
+	  - Multiple: Enable multiple pruning methods for evaluation/comparison
+
+config PRUNING_MODE_NONE
+	bool "No pruning"
+	help
+	  No pruning will be applied. Model trains with all weights active.
+	  Use this for baseline training or when pruning is not needed.
+
+config PRUNING_MODE_SINGLE
+	bool "Single pruning method"
+	help
+	  Select and configure a single pruning method for training.
+
+config PRUNING_MODE_MULTIPLE
+	bool "Multiple pruning methods (evaluation mode)"
+	help
+	  Enable multiple pruning methods for comparison and evaluation.
+	  The actual method(s) used will be determined at runtime.
+
+endchoice
+
+# Single pruning method selection
+if PRUNING_MODE_SINGLE
+
+choice
+	prompt "Select pruning method"
+	default PRUNING_SELECT_MAGNITUDE
+	help
+	  Select which pruning method to use for training.
+
+config PRUNING_SELECT_MAGNITUDE
+	bool "Magnitude pruning"
+	depends on !OPTIMIZER_ADAMWPRUNE
+	help
+	  Prune weights based on their absolute magnitude.
+	  This is the simplest and most widely used pruning technique.
+	  Removes the smallest magnitude weights.
+
+config PRUNING_SELECT_MOVEMENT
+	bool "Movement pruning"
+	depends on !OPTIMIZER_ADAMWPRUNE
+	help
+	  Movement pruning based on the paper:
+	  "Movement Pruning: Adaptive Sparsity by Fine-Tuning"
+	  Prunes weights based on their movement during training.
+
+config PRUNING_SELECT_STATE
+	bool "State-based pruning (AdamWPrune)"
+	depends on OPTIMIZER_ADAMWPRUNE
+	help
+	  Built-in state-based pruning using Adam optimizer states.
+	  Uses momentum and variance information for pruning decisions.
+	  Zero memory overhead compared to external pruning methods.
+
+endchoice
+
+endif # PRUNING_MODE_SINGLE
+
+# Multiple pruning method selection
+if PRUNING_MODE_MULTIPLE
+
+comment "Select pruning methods to enable"
+
+config PRUNING_ENABLE_NONE
+	bool "Enable no pruning (baseline)"
+	default y
+	help
+	  Include baseline (no pruning) in evaluation.
+
+config PRUNING_ENABLE_MAGNITUDE
+	bool "Enable magnitude pruning"
+	default y
+	help
+	  Enable magnitude pruning for evaluation.
+
+config PRUNING_ENABLE_MOVEMENT
+	bool "Enable movement pruning"
+	default y
+	help
+	  Enable movement pruning for evaluation.
+
+# State pruning is automatically enabled with AdamWPrune
+comment "State-based pruning is automatically enabled when AdamWPrune optimizer is selected"
+	depends on OPTIMIZER_ENABLED_ADAMWPRUNE
+
+endif # PRUNING_MODE_MULTIPLE
+
+# Namespace configuration for enabled pruning methods
+# These are the actual flags that code should check
+config PRUNING_ENABLED_NONE
+	bool
+	default y if PRUNING_MODE_NONE
+	default y if PRUNING_MODE_MULTIPLE && PRUNING_ENABLE_NONE
+	default n
+
+config PRUNING_ENABLED_MAGNITUDE
+	bool
+	default y if PRUNING_MODE_SINGLE && PRUNING_SELECT_MAGNITUDE
+	default y if PRUNING_MODE_MULTIPLE && PRUNING_ENABLE_MAGNITUDE
+	default n
+
+config PRUNING_ENABLED_MOVEMENT
+	bool
+	default y if PRUNING_MODE_SINGLE && PRUNING_SELECT_MOVEMENT
+	default y if PRUNING_MODE_MULTIPLE && PRUNING_ENABLE_MOVEMENT
+	default n
+
+config PRUNING_ENABLED_STATE
+	bool
+	default y if PRUNING_MODE_SINGLE && PRUNING_SELECT_STATE
+	default y if PRUNING_MODE_MULTIPLE && OPTIMIZER_ENABLED_ADAMWPRUNE
+	default n
+
+# Count of enabled pruning methods (for validation)
+config PRUNING_COUNT
+	int
+	default 0 if PRUNING_MODE_NONE
+	default 1 if PRUNING_MODE_SINGLE
+	default 3 if PRUNING_MODE_MULTIPLE && PRUNING_ENABLE_NONE && PRUNING_ENABLE_MAGNITUDE && PRUNING_ENABLE_MOVEMENT
+
+# Default pruning method string for single mode
+config PRUNING_DEFAULT
+	string
+	default "none" if PRUNING_MODE_NONE
+	default "magnitude" if PRUNING_MODE_SINGLE && PRUNING_SELECT_MAGNITUDE
+	default "movement" if PRUNING_MODE_SINGLE && PRUNING_SELECT_MOVEMENT
+	default "state" if PRUNING_MODE_SINGLE && PRUNING_SELECT_STATE
+	default "" if PRUNING_MODE_MULTIPLE
+
+# Sparsity level configuration
+if PRUNING_MODE_SINGLE && !PRUNING_MODE_NONE
+
+config TARGET_SPARSITY
+	string "Target sparsity level (0.0-1.0)"
+	default "0.9"
+	help
+	  Target sparsity level for pruning (fraction of weights to prune).
+	  0.5 = 50% sparsity (remove half of the weights)
+	  0.9 = 90% sparsity (remove 90% of weights)
+	  Default is 0.9 (90% sparsity).
+
+endif # PRUNING_MODE_SINGLE && !PRUNING_MODE_NONE
+
+# Multiple sparsity levels for evaluation mode
+if PRUNING_MODE_MULTIPLE && (PRUNING_ENABLE_MAGNITUDE || PRUNING_ENABLE_MOVEMENT)
+
+comment "Select sparsity levels to test"
+
+config SPARSITY_ENABLE_50
+	bool "Test 50% sparsity"
+	default y
+	help
+	  Include 50% sparsity (0.5) in evaluation.
+
+config SPARSITY_ENABLE_70
+	bool "Test 70% sparsity"
+	default y
+	help
+	  Include 70% sparsity (0.7) in evaluation.
+
+config SPARSITY_ENABLE_90
+	bool "Test 90% sparsity"
+	default y
+	help
+	  Include 90% sparsity (0.9) in evaluation.
+
+config SPARSITY_ENABLE_95
+	bool "Test 95% sparsity"
+	default n
+	help
+	  Include 95% sparsity (0.95) in evaluation.
+	  This is a very aggressive sparsity level.
+
+config SPARSITY_ENABLE_99
+	bool "Test 99% sparsity"
+	default n
+	help
+	  Include 99% sparsity (0.99) in evaluation.
+	  This is an extreme sparsity level for research purposes.
+
+endif # PRUNING_MODE_MULTIPLE
+
+# Common pruning parameters
+if (PRUNING_MODE_SINGLE && !PRUNING_MODE_NONE) || PRUNING_MODE_MULTIPLE
+
+menu "Pruning Parameters"
+
+config PRUNING_WARMUP
+	int "Pruning warmup steps"
+	default 100
+	range 0 10000
+	help
+	  Number of training steps before pruning starts.
+	  Allows model to learn initial features before pruning.
+	  Default is 100 steps.
+
+config PRUNING_FREQUENCY
+	int "Pruning update frequency (steps)"
+	default 50
+	range 1 1000
+	help
+	  How often to update pruning masks (in steps).
+	  Lower values = more frequent updates.
+	  Default is 50 steps.
+
+config PRUNING_RAMP_END_EPOCH
+	int "Ramp end epoch"
+	default 8
+	range 1 100
+	help
+	  Epoch at which pruning ramp ends and sparsity stabilizes.
+	  Default is 8.
+
+endmenu
+
+endif # Pruning enabled
+
+# Magnitude pruning specific options
+if PRUNING_ENABLED_MAGNITUDE
+
+menu "Magnitude Pruning Configuration"
+
+config MAGNITUDE_PRUNING_NORM
+	string "Norm type for magnitude calculation"
+	default "l1"
+	help
+	  Norm type for calculating weight magnitudes.
+	  Options: "l1" (absolute value), "l2" (Euclidean norm)
+	  Default is "l1".
+
+config MAGNITUDE_PRUNING_STRUCTURED
+	bool "Use structured pruning"
+	default n
+	help
+	  Enable structured pruning (prune entire channels/filters).
+	  Default is unstructured pruning (individual weights).
+
+endmenu
+
+endif # PRUNING_ENABLED_MAGNITUDE
+
+# Movement pruning specific options
+if PRUNING_ENABLED_MOVEMENT
+
+menu "Movement Pruning Configuration"
+
+config MOVEMENT_PRUNING_BETA
+	string "Movement beta coefficient"
+	default "0.9"
+	help
+	  Exponential moving average coefficient for movement scores.
+	  Higher values = more weight to historical movement.
+	  Default is 0.9.
+
+config MOVEMENT_PRUNING_USE_GRADIENT
+	bool "Use gradient for movement"
+	default y
+	help
+	  Use gradient information for calculating movement scores.
+	  If disabled, uses weight changes directly.
+
+endmenu
+
+endif # PRUNING_ENABLED_MOVEMENT
+
+# State-based pruning specific options
+if PRUNING_ENABLED_STATE
+
+menu "State Pruning Configuration"
+
+config STATE_PRUNING_STRATEGY
+	string "Pruning strategy"
+	default "hybrid"
+	help
+	  Strategy for state-based pruning:
+	  - "momentum": Use momentum information only
+	  - "variance": Use variance information only
+	  - "hybrid": Combine momentum and variance (recommended)
+	  Default is "hybrid".
+
+config STATE_PRUNING_MOMENTUM_WEIGHT
+	string "Momentum weight in hybrid"
+	default "0.5"
+	depends on STATE_PRUNING_STRATEGY = "hybrid"
+	help
+	  Weight given to momentum signal in hybrid strategy.
+	  Range: 0.0-1.0, where 1.0 = momentum only, 0.0 = variance only.
+	  Default is 0.5 (equal weighting).
+
+endmenu
+
+endif # PRUNING_ENABLED_STATE
+
+# Analysis and logging options
+menu "Pruning Analysis"
+	depends on !PRUNING_MODE_NONE
+
+config PRUNING_SAVE_MASKS
+	bool "Save pruning masks"
+	default n
+	help
+	  Save pruning masks to file for analysis.
+
+config PRUNING_VISUALIZE_MASKS
+	bool "Visualize pruning patterns"
+	default n
+	help
+	  Generate visualizations of pruning patterns.
+
+config PRUNING_LOG_SPARSITY
+	bool "Log sparsity statistics"
+	default y
+	help
+	  Log detailed sparsity statistics during training.
+
+endmenu
+
+# Legacy compatibility mappings
+# Map old ENABLE_PRUNING to new system
+config ENABLE_PRUNING
+	bool
+	default y if PRUNING_MODE_SINGLE
+	default n
+
+# Map old PRUNING_* selections to new namespace
+config PRUNING_NONE
+	bool
+	default y if PRUNING_MODE_NONE
+	default n
+
+config PRUNING_MAGNITUDE
+	bool
+	default y if PRUNING_ENABLED_MAGNITUDE && PRUNING_MODE_SINGLE
+	default n
+
+config PRUNING_MOVEMENT
+	bool
+	default y if PRUNING_ENABLED_MOVEMENT && PRUNING_MODE_SINGLE
+	default n
+
+config PRUNING_STATE
+	bool
+	default y if PRUNING_ENABLED_STATE && PRUNING_MODE_SINGLE
+	default n
+
+config PRUNING_METHOD
+	string
+	default "none" if PRUNING_NONE || PRUNING_MODE_NONE
+	default "magnitude" if PRUNING_MAGNITUDE
+	default "movement" if PRUNING_MOVEMENT
+	default "state" if PRUNING_STATE
+	default "none"
+
+# Map old TEST_PRUNING_* to new namespace
+config TEST_PRUNING_NONE
+	bool
+	default y if PRUNING_ENABLED_NONE && PRUNING_MODE_MULTIPLE
+	default n
+
+config TEST_PRUNING_MAGNITUDE
+	bool
+	default y if PRUNING_ENABLED_MAGNITUDE && PRUNING_MODE_MULTIPLE
+	default n
+
+config TEST_PRUNING_MOVEMENT
+	bool
+	default y if PRUNING_ENABLED_MOVEMENT && PRUNING_MODE_MULTIPLE
+	default n
+
+config TEST_PRUNING_METHODS
+	string
+	default "none,magnitude,movement" if TEST_PRUNING_NONE && TEST_PRUNING_MAGNITUDE && TEST_PRUNING_MOVEMENT
+	default "none,magnitude" if TEST_PRUNING_NONE && TEST_PRUNING_MAGNITUDE && !TEST_PRUNING_MOVEMENT
+	default "none,movement" if TEST_PRUNING_NONE && !TEST_PRUNING_MAGNITUDE && TEST_PRUNING_MOVEMENT
+	default "none" if TEST_PRUNING_NONE && !TEST_PRUNING_MAGNITUDE && !TEST_PRUNING_MOVEMENT
+	default ""
+
+# Map old TEST_SPARSITY_* to new namespace
+config TEST_SPARSITY_50
+	bool
+	default y if SPARSITY_ENABLE_50 && PRUNING_MODE_MULTIPLE
+	default n
+
+config TEST_SPARSITY_70
+	bool
+	default y if SPARSITY_ENABLE_70 && PRUNING_MODE_MULTIPLE
+	default n
+
+config TEST_SPARSITY_90
+	bool
+	default y if SPARSITY_ENABLE_90 && PRUNING_MODE_MULTIPLE
+	default n
+
+config TEST_SPARSITY_95
+	bool
+	default y if SPARSITY_ENABLE_95 && PRUNING_MODE_MULTIPLE
+	default n
+
+config TEST_SPARSITY_99
+	bool
+	default y if SPARSITY_ENABLE_99 && PRUNING_MODE_MULTIPLE
+	default n
+
+endmenu

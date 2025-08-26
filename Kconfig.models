@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MIT
+# Model Selection Configuration
+
+menu "Model Selection"
+
+# For now we only have one model, so just select it
+config MODEL_LENET5
+	bool
+	default y
+	help
+	  LeNet-5 convolutional neural network for MNIST digit classification.
+	  Small model suitable for testing and development.
+	  Parameters: ~60K
+
+config MODEL
+	string
+	default "lenet5"
+
+# Test matrix model selection
+config TEST_MODEL_LENET5
+	bool
+	default y
+	help
+	  Include LeNet-5 in the test matrix.
+
+config TEST_MODELS
+	string
+	default "lenet5"
+
+# Model-specific configurations
+if MODEL_LENET5 || TEST_MODEL_LENET5
+source "lenet5/Kconfig"
+endif
+
+endmenu

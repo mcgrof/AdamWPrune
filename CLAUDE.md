@@ -6,16 +6,17 @@
 - Make small, atomic commits - one logical change per commit
 - Each commit should be functional and not break the build
 - Run code formatter (black for Python) after each change
+- Run scripts/fix_whitespace_issues.py always on all files
 - Test that code runs successfully before committing
 
 ### Commit Messages
 - Use descriptive commit messages with the format:
   ```
   file.py: brief description of change
-  
+
   Detailed explanation of what was changed and why.
   Include technical details about the implementation.
-  
+
   Generated-by: Claude AI
   Signed-off-by: Luis Chamberlain <mcgrof@kernel.org>
   ```

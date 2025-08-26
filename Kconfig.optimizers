@@ -1,0 +1,434 @@
+# SPDX-License-Identifier: MIT
+# Optimizer Configuration
+
+menu "Optimizer Selection"
+
+# Main optimizer mode selection
+choice
+	prompt "Optimizer Mode"
+	default OPTIMIZER_MODE_MULTIPLE
+	help
+	  Select how to configure optimizers:
+	  - None: No optimizer (inference only or custom optimizer)
+	  - Single: Use one specific optimizer for training
+	  - Multiple: Enable multiple optimizers for evaluation/comparison
+
+config OPTIMIZER_MODE_NONE
+	bool "No optimizer"
+	help
+	  Don't use any optimizer. Useful for inference-only or when
+	  using a custom optimizer implementation.
+
+config OPTIMIZER_MODE_SINGLE
+	bool "Single optimizer"
+	help
+	  Select and configure a single optimizer for training.
+
+config OPTIMIZER_MODE_MULTIPLE
+	bool "Multiple optimizers (evaluation mode)"
+	help
+	  Enable multiple optimizers for comparison and evaluation.
+	  The actual optimizer(s) used will be determined at runtime.
+
+endchoice
+
+# Single optimizer selection
+if OPTIMIZER_MODE_SINGLE
+
+choice
+	prompt "Select optimizer"
+	default OPTIMIZER_SELECT_SGD
+	help
+	  Select which optimizer to use for training.
+
+config OPTIMIZER_SELECT_SGD
+	bool "SGD (Stochastic Gradient Descent)"
+	help
+	  Standard SGD optimizer with momentum support.
+	  Simple and reliable baseline optimizer.
+
+config OPTIMIZER_SELECT_ADAM
+	bool "Adam"
+	help
+	  Adam optimizer - adaptive learning rate optimization algorithm.
+	  Combines advantages of AdaGrad and RMSProp.
+
+config OPTIMIZER_SELECT_ADAMW
+	bool "AdamW"
+	help
+	  AdamW optimizer - Adam with decoupled weight decay regularization.
+	  Better generalization than standard Adam.
+
+config OPTIMIZER_SELECT_ADAMWADV
+	bool "AdamW Advanced"
+	help
+	  AdamW with additional enhancements:
+	  - AMSGrad for better convergence
+	  - Stronger weight decay (0.01)
+	  - Cosine annealing learning rate schedule
+	  - Gradient clipping
+
+config OPTIMIZER_SELECT_ADAMWSPAM
+	bool "AdamW SPAM"
+	help
+	  AdamW with SPAM (Spike-Aware Pruning-Adaptive Momentum):
+	  - Automatic spike detection and momentum reset
+	  - Optional periodic momentum reset
+	  - Spike-aware gradient clipping
+	  - Cosine warmup after reset
+
+config OPTIMIZER_SELECT_ADAMWPRUNE
+	bool "AdamWPrune (Experimental)"
+	help
+	  AdamWPrune - All AdamW Advanced features plus state-based pruning:
+	  - Uses Adam momentum and variance for pruning decisions
+	  - Zero memory overhead pruning
+	  - Hybrid pruning strategy (momentum × stability)
+
+endchoice
+
+endif # OPTIMIZER_MODE_SINGLE
+
+# Multiple optimizer selection
+if OPTIMIZER_MODE_MULTIPLE
+
+comment "Select optimizers to enable"
+
+config OPTIMIZER_ENABLE_SGD
+	bool "Enable SGD"
+	default y
+	help
+	  Enable SGD optimizer for evaluation.
+
+config OPTIMIZER_ENABLE_ADAM
+	bool "Enable Adam"
+	default y
+	help
+	  Enable Adam optimizer for evaluation.
+
+config OPTIMIZER_ENABLE_ADAMW
+	bool "Enable AdamW"
+	default y
+	help
+	  Enable AdamW optimizer for evaluation.
+
+config OPTIMIZER_ENABLE_ADAMWADV
+	bool "Enable AdamW Advanced"
+	default y
+	help
+	  Enable AdamW Advanced optimizer for evaluation.
+
+config OPTIMIZER_ENABLE_ADAMWSPAM
+	bool "Enable AdamW SPAM"
+	default y
+	help
+	  Enable AdamW SPAM optimizer for evaluation.
+
+config OPTIMIZER_ENABLE_ADAMWPRUNE
+	bool "Enable AdamWPrune"
+	default y
+	help
+	  Enable AdamWPrune optimizer for evaluation.
+
+endif # OPTIMIZER_MODE_MULTIPLE
+
+# Namespace configuration for enabled optimizers
+# These are the actual flags that code should check
+config OPTIMIZER_ENABLED_SGD
+	bool
+	default y if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_SGD
+	default y if OPTIMIZER_MODE_MULTIPLE && OPTIMIZER_ENABLE_SGD
+	default n
+
+config OPTIMIZER_ENABLED_ADAM
+	bool
+	default y if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAM
+	default y if OPTIMIZER_MODE_MULTIPLE && OPTIMIZER_ENABLE_ADAM
+	default n
+
+config OPTIMIZER_ENABLED_ADAMW
+	bool
+	default y if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAMW
+	default y if OPTIMIZER_MODE_MULTIPLE && OPTIMIZER_ENABLE_ADAMW
+	default n
+
+config OPTIMIZER_ENABLED_ADAMWADV
+	bool
+	default y if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAMWADV
+	default y if OPTIMIZER_MODE_MULTIPLE && OPTIMIZER_ENABLE_ADAMWADV
+	default n
+
+config OPTIMIZER_ENABLED_ADAMWSPAM
+	bool
+	default y if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAMWSPAM
+	default y if OPTIMIZER_MODE_MULTIPLE && OPTIMIZER_ENABLE_ADAMWSPAM
+	default n
+
+config OPTIMIZER_ENABLED_ADAMWPRUNE
+	bool
+	default y if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAMWPRUNE
+	default y if OPTIMIZER_MODE_MULTIPLE && OPTIMIZER_ENABLE_ADAMWPRUNE
+	default n
+
+# Count of enabled optimizers (for validation)
+config OPTIMIZER_COUNT
+	int
+	default 0 if OPTIMIZER_MODE_NONE
+	default 1 if OPTIMIZER_MODE_SINGLE
+	default 6 if OPTIMIZER_MODE_MULTIPLE && OPTIMIZER_ENABLE_SGD && OPTIMIZER_ENABLE_ADAM && OPTIMIZER_ENABLE_ADAMW && OPTIMIZER_ENABLE_ADAMWADV && OPTIMIZER_ENABLE_ADAMWSPAM && OPTIMIZER_ENABLE_ADAMWPRUNE
+
+# Default optimizer string for single mode
+config OPTIMIZER_DEFAULT
+	string
+	default "" if OPTIMIZER_MODE_NONE
+	default "sgd" if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_SGD
+	default "adam" if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAM
+	default "adamw" if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAMW
+	default "adamwadv" if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAMWADV
+	default "adamwspam" if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAMWSPAM
+	default "adamwprune" if OPTIMIZER_MODE_SINGLE && OPTIMIZER_SELECT_ADAMWPRUNE
+	default "" if OPTIMIZER_MODE_MULTIPLE
+
+# SGD specific options
+if OPTIMIZER_ENABLED_SGD
+
+menu "SGD Configuration"
+
+config SGD_MOMENTUM
+	string "Momentum"
+	default "0.9"
+	help
+	  Momentum factor for SGD optimizer. Default is 0.9.
+
+config SGD_WEIGHT_DECAY
+	string "Weight decay"
+	default "0.0"
+	help
+	  Weight decay (L2 penalty) for SGD optimizer. Default is 0.0.
+
+endmenu
+
+endif # OPTIMIZER_ENABLED_SGD
+
+# Adam specific options
+if OPTIMIZER_ENABLED_ADAM
+
+menu "Adam Configuration"
+
+config ADAM_BETA1
+	string "Beta1"
+	default "0.9"
+	help
+	  Coefficient for computing running average of gradient. Default is 0.9.
+
+config ADAM_BETA2
+	string "Beta2"
+	default "0.999"
+	help
+	  Coefficient for computing running average of squared gradient. Default is 0.999.
+
+config ADAM_EPSILON
+	string "Epsilon"
+	default "1e-8"
+	help
+	  Small constant for numerical stability. Default is 1e-8.
+
+config ADAM_WEIGHT_DECAY
+	string "Weight decay"
+	default "0.0"
+	help
+	  Weight decay for Adam optimizer. Default is 0.0.
+
+endmenu
+
+endif # OPTIMIZER_ENABLED_ADAM
+
+# AdamW specific options
+if OPTIMIZER_ENABLED_ADAMW
+
+menu "AdamW Configuration"
+
+config ADAMW_BETA1
+	string "Beta1"
+	default "0.9"
+	help
+	  Coefficient for computing running average of gradient. Default is 0.9.
+
+config ADAMW_BETA2
+	string "Beta2"
+	default "0.999"
+	help
+	  Coefficient for computing running average of squared gradient. Default is 0.999.
+
+config ADAMW_EPSILON
+	string "Epsilon"
+	default "1e-8"
+	help
+	  Small constant for numerical stability. Default is 1e-8.
+
+config ADAMW_WEIGHT_DECAY
+	string "Weight decay"
+	default "0.0001"
+	help
+	  Weight decay for AdamW optimizer. Default is 0.0001.
+
+endmenu
+
+endif # OPTIMIZER_ENABLED_ADAMW
+
+# Advanced optimizer options (AdamWAdv, SPAM, Prune)
+if OPTIMIZER_ENABLED_ADAMWADV || OPTIMIZER_ENABLED_ADAMWSPAM || OPTIMIZER_ENABLED_ADAMWPRUNE
+
+menu "Advanced Optimizer Configuration"
+
+config ADV_USE_AMSGRAD
+	bool "Use AMSGrad"
+	default y
+	help
+	  Enable AMSGrad variant for better convergence stability.
+
+config ADV_WEIGHT_DECAY
+	string "Weight decay"
+	default "0.01"
+	help
+	  Weight decay for advanced optimizers. Default is 0.01 (stronger than basic AdamW).
+
+config ADV_USE_COSINE_ANNEALING
+	bool "Use cosine annealing LR schedule"
+	default y
+	help
+	  Enable cosine annealing learning rate schedule.
+
+config ADV_COSINE_ETA_MIN
+	string "Cosine annealing minimum LR"
+	default "1e-6"
+	depends on ADV_USE_COSINE_ANNEALING
+	help
+	  Minimum learning rate for cosine annealing. Default is 1e-6.
+
+endmenu
+
+endif
+
+# SPAM specific options
+if OPTIMIZER_ENABLED_ADAMWSPAM || OPTIMIZER_ENABLED_ADAMWPRUNE
+
+menu "SPAM Configuration"
+
+config SPAM_THETA
+	string "Spike threshold theta"
+	default "50.0"
+	help
+	  Theta parameter for spike-aware clipping (approximate GSS).
+	  Default is 50.0.
+
+config SPAM_ENABLE_CLIP
+	bool "Enable spike-aware clipping"
+	default n
+	help
+	  Enable SPAM spike-aware clipping using Adam's second moment.
+
+config SPAM_SPIKE_THRESHOLD
+	string "Spike detection z-score threshold"
+	default "2.0"
+	help
+	  Z-score threshold for detecting gradient spikes. Default is 2.0.
+
+config SPAM_PERIODIC_RESET
+	bool "Enable periodic momentum reset"
+	default n
+	help
+	  Enable periodic reset of momentum at fixed intervals.
+
+config SPAM_INTERVAL
+	int "Periodic reset interval (steps)"
+	default 1000
+	range 100 10000
+	depends on SPAM_PERIODIC_RESET
+	help
+	  Number of steps between periodic momentum resets. Default is 1000.
+
+config SPAM_WARMUP
+	bool "Enable cosine warmup after reset"
+	default n
+	depends on SPAM_PERIODIC_RESET
+	help
+	  Enable cosine learning rate warmup after momentum reset.
+
+config SPAM_WARMUP_STEPS
+	int "Warmup steps after reset"
+	default 100
+	range 10 1000
+	depends on SPAM_WARMUP
+	help
+	  Number of warmup steps after each reset. Default is 100.
+
+endmenu
+
+endif # SPAM options
+
+# Legacy compatibility - map old TEST_MATRIX_MODE configurations
+config TEST_MATRIX_MODE
+	def_bool OPTIMIZER_MODE_MULTIPLE
+
+# Map old TEST_OPTIMIZER_ENABLED_* to new namespace
+config TEST_OPTIMIZER_ENABLED_SGD
+	bool
+	default y if OPTIMIZER_ENABLED_SGD && OPTIMIZER_MODE_MULTIPLE
+
+config TEST_OPTIMIZER_ENABLED_ADAM
+	bool
+	default y if OPTIMIZER_ENABLED_ADAM && OPTIMIZER_MODE_MULTIPLE
+
+config TEST_OPTIMIZER_ENABLED_ADAMW
+	bool
+	default y if OPTIMIZER_ENABLED_ADAMW && OPTIMIZER_MODE_MULTIPLE
+
+config TEST_OPTIMIZER_ENABLED_ADAMWADV
+	bool
+	default y if OPTIMIZER_ENABLED_ADAMWADV && OPTIMIZER_MODE_MULTIPLE
+
+config TEST_OPTIMIZER_ENABLED_ADAMWSPAM
+	bool
+	default y if OPTIMIZER_ENABLED_ADAMWSPAM && OPTIMIZER_MODE_MULTIPLE
+
+config TEST_OPTIMIZER_ENABLED_ADAMWPRUNE
+	bool
+	default y if OPTIMIZER_ENABLED_ADAMWPRUNE && OPTIMIZER_MODE_MULTIPLE
+
+# Map old single OPTIMIZER_* selections to new namespace
+config OPTIMIZER_SGD
+	bool
+	default y if OPTIMIZER_ENABLED_SGD && OPTIMIZER_MODE_SINGLE
+
+config OPTIMIZER_ADAM
+	bool
+	default y if OPTIMIZER_ENABLED_ADAM && OPTIMIZER_MODE_SINGLE
+
+config OPTIMIZER_ADAMW
+	bool
+	default y if OPTIMIZER_ENABLED_ADAMW && OPTIMIZER_MODE_SINGLE
+
+config OPTIMIZER_ADAMWADV
+	bool
+	default y if OPTIMIZER_ENABLED_ADAMWADV && OPTIMIZER_MODE_SINGLE
+
+config OPTIMIZER_ADAMWSPAM
+	bool
+	default y if OPTIMIZER_ENABLED_ADAMWSPAM && OPTIMIZER_MODE_SINGLE
+
+config OPTIMIZER_ADAMWPRUNE
+	bool
+	default y if OPTIMIZER_ENABLED_ADAMWPRUNE && OPTIMIZER_MODE_SINGLE
+
+config OPTIMIZER
+	string
+	default "sgd" if OPTIMIZER_SGD
+	default "adam" if OPTIMIZER_ADAM
+	default "adamw" if OPTIMIZER_ADAMW
+	default "adamwadv" if OPTIMIZER_ADAMWADV
+	default "adamwspam" if OPTIMIZER_ADAMWSPAM
+	default "adamwprune" if OPTIMIZER_ADAMWPRUNE
+	default ""
+
+endmenu

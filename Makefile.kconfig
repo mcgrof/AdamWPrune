@@ -1,0 +1,157 @@
+# SPDX-License-Identifier: MIT
+# Kconfig integration for AdamWPrune
+
+# Kconfig tools path
+KCONFIG_DIR := scripts/kconfig
+
+# Configuration files
+KCONFIG := Kconfig
+CONFIG_FILE := .config
+CONFIG_OLD := .config.old
+DEFCONFIG_DIR := defconfigs
+
+# Kconfig tools
+CONF := $(KCONFIG_DIR)/conf
+MCONF := $(KCONFIG_DIR)/mconf
+NCONF := $(KCONFIG_DIR)/nconf
+
+# Export for sub-makefiles
+export KCONFIG_DIR CONFIG_FILE
+
+# Include the config file if it exists
+-include $(CONFIG_FILE)
+
+# Ensure kconfig tools are built
+$(CONF) $(MCONF) $(NCONF):
+	@$(MAKE) -C $(KCONFIG_DIR) -f Makefile
+
+# Kconfig targets
+.PHONY: menuconfig xconfig gconfig config oldconfig defconfig savedefconfig
+
+menuconfig: $(MCONF)
+	@$(MCONF) $(KCONFIG)
+
+nconfig: $(NCONF)
+	@$(NCONF) $(KCONFIG)
+
+config: $(CONF)
+	@$(CONF) $(KCONFIG)
+
+oldconfig: $(CONF)
+	@$(CONF) --oldconfig $(KCONFIG)
+
+# Load a defconfig
+defconfig: $(CONF)
+	@if [ -z "$(DEFCONFIG)" ]; then \
+		echo "Usage: make defconfig DEFCONFIG=<config_name>"; \
+		echo "Use 'make list-defconfigs' to see available configurations"; \
+		exit 1; \
+	fi
+	@found_config=""; \
+	if [ -f "$(DEFCONFIG_DIR)/$(DEFCONFIG)" ]; then \
+		found_config="$(DEFCONFIG_DIR)/$(DEFCONFIG)"; \
+	else \
+		for model_dir in */defconfigs; do \
+			if [ -f "$$model_dir/$(DEFCONFIG)" ]; then \
+				found_config="$$model_dir/$(DEFCONFIG)"; \
+				break; \
+			fi; \
+		done; \
+	fi; \
+	if [ -z "$$found_config" ]; then \
+		echo "Error: Configuration '$(DEFCONFIG)' not found"; \
+		echo "Use 'make list-defconfigs' to see available configurations"; \
+		exit 1; \
+	fi; \
+	echo "Loading defconfig: $(DEFCONFIG) from $$found_config"; \
+	cp "$$found_config" $(CONFIG_FILE)
+	@$(CONF) --olddefconfig $(KCONFIG)
+
+# Save current config as defconfig
+savedefconfig: $(CONF)
+	@if [ -z "$(DEFCONFIG)" ]; then \
+		echo "Usage: make savedefconfig DEFCONFIG=<config_name>"; \
+		exit 1; \
+	fi
+	@echo "Saving defconfig to: $(DEFCONFIG_DIR)/$(DEFCONFIG)"
+	@mkdir -p $(DEFCONFIG_DIR)
+	@$(CONF) --savedefconfig=$(DEFCONFIG_DIR)/$(DEFCONFIG) $(KCONFIG)
+
+# List available defconfigs
+list-defconfigs:
+	@echo "Available defconfigs:"
+	@echo "  Global configurations:"
+	@if [ -d "$(DEFCONFIG_DIR)" ]; then ls -1 $(DEFCONFIG_DIR)/ | sed 's/^/    /'; fi
+	@echo "  Model-specific configurations:"
+	@find . -name "defconfigs" -type d -not -path "./defconfigs" 2>/dev/null | while read dir; do \
+		model=$$(echo $$dir | cut -d'/' -f2); \
+		echo "    $$model:"; \
+		ls -1 $$dir/ 2>/dev/null | sed 's/^/      /'; \
+	done
+
+# Generate defconfig-* targets for tab completion
+# This allows: make defconfig-lenet5, make defconfig-lenet5-sgd, etc.
+DEFCONFIGS := $(notdir $(wildcard $(DEFCONFIG_DIR)/*)) $(notdir $(wildcard */defconfigs/*))
+define defconfig_rule
+defconfig-$(1): $$(CONF)
+	@$(MAKE) defconfig DEFCONFIG=$(1)
+endef
+$(foreach config,$(DEFCONFIGS),$(eval $(call defconfig_rule,$(config))))
+
+# Special config targets
+allyesconfig: $(CONF)
+	@echo "Enabling all features (test matrix mode with all options)..."
+	@cp $(DEFCONFIG_DIR)/allyesconfig $(CONFIG_FILE) 2>/dev/null || \
+		(echo "Creating allyesconfig..." && \
+		 cp $(DEFCONFIG_DIR)/test-matrix-full $(CONFIG_FILE))
+	@$(CONF) --olddefconfig $(KCONFIG)
+	@echo "Configuration set to test all combinations."
+
+allnoconfig: $(CONF)
+	@echo "Disabling all optional features..."
+	@echo "# Minimal configuration" > $(CONFIG_FILE)
+	@echo "CONFIG_MODEL_LENET5=y" >> $(CONFIG_FILE)
+	@echo "CONFIG_OPTIMIZER_SGD=y" >> $(CONFIG_FILE)
+	@$(CONF) --olddefconfig $(KCONFIG)
+	@echo "Configuration set to minimal SGD training."
+
+# Clean config files
+clean-config:
+	@rm -f $(CONFIG_FILE) $(CONFIG_OLD) .config.cmd
+
+# Help for Kconfig targets
+kconfig-help:
+	@echo "Kconfig targets:"
+	@echo "  menuconfig       - Update configuration using ncurses menu"
+	@echo "  xconfig          - Update configuration using Qt GUI"
+	@echo "  gconfig          - Update configuration using GTK GUI"
+	@echo "  config           - Update configuration using line-oriented program"
+	@echo "  oldconfig        - Update configuration using defaults for new options"
+	@echo "  defconfig        - Load a defconfig (DEFCONFIG=<name>)"
+	@echo "  savedefconfig    - Save current config as defconfig (DEFCONFIG=<name>)"
+	@echo "  list-defconfigs  - List available defconfig files"
+	@echo "  clean-config     - Remove configuration files"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make defconfig DEFCONFIG=lenet5           # Load full LeNet-5 config"
+	@echo "  make defconfig DEFCONFIG=lenet5-sgd       # Load LeNet-5 with SGD"
+	@echo "  make defconfig DEFCONFIG=lenet5-adamwprune # Load LeNet-5 with AdamWPrune"
+	@echo "  make menuconfig                            # Interactive configuration"
+	@echo "  make savedefconfig DEFCONFIG=my-config    # Save current config"
+
+# Generate Python config from Kconfig
+.PHONY: generate-config
+generate-config: $(CONFIG_FILE)
+	@echo "Generating Python configuration from $(CONFIG_FILE)..."
+	@python scripts/kconfig2py.py $(CONFIG_FILE) > config.py
+	@echo "Configuration saved to config.py"
+
+# Ensure config exists before building
+check-config:
+	@if [ ! -f "$(CONFIG_FILE)" ]; then \
+		echo "Error: No configuration found!"; \
+		echo "Run 'make menuconfig' or 'make defconfig DEFCONFIG=<name>' first"; \
+		echo ""; \
+		$(MAKE) list-defconfigs; \
+		exit 1; \
+	fi

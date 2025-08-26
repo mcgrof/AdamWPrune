@@ -14,9 +14,21 @@ results/
 
 # Model checkpoints - exclude all model files
 *.pth
-*.json
 *.patch
 data/
+
+# Training metrics and test results
+training_metrics.json
+test_matrix_results_*/
+model_*_metrics.json
+
+# Keep configuration and important JSONs
+!test-*.yaml
+!defconfigs/
+!*/defconfigs/
+
+# Images are tracked for README display
+# Run 'make update-graphs' to regenerate from test results
 
 # Model-specific data directories
 lenet5/data/
@@ -28,10 +40,19 @@ resnet18/data/
 *.swp
 *~
 
-# Hacks and TODOs
-*.sh
-*.txt
+# Temporary files and old hacks
+*.tmp
+temp_*.sh
+hack_*.sh
+TODO.txt
+notes.txt
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Kconfig auto-generated files
+.config
+.config.*
+config.py
+include/

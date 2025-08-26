@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# LeNet-5 Model Configuration
+
+config LENET5_NUM_CLASSES
+	int "Number of output classes"
+	default 10
+	range 2 1000
+	help
+	  Number of output classes for LeNet-5. Default is 10 for MNIST.
+
+# Simplified dataset selection - only MNIST for now
+config LENET5_DATASET
+	string
+	default "mnist"
+	help
+	  Dataset for LeNet-5. Currently only MNIST is supported.

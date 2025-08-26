@@ -46,22 +46,22 @@ Totals when pruning at non-baseline levels:
 AdamWPrune reuses optimizer states to prune weights while achieving competitive
 accuracies, with minimal extra memory (boolean mask) when pruning is active.
 
-![Without Pruning](images/optimizer_comparison_baseline.png)
+![Without Pruning](images/lenet5/optimizer_comparison_baseline.png)
 *Compares results without weith pruning*
 
 Below are the results when sparsity target is set to 50%:
 
-![50% sparsity](images/optimizer_comparison_50_pruning.png)
+![50% sparsity](images/lenet5/optimizer_comparison_50_pruning.png)
 *Compares results without with 50% sparsity target*
 
 Below are the results when sparsity target is set to 70%:
 
-![70% sparsity](images/optimizer_comparison_70_pruning.png)
+![70% sparsity](images/lenet5/optimizer_comparison_70_pruning.png)
 *Compares results without 70% sparsity target*
 
 Below are the results when sparsity target is set to 90%:
 
-![90% sparsity](images/optimizer_comparison_90_pruning.png)
+![90% sparsity](images/lenet5/optimizer_comparison_90_pruning.png)
 *Compares results without 90% sparsity target*
 
 Lenet-5 is a super small neural network, the actual memory impacted on a
@@ -69,7 +69,7 @@ modern GPU is too small to measure the impact at run time, so we can only
 compute the theoretical cost of the extra movement pruning, below we do
 that.
 
-![Memory efficiency](images/memory_efficiency_summary.png)
+![Memory efficiency](images/lenet5/memory_efficiency_summary.png)
 Note on the plot above: The “Memory Savings” axis is computed relative to SGD using movement pruning at the same sparsity level. This highlights the incremental memory cost of how sparsity is achieved. In this repository:
 - Movement pruning maintains extra float32 buffers (scores + initial_weights + masks), which makes it memory-expensive relative to SGD weights alone.
 - AdamWPrune reuses Adam states and only adds a boolean mask, so it shows positive savings vs SGD+movement at the same sparsity.
@@ -80,7 +80,7 @@ blue is AdamW with a 50% sparsity goal run with movement pruning; in cyan is
 AdamWPrune with 50% sparsity goal using Adam-state pruning. Memory benefits
 materialize more clearly on larger models.
 
-![GPU utilization usage](images/adamw-50-vs-adamwprune-gpu_comparison.png)
+![GPU utilization usage](images/lenet5/adamw-50-vs-adamwprune-gpu_comparison.png)
 *Compares memory required for weight pruning*
 
 ## Features
@@ -90,6 +90,10 @@ materialize more clearly on larger models.
 - **Movement Pruning**: Adaptive sparsity based on weight movements during training
 - **Logging**: Detailed training metrics and visualization support
 - **A/B/C/D Testing**: Compare multiple pruning configurations with visualization
+- **Kconfig System**: Linux kernel-style configuration menu for experiment setup
+- **Test Matrix**: Automated testing across optimizer and pruning combinations
+- **Incremental Re-runs**: Re-run specific tests while preserving other results
+- **Comprehensive Reports**: Memory efficiency analysis and performance rankings
 
 ## Movement Pruning
 
@@ -266,6 +270,41 @@ python train.py --optimizer adamwprune --pruning-method movement --target-sparsi
 pip install torch torchvision numpy matplotlib logging json
 ```
 
+## Quick Start
+
+### Option 1: Run Complete Test Matrix (Recommended)
+
+```bash
+# Configure for all optimizer and pruning combinations
+make allyesconfig
+
+# Run complete test matrix (takes ~15-20 minutes)
+make test-matrix
+
+# View comprehensive results
+cat test_matrix_results_*/summary_report.txt
+```
+
+### Option 2: Test Specific Configuration
+
+```bash
+# Interactive configuration menu
+make menuconfig
+
+# Or load a preset configuration
+make defconfig-lenet5-adamwprune
+
+# Run configured tests
+make train
+```
+
+### Option 3: Quick AdamWPrune Demo
+
+```bash
+cd lenet5
+python train.py --optimizer adamwprune --target-sparsity 0.7
+```
+
 ## Usage
 
 ### Reproduce findings and graph results
@@ -308,55 +347,368 @@ python train.py --pruning-method movement --target-sparsity 0.7 --pruning-warmup
 - `--target-sparsity`: Target sparsity level 0.0-1.0 (default: `0.9`)
 - `--pruning-warmup`: Number of training steps before pruning starts (default: `100`)
 
+## Configuration System (Kconfig)
+
+This project includes a Linux kernel-style configuration system for managing complex test matrices and training configurations. This allows you to configure experiments through an interactive menu system or predefined configurations.
+
+### Scalable Directory Structure
+
+The project now uses a scalable model-based directory structure:
+
+```
+AdamWPrune/
+├── defconfigs/              # Global configurations
+│   ├── allyesconfig
+│   ├── test-matrix-full
+│   └── test-matrix-*
+├── lenet5/                  # LeNet-5 model directory
+│   ├── Kconfig              # Model-specific configuration options
+│   ├── defconfigs/          # LeNet-5 specific configurations
+│   │   ├── lenet5
+│   │   ├── lenet5-adamw
+│   │   ├── lenet5-adamwprune
+│   │   └── lenet5-*
+│   ├── train.py             # Model training script
+│   └── *.py                 # Other model-specific files
+└── future_model/            # Future models follow same pattern
+    ├── Kconfig
+    ├── defconfigs/
+    └── train.py
+```
+
+### Quick Start with Kconfig
+
+```bash
+# Interactive configuration menu
+make menuconfig
+
+# Load a predefined configuration (searches both global and model directories)
+make defconfig DEFCONFIG=lenet5           # Full test configuration
+make defconfig DEFCONFIG=lenet5-sgd       # SGD-only configuration
+make defconfig DEFCONFIG=lenet5-adamwprune # AdamWPrune configuration
+
+# Alternative syntax (tab completion supported)
+make defconfig-lenet5-adamwprune
+
+# Run configured training
+make train
+```
+
+### Available Configuration Targets
+
+- `make menuconfig` - Interactive ncurses-based configuration menu
+- `make allyesconfig` - Enable all features (full test matrix)
+- `make allnoconfig` - Minimal configuration (SGD only)
+- `make defconfig DEFCONFIG=<name>` - Load a specific configuration (searches all directories)
+- `make list-defconfigs` - List all available configurations (global + model-specific)
+- `make savedefconfig DEFCONFIG=<name>` - Save current configuration as a default
+
+### Navigating the Configuration Menu (menuconfig)
+
+The interactive configuration menu provides a hierarchical interface to all settings. Here's how to navigate and understand the key configuration symbols:
+
+#### Navigation Keys
+- `↑/↓` - Navigate menu items
+- `Enter` - Enter submenu or toggle boolean options
+- `Space` - Toggle selection for boolean/tristate options
+- `Esc` - Go back or exit
+- `?` - Show help for current option
+- `/` - Search for configuration symbols
+- `Q` - Quit and save changes
+
+#### Main Menu Structure
+
+**General Settings**
+- `BATCH_SIZE` - Training batch size (default: 512)
+- `NUM_EPOCHS` - Number of training epochs (default: 10)
+- `LEARNING_RATE` - Initial learning rate (default: "0.001")
+- `DEVICE` - Compute device ("cuda" or "cpu")
+- `NUM_WORKERS` - DataLoader worker processes (default: 16)
+
+**Model Selection**
+- `TEST_MATRIX_MODE` - Enable to select multiple models for batch testing
+- `MODEL_LENET5` / `TEST_MODEL_LENET5` - Include LeNet-5 in experiments
+- `LENET5_NUM_CLASSES` - Number of output classes (default: 10 for MNIST)
+- `LENET5_DATASET` - Dataset to use ("mnist")
+
+**Optimizer Selection**
+- `TEST_OPTIMIZER_ENABLED_*` - Boolean flags for each optimizer in test matrix mode
+  - `TEST_OPTIMIZER_ENABLED_SGD` - Include SGD optimizer
+  - `TEST_OPTIMIZER_ENABLED_ADAM` - Include Adam optimizer
+  - `TEST_OPTIMIZER_ENABLED_ADAMW` - Include AdamW optimizer
+  - `TEST_OPTIMIZER_ENABLED_ADAMWADV` - Include AdamW Advanced (with AMSGrad + Cosine Annealing)
+  - `TEST_OPTIMIZER_ENABLED_ADAMWSPAM` - Include AdamW with SPAM (Spike-Aware Momentum)
+  - `TEST_OPTIMIZER_ENABLED_ADAMWPRUNE` - Include AdamWPrune (state-based pruning)
+
+**Optimizer-Specific Settings**
+- SGD: `SGD_MOMENTUM`, `SGD_WEIGHT_DECAY`
+- Adam: `ADAM_BETA1`, `ADAM_BETA2`, `ADAM_EPSILON`, `ADAM_WEIGHT_DECAY`
+- AdamW: `ADAMW_BETA1`, `ADAMW_BETA2`, `ADAMW_EPSILON`, `ADAMW_WEIGHT_DECAY`
+- AdamWAdv: `ADV_USE_AMSGRAD`, `ADV_USE_COSINE_ANNEALING`, `ADV_COSINE_ETA_MIN`
+- AdamWSPAM: `SPAM_THETA`, `SPAM_ENABLE_CLIP`, `SPAM_SPIKE_THRESHOLD`, `SPAM_WARMUP_STEPS`
+
+**Pruning Configuration**
+- `ENABLE_PRUNING` - Enable pruning (required for all pruning methods)
+- `TEST_PRUNING_*` - Select pruning methods for test matrix:
+  - `TEST_PRUNING_NONE` - Baseline without pruning
+  - `TEST_PRUNING_MAGNITUDE` - Magnitude-based pruning (remove smallest weights)
+  - `TEST_PRUNING_MOVEMENT` - Movement-based pruning (track weight importance)
+- `TARGET_SPARSITY` - Target sparsity level (0.0-1.0, default: "0.9" = 90%)
+- `PRUNING_WARMUP` - Steps before pruning starts (default: 100)
+- `PRUNING_FREQUENCY` - Steps between pruning updates (default: 50)
+
+**Sparsity Level Testing** (Test Matrix Mode)
+- `TEST_SPARSITY_50` - Test at 50% sparsity
+- `TEST_SPARSITY_70` - Test at 70% sparsity
+- `TEST_SPARSITY_90` - Test at 90% sparsity
+- `TEST_SPARSITY_95` - Test at 95% sparsity (disabled by default)
+- `TEST_SPARSITY_99` - Test at 99% sparsity (disabled by default)
+
+**Advanced Settings**
+- `COMPILE_MODEL` - Use torch.compile() for optimization
+- `MIXED_PRECISION` - Enable Automatic Mixed Precision (AMP)
+- `GPU_WARMUP` - Run GPU warmup before timing measurements
+- `SAVE_CHECKPOINT` - Save model checkpoints during training
+- `VERBOSE` - Enable verbose logging
+- `DEBUG` - Enable debug mode with additional logging
+
+#### Configuration Tips
+
+1. **Test Matrix vs Single Mode**: Toggle `TEST_MATRIX_MODE` to switch between:
+   - Single configuration: Train one specific model/optimizer/pruning combination
+   - Test matrix: Batch test multiple combinations automatically
+
+2. **AdamWPrune Special Behavior**: When `TEST_OPTIMIZER_ENABLED_ADAMWPRUNE` is selected, state-based pruning is automatically added to the test matrix regardless of other pruning selections.
+
+3. **Memory Considerations**: Higher sparsity levels (95%, 99%) are disabled by default as they often lead to significant accuracy degradation.
+
+4. **Quick Presets**: Use `make list-defconfigs` to see available preset configurations instead of manual configuration.
+
+## Test Matrix System
+
+The test matrix system allows you to automatically run comprehensive experiments across multiple optimizer and pruning configurations, generating detailed comparative reports.
+
+### Running Test Matrices
+
+```bash
+# Run test matrix with current .config
+make test-matrix
+
+# Run test matrix from YAML configuration
+make test-matrix-yaml
+
+# Dry run to see what would be tested
+make test-matrix-dry-run
+
+# Quick preset test matrices
+make test-all-optimizers  # Test all optimizers with LeNet-5
+make test-all-pruning     # Test all pruning methods
+make test-everything      # Test all combinations (optimizers × pruning)
+```
+
+### Test Matrix Results
+
+Test results are stored in timestamped directories:
+- `test_matrix_results_YYYYMMDD_HHMMSS/`
+  - Individual test directories (e.g., `lenet5_adamw_movement_70`)
+  - `all_results.json` - Complete test data in JSON format
+  - `summary_report.txt` - Comprehensive analysis including:
+    - Accuracy comparisons
+    - Memory efficiency analysis
+    - Performance rankings by optimizer
+    - Inference memory estimates with sparsity benefits
+
+### Re-running Specific Tests
+
+A powerful feature of the test matrix system is the ability to re-run only specific tests while preserving other results. This is particularly useful when debugging or optimizing a specific optimizer.
+
+#### Re-run Tests with Make
+
+```bash
+# Re-run all tests in an existing directory
+make test-rerun TARGET=test_matrix_results_20250826_181029
+
+# Re-run only AdamWPrune tests
+make test-rerun TARGET=test_matrix_results_20250826_181029 OPTIMIZER=adamwprune
+
+# Re-run only AdamW tests
+make test-rerun TARGET=test_matrix_results_20250826_181029 OPTIMIZER=adamw
+```
+
+#### Re-run Tests with Python Script
+
+```bash
+# Using the test matrix script directly
+python3 scripts/run_test_matrix.py \
+    --rerun-dir test_matrix_results_20250826_181029 \
+    --filter-optimizer adamwprune
+
+# With custom configuration
+python3 scripts/run_test_matrix.py \
+    --config .config \
+    --rerun-dir test_matrix_results_20250826_181029 \
+    --filter-optimizer adamwprune
+```
+
+#### Convenience Script for AdamWPrune
+
+```bash
+# Re-run AdamWPrune tests with optimized configuration
+./scripts/rerun_adamwprune.sh test_matrix_results_20250826_181029
+
+# With dry-run to see what would be executed
+./scripts/rerun_adamwprune.sh test_matrix_results_20250826_181029 --dry-run
+```
+
+### YAML Configuration
+
+Test matrices can be configured using YAML files for more complex setups:
+
+```yaml
+# test-matrix.yaml example
+test_matrix:
+  models:
+    - lenet5
+  optimizers:
+    - sgd
+    - adam
+    - adamw
+    - adamwprune
+  pruning_methods:
+    - none
+    - movement
+    - magnitude
+    - state  # For AdamWPrune
+  sparsity_levels:
+    - 0.5
+    - 0.7
+    - 0.9
+
+common_config:
+  batch_size: 512
+  num_epochs: 10
+  learning_rate: 0.001
+  num_workers: 16
+  device: cuda
+  pruning:
+    warmup_steps: 100
+    frequency: 50
+
+advanced:
+  compile_model: true
+  mixed_precision: true
+```
+
+### Regenerating Summary Reports
+
+If you need to regenerate the summary report with updated analysis:
+
+```bash
+# Regenerate for the most recent test results
+make summary
+
+# Regenerate for a specific directory
+python3 scripts/regenerate_summary.py test_matrix_results_20250826_181029
+```
+
+The enhanced summary report includes:
+- **Accuracy Rankings**: Top performers by final accuracy
+- **Speed Analysis**: Fastest training configurations
+- **Memory Efficiency**: Detailed analysis of memory usage per optimizer
+  - Training memory requirements (optimizer states + pruning overhead)
+  - Inference memory estimates (accounting for sparsity benefits)
+  - Memory efficiency scores (accuracy per unit memory)
+- **Optimizer Comparisons**: Best configuration for each optimizer
+- **AdamWPrune Highlights**: Special section for state-based pruning performance
+
+### Understanding Test Result Directories
+
+Each test creates a directory named by its configuration:
+- `lenet5_sgd_none` - SGD without pruning
+- `lenet5_adam_movement_50` - Adam with movement pruning at 50% sparsity
+- `lenet5_adamwprune_state_70` - AdamWPrune with state pruning at 70% sparsity
+
+Each directory contains:
+- `training_metrics.json` - Detailed training metrics
+- `train.log` - Full training output log
+
+### Key Features of Test Re-run
+
+1. **Preserves Existing Results**: When re-running specific tests, all other test results are preserved
+2. **Flexible Configuration**: Uses standard Kconfig system with filtering options for any optimizer
+3. **Incremental Testing**: Fix bugs in one optimizer and re-test without running the entire matrix
+4. **Consolidated Reporting**: All results (original and re-run) are merged in the final report
+
+### Common Re-run Scenarios
+
+```bash
+# After fixing a bug in AdamWPrune optimizer
+make test-rerun TARGET=test_matrix_results_20250826_181029 OPTIMIZER=adamwprune
+
+# Testing different configurations for one optimizer
+# 1. Adjust configuration with: make menuconfig (or edit .config)
+# 2. Re-run with new configuration
+python3 scripts/run_test_matrix.py \
+    --config .config \
+    --rerun-dir test_matrix_results_20250826_181029 \
+    --filter-optimizer adamwprune
+
+# Re-run failed tests only (manual selection)
+# 1. Check which tests failed
+grep "Failed" test_matrix_results_*/summary_report.txt
+# 2. Re-run specific optimizer that failed
+make test-rerun TARGET=test_matrix_results_20250826_181029 OPTIMIZER=<failed_optimizer>
+```
+
 ## Performance Results
 
 ### Model Comparison
 
 ## SGD
-![Model Comparison](images/sgd-with-movement-pruning-model_comparison.png)
+![Model Comparison](images/lenet5/sgd-with-movement-pruning-model_comparison.png)
 *Comparison of all model configurations*
 
-![Accuracy Evolution](images/sgd-with-movement-accuracy_evolution.png)
+![Accuracy Evolution](images/lenet5/sgd-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
 
 ## Adam
 
-![Model Comparison](images/adam-with-movement-pruning-model_comparison.png)
+![Model Comparison](images/lenet5/adam-with-movement-pruning-model_comparison.png)
 *Comparison of all model configurations*
 
-![Accuracy Evolution](images/adam-with-movement-accuracy_evolution.png)
+![Accuracy Evolution](images/lenet5/adam-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
 
 ## AdamW
 
-![Model Comparison](images/adamw-with-movement-pruning-model_comparison.png)
+![Model Comparison](images/lenet5/adamw-with-movement-pruning-model_comparison.png)
 *Comparison of all model configurations*
 
-![Accuracy Evolution](images/adamw-with-movement-accuracy_evolution.png)
+![Accuracy Evolution](images/lenet5/adamw-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
 
 ## AdamWAdv
 
-![Model Comparison](images/adamwadv-with-movement-pruning-model_comparison.png)
+![Model Comparison](images/lenet5/adamwadv-with-movement-pruning-model_comparison.png)
 *Comparison of all model configurations*
 
-![Accuracy Evolution](images/adamwadv-with-movement-accuracy_evolution.png)
+![Accuracy Evolution](images/lenet5/adamwadv-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
 
 ## AdamWSPAM
 
-![Model Comparison](images/adamwspam-with-movement-pruning-model_comparison.png)
+![Model Comparison](images/lenet5/adamwspam-with-movement-pruning-model_comparison.png)
 *Comparison of all model configurations*
 
-![Accuracy Evolution](images/adamwspam-with-movement-accuracy_evolution.png)
+![Accuracy Evolution](images/lenet5/adamwspam-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
 
 ## AdamWPrune
 
-![Model Comparison](images/adamwprune-with-movement-pruning-model_comparison.png)
+![Model Comparison](images/lenet5/adamwprune-with-movement-pruning-model_comparison.png)
 *Comparison of all model configurations*
 
-![Accuracy Evolution](images/adamwprune-with-movement-accuracy_evolution.png)
+![Accuracy Evolution](images/lenet5/adamwprune-with-movement-accuracy_evolution.png)
 *Test accuracy evolution across epochs for different pruning levels*
 
 ## Visualization
