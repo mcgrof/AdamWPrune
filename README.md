@@ -270,49 +270,17 @@ pip install torch torchvision numpy matplotlib logging json
 
 ### Reproduce findings and graph results
 
-```bash
-make sgd-movement
-```
-
-You should see something like this in less than 5 minutes, we've trimmed
-the results to only show the relevant stats here:
-
-```
-Model                     Accuracy     Compression  Parameters      Training Time
---------------------------------------------------------------------------------
-SGD Baseline              96.24       % 1.00        x 61,750/61,750   16.39       s
-SGD 50% Pruning           97.02       % 1.99        x 31,015/61,750   16.28       s
-SGD 70% Pruning           96.16       % 3.30        x 18,721/61,750   16.18       s
-SGD 90% Pruning           95.31       % 9.61        x 6,427/61,750    16.12       s
-Adam Baseline             98.43       % 1.00        x 61,750/61,750   16.96       s
-Adam 50% Pruning          98.93       % 1.99        x 31,015/61,750   16.66       s
-Adam 70% Pruning          98.95       % 3.30        x 18,721/61,750   16.29       s
-Adam 90% Pruning          98.15       % 9.61        x 6,427/61,750    16.61       s
-AdamW Baseline            98.84       % 1.00        x 61,750/61,750   16.31       s
-AdamW 50% Pruning         98.85       % 1.99        x 31,015/61,750   16.32       s
-AdamW 70% Pruning         98.99       % 3.30        x 18,721/61,750   16.46       s
-AdamW 90% Pruning         97.97       % 9.61        x 6,427/61,750    16.45       s
-AdamWAdv Baseline         98.83       % 1.00        x 61,750/61,750   17.25       s
-AdamWAdv 50% Pruning      99.08       % 1.99        x 31,015/61,750   16.43       s
-AdamWAdv 70% Pruning      98.64       % 3.30        x 18,721/61,750   16.79       s
-AdamWAdv 90% Pruning      87.80       % 9.61        x 6,427/61,750    16.76       s
-AdamWSPAM Baseline        99.05       % 1.00        x 61,750/61,750   17.14       s
-AdamWSPAM 50% Pruning     99.06       % 1.99        x 31,015/61,750   17.11       s
-AdamWSPAM 70% Pruning     98.90       % 3.30        x 18,721/61,750   17.35       s
-AdamWSPAM 90% Pruning     95.37       % 9.61        x 6,427/61,750    17.17       s
-AdamWPrune Baseline       99.04       % 1.00        x 61,750/61,750   17.21       s
-AdamWPrune 50% Pruning    98.99       % 1.99        x 31,015/61,750   17.25       s
-AdamWPrune 70% Pruning    98.77       % 3.30        x 18,721/61,750   17.32       s
-AdamWPrune 90% Pruning    97.17       % 9.61        x 6,427/61,750    17.29       s
-================================================================================
-
-```
-
 To run all tests, use:
 
 ```bash
-make
+# Runs all tests
+make memory-comparison
+
+# Update our graphs in images
+make update-graphs
 ```
+
+This should take about ~ 15-20 minutes.
 
 ### Basic Training (No Pruning)
 
