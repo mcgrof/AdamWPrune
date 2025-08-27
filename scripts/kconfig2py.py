@@ -205,6 +205,21 @@ def generate_python_config(config):
     lines.append(
         '        args["spam_warmup_steps"] = getattr(config, "SPAM_WARMUP_STEPS", 0)'
     )
+    lines.append("")
+    lines.append("    # AdamWPrune tuning parameters")
+    lines.append('    if config.OPTIMIZER == "adamwprune":')
+    lines.append(
+        '        args["adamwprune_beta1"] = float(getattr(config, "ADAMWPRUNE_BETA1", "0.9"))'
+    )
+    lines.append(
+        '        args["adamwprune_beta2"] = float(getattr(config, "ADAMWPRUNE_BETA2", "0.999"))'
+    )
+    lines.append(
+        '        args["adamwprune_weight_decay"] = float(getattr(config, "ADAMWPRUNE_WEIGHT_DECAY", "0.01"))'
+    )
+    lines.append(
+        '        args["adamwprune_amsgrad"] = getattr(config, "ADAMWPRUNE_AMSGRAD", True)'
+    )
     lines.append("    ")
     lines.append("    return args")
     lines.append("")

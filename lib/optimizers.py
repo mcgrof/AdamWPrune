@@ -115,14 +115,27 @@ def create_optimizer(
 
     elif optimizer_type == "adamwprune":
         # AdamWPrune - Experimental: All enhancements + state-based pruning
+
+        # Get tuning parameters from args or use defaults
+        beta1 = float(getattr(args, 'adamwprune_beta1', 0.9) if args else 0.9)
+        beta2 = float(getattr(args, 'adamwprune_beta2', 0.999) if args else 0.999)
+        weight_decay = float(getattr(args, 'adamwprune_weight_decay', 0.01) if args else 0.01)
+        amsgrad = bool(getattr(args, 'adamwprune_amsgrad', True) if args else True)
+
         optimizer = torch.optim.AdamW(
             model.parameters(),
             lr=learning_rate,
-            betas=(0.9, 0.999),
+            betas=(beta1, beta2),
             eps=1e-8,
-            weight_decay=0.01,
-            amsgrad=True,
+            weight_decay=weight_decay,
+            amsgrad=amsgrad,
         )
+
+        logger.info(f"Using AdamWPrune with tuned parameters:")
+        logger.info(f"  - Beta1: {beta1} (momentum coefficient)")
+        logger.info(f"  - Beta2: {beta2} (variance coefficient)")
+        logger.info(f"  - Weight decay: {weight_decay}")
+        logger.info(f"  - AMSGrad: {amsgrad}")
 
         # Initialize both SPAM and pruning state
         spam_state = {
@@ -142,11 +155,18 @@ def create_optimizer(
         }
 
         # AdamWPrune specific state for state-based pruning
+        # Only enable built-in state-based pruning when explicitly using "movement" or "state" method
+        # For "magnitude" pruning, use external MagnitudePruning class instead
         adamprune_state = {
-            "pruning_enabled": args.pruning_method == "movement" if args else False,
+            "pruning_enabled": (
+                args.pruning_method in ["movement", "state", "adamwprune"]
+                and args.target_sparsity > 0
+                if args
+                else False
+            ),
             "target_sparsity": (
                 args.target_sparsity
-                if args and args.pruning_method == "movement"
+                if args and args.pruning_method in ["movement", "state", "adamwprune"]
                 else 0
             ),
             "warmup_steps": args.pruning_warmup if args else 100,
@@ -311,6 +331,7 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, epoch):
     if adamprune_state is None or not adamprune_state["pruning_enabled"]:
         return
 
+    # Always increment step count when called
     adamprune_state["step_count"] += 1
 
     # Update masks based on Adam states

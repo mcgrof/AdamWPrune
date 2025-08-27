@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: MIT
+# Demonstration of optimizer-specific pruning capabilities
+# This config shows how different optimizers support different pruning methods
+
+# Enable multiple optimizer mode for comparison
+CONFIG_OPTIMIZER_MODE_MULTIPLE=y
+
+# ResNet-18 configuration
+CONFIG_MODEL_MODE_SINGLE=y
+CONFIG_MODEL_SELECT_RESNET18=y
+CONFIG_RESNET18_NUM_CLASSES=10
+CONFIG_RESNET18_DATASET="cifar10"
+CONFIG_RESNET18_USE_AUGMENTATION=y
+CONFIG_RESNET18_USE_COSINE_SCHEDULE=y
+CONFIG_RESNET18_BASE_LR="0.1"
+CONFIG_RESNET18_BATCH_SIZE=128
+CONFIG_RESNET18_EPOCHS=100
+
+# Training settings
+CONFIG_BATCH_SIZE=128
+CONFIG_NUM_EPOCHS=100
+CONFIG_LEARNING_RATE="0.1"
+CONFIG_NUM_WORKERS=8
+CONFIG_DEVICE="cuda"
+CONFIG_DATA_DIR="data"
+CONFIG_OUTPUT_DIR="results"
+CONFIG_JSON_OUTPUT="training_metrics.json"
+
+# Enable different optimizers with different capabilities:
+# SGD, Adam, AdamW, AdamWAdv, AdamWSPAM: support magnitude and movement pruning
+# AdamWPrune: ONLY supports built-in state pruning
+CONFIG_OPTIMIZER_ENABLE_SGD=y
+CONFIG_OPTIMIZER_ENABLE_ADAM=y
+CONFIG_OPTIMIZER_ENABLE_ADAMW=y
+CONFIG_OPTIMIZER_ENABLE_ADAMWADV=y
+CONFIG_OPTIMIZER_ENABLE_ADAMWSPAM=y
+CONFIG_OPTIMIZER_ENABLE_ADAMWPRUNE=y
+
+# Multiple pruning methods mode
+# Now with the new Kconfig, each pruning method will only be available
+# for optimizers that support it
+CONFIG_PRUNING_MODE_MULTIPLE=y
+
+# Enable pruning methods
+# These will automatically be filtered by optimizer capabilities
+CONFIG_PRUNING_ENABLE_NONE=y        # Baseline (all optimizers)
+CONFIG_PRUNING_ENABLE_MAGNITUDE=y   # SGD, Adam, AdamW, AdamWAdv, AdamWSPAM
+CONFIG_PRUNING_ENABLE_MOVEMENT=y    # SGD, Adam, AdamW, AdamWAdv, AdamWSPAM
+CONFIG_PRUNING_ENABLE_STATE=y       # AdamWPrune ONLY
+
+# When test matrix runs:
+# - SGD, Adam, AdamW, AdamWAdv, AdamWSPAM will test with: none, magnitude, movement
+# - AdamWPrune will test with: none, state
+# This clearly shows which optimizers support which pruning methods
+
+# Target sparsity for pruning tests
+CONFIG_TARGET_SPARSITY="0.7"
+CONFIG_PRUNING_WARMUP=1000
+CONFIG_PRUNING_FREQUENCY=100
+CONFIG_PRUNING_RAMP_END_EPOCH=75
+CONFIG_PRUNING_LOG_SPARSITY=y
+
+# Advanced settings
+CONFIG_ADV_USE_AMSGRAD=n
+CONFIG_ADV_WEIGHT_DECAY="0.0001"
+CONFIG_ADV_USE_COSINE_ANNEALING=y
+CONFIG_ADV_COSINE_ETA_MIN="1e-8"
+
+# ResNet optimizations
+CONFIG_COMPILE_MODEL=y
+CONFIG_MIXED_PRECISION=y
+CONFIG_GPU_WARMUP=y
+CONFIG_PIN_MEMORY=y
+CONFIG_PERSISTENT_WORKERS=y
+CONFIG_PREFETCH_FACTOR=4
+CONFIG_GRADIENT_CLIP_NORM="1.0"
+CONFIG_SAVE_CHECKPOINT=y
+CONFIG_CHECKPOINT_INTERVAL=10
+
+# Enable inference testing
+CONFIG_INFERENCE_TEST=y
+CONFIG_INFERENCE_BATCH_SIZES="1,16,32,64,128,256"
+
+# GPU monitoring
+CONFIG_GPU_MONITOR=y
+
+# Logging
+CONFIG_VERBOSE=y
+CONFIG_LOG_LEVEL="INFO"
+CONFIG_DEBUG=n
+CONFIG_PROFILE=n
+
+# Pruning analysis
+CONFIG_PRUNING_SAVE_MASKS=y
+CONFIG_PRUNING_VISUALIZE_MASKS=n
+
+# SPAM settings (for AdamWSPAM)
+CONFIG_SPAM_THETA="50.0"
+CONFIG_SPAM_INTERVAL=0
+CONFIG_SPAM_WARMUP_STEPS=0

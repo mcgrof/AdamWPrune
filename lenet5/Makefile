@@ -23,7 +23,7 @@ all:
 clean:
 	@echo "Cleaning LeNet-5 build artifacts..."
 	@rm -f *.pth *.log *.json
-	@rm -rf __pycache__ results/
+	@rm -rf __pycache__
 	@find . -name "*.pyc" -delete
 	@find . -name "*.pyo" -delete
 

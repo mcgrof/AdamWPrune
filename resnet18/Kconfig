@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: MIT
+# ResNet-18 Model Configuration
+
+config RESNET18_NUM_CLASSES
+	int "Number of output classes"
+	default 10
+	range 2 1000
+	help
+	  Number of output classes for ResNet-18.
+	  Default is 10 for CIFAR-10.
+	  Use 100 for CIFAR-100, 1000 for ImageNet.
+
+choice
+	prompt "Dataset"
+	default RESNET18_DATASET_CIFAR10
+	help
+	  Select the dataset for training ResNet-18.
+
+config RESNET18_DATASET_CIFAR10
+	bool "CIFAR-10"
+	help
+	  CIFAR-10 dataset: 32x32 color images in 10 classes.
+	  60,000 images total (50,000 training, 10,000 test).
+
+config RESNET18_DATASET_CIFAR100
+	bool "CIFAR-100"
+	help
+	  CIFAR-100 dataset: 32x32 color images in 100 classes.
+	  60,000 images total (50,000 training, 10,000 test).
+
+endchoice
+
+config RESNET18_DATASET
+	string
+	default "cifar10" if RESNET18_DATASET_CIFAR10
+	default "cifar100" if RESNET18_DATASET_CIFAR100
+
+# ResNet-18 specific training parameters
+config RESNET18_EPOCHS
+	int "Number of training epochs"
+	default 100
+	range 1 300
+	help
+	  Number of epochs to train ResNet-18.
+	  Default is 100 for CIFAR-10.
+	  Typically needs 100-200 epochs for good convergence.
+
+config RESNET18_BATCH_SIZE
+	int "Batch size for ResNet-18"
+	default 128
+	range 16 512
+	help
+	  Batch size for ResNet-18 training.
+	  Default is 128. Reduce if GPU memory is limited.
+
+config RESNET18_BASE_LR
+	string "Base learning rate"
+	default "0.1"
+	help
+	  Base learning rate for ResNet-18.
+	  Default is 0.1 for SGD, will be scaled for Adam-based optimizers.
+
+config RESNET18_USE_AUGMENTATION
+	bool "Use data augmentation"
+	default y
+	help
+	  Enable data augmentation for training.
+	  Includes random cropping and horizontal flipping.
+
+config RESNET18_USE_COSINE_SCHEDULE
+	bool "Use cosine learning rate schedule"
+	default y
+	help
+	  Use cosine annealing for learning rate scheduling.
+	  Recommended for ResNet training on CIFAR.

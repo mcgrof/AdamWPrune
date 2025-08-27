@@ -11,8 +11,10 @@ include Makefile.kconfig
 .PHONY: all
 ifeq ($(CONFIG_OPTIMIZER_MODE_MULTIPLE),y)
 all: check-config test-matrix
+else ifeq ($(CONFIG_MODEL_MODE_MULTIPLE),y)
+all: check-config test-matrix
 else
-all: check-config memory-comparison update-graphs
+all: check-config train
 endif
 
 # Default model to train (can be overridden by Kconfig)
@@ -39,32 +41,73 @@ update-graphs: check-config generate-config
 	fi; \
 	echo "Using results from: $$RESULTS_DIR"; \
 	python3 scripts/generate_optimizer_graphs.py "$$RESULTS_DIR" "$$RESULTS_DIR/graphs"; \
-	mkdir -p images/lenet5; \
-	echo "Copying graphs to images/lenet5/..."; \
+	python3 scripts/generate_gpu_memory_comparison.py "$$RESULTS_DIR" --output "$$RESULTS_DIR/graphs"; \
+	python3 scripts/visualize_train_vs_inference_memory.py "$$RESULTS_DIR" --output "$$RESULTS_DIR/graphs"; \
+	\
+	# Detect which model was tested by checking test directory names \
+	if ls "$$RESULTS_DIR" | grep -q "^lenet5_"; then \
+		MODEL_DIR="lenet5"; \
+	elif ls "$$RESULTS_DIR" | grep -q "^resnet18_"; then \
+		MODEL_DIR="resnet18"; \
+	else \
+		echo "Warning: Could not detect model type, defaulting to lenet5"; \
+		MODEL_DIR="lenet5"; \
+	fi; \
+	\
+	mkdir -p "images/$$MODEL_DIR"; \
+	echo "Copying graphs to images/$$MODEL_DIR/..."; \
 	for optimizer in sgd adam adamw adamwadv adamwspam adamwprune; do \
 		if [ -f "$$RESULTS_DIR/graphs/$${optimizer}_model_comparison.png" ]; then \
-			cp "$$RESULTS_DIR/graphs/$${optimizer}_model_comparison.png" "images/lenet5/$${optimizer}_model_comparison.png"; \
-			cp "$$RESULTS_DIR/graphs/$${optimizer}_accuracy_evolution.png" "images/lenet5/$${optimizer}_accuracy_evolution.png"; \
+			cp "$$RESULTS_DIR/graphs/$${optimizer}_model_comparison.png" "images/$$MODEL_DIR/$${optimizer}_model_comparison.png"; \
+			cp "$$RESULTS_DIR/graphs/$${optimizer}_accuracy_evolution.png" "images/$$MODEL_DIR/$${optimizer}_accuracy_evolution.png"; \
 			echo "  Copied $$optimizer graphs"; \
 		fi; \
 	done; \
-	echo "Graphs updated in images/lenet5/"
+	if [ -f "$$RESULTS_DIR/graphs/gpu_memory_comparison.png" ]; then \
+		cp "$$RESULTS_DIR/graphs/gpu_memory_comparison.png" "images/$$MODEL_DIR/gpu_memory_comparison.png"; \
+		echo "  Copied GPU memory comparison graph"; \
+	fi; \
+	if [ -f "$$RESULTS_DIR/graphs/training_memory_comparison.png" ]; then \
+		cp "$$RESULTS_DIR/graphs/training_memory_comparison.png" "images/$$MODEL_DIR/training_memory_comparison.png"; \
+		echo "  Copied training memory comparison graph"; \
+	fi; \
+	if [ -f "$$RESULTS_DIR/graphs/gpu_memory_timeline.png" ]; then \
+		cp "$$RESULTS_DIR/graphs/gpu_memory_timeline.png" "images/$$MODEL_DIR/gpu_memory_timeline.png"; \
+		echo "  Copied GPU memory timeline graph"; \
+	fi; \
+	if [ -f "$$RESULTS_DIR/graphs/memory_vs_accuracy_scatter.png" ]; then \
+		cp "$$RESULTS_DIR/graphs/memory_vs_accuracy_scatter.png" "images/$$MODEL_DIR/memory_vs_accuracy_scatter.png"; \
+		echo "  Copied memory vs accuracy scatter graph"; \
+	fi; \
+	echo "Graphs updated in images/$$MODEL_DIR/"
 
-# Clean build artifacts but keep configuration
+# Clean build artifacts but keep configuration and test results
 clean:
-	@echo "Cleaning build artifacts (keeping configuration)..."
+	@echo "Cleaning build artifacts (keeping configuration and test results)..."
 	@rm -f *.log train.log */train.log
 	@rm -rf __pycache__
 	@rm -rf */__pycache__
 	@rm -rf lib/__pycache__
 	@rm -rf scripts/__pycache__
-	@rm -rf test_matrix_results_*
 	@rm -f *.pyc *.pyo
 	@rm -f training_metrics.json
 	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
 	@if [ -d $(MODEL) ]; then $(MAKE) -C $(MODEL) clean; fi
+
+# Analyze GPU memory usage from battle results
+analyze-gpu: check-config
+	@echo "Analyzing GPU memory usage from test matrix results..."
+	@LATEST_DIR=$$(ls -d test_matrix_results_* 2>/dev/null | sort | tail -1); \
+	if [ -n "$$LATEST_DIR" ]; then \
+		echo "Using results from: $$LATEST_DIR"; \
+		python scripts/visualize_test_matrix_gpu.py "$$LATEST_DIR"; \
+		echo "GPU analysis complete. View $$LATEST_DIR/gpu_comparison.png"; \
+	else \
+		echo "No test_matrix_results_* directories found."; \
+		echo "Run 'make' with CONFIG_GPU_MONITOR=y to generate GPU data."; \
+	fi
 
 # Clean everything including configuration and model files
 # Returns workspace to pristine distribution state (keeps downloaded datasets)
@@ -91,23 +134,31 @@ data-clean:
 	@echo "Datasets removed. They will be re-downloaded on next training run."
 
 
-# Train with current configuration
-ifeq ($(CONFIG_TEST_MATRIX_MODE),y)
-train: check-config test-matrix
-else
+# Train with current configuration (using test matrix framework for consistency)
 train: check-config generate-config
 	@echo "Training with configuration from .config..."
-	cd $(MODEL) && python train.py --config ../config.py
-endif
+	@echo "Using test matrix framework for consistent logging and monitoring"
+	@if [ -n "$(EPOCHS)" ]; then \
+		echo "Overriding epochs to $(EPOCHS) for testing..."; \
+		YES=$(YES) python3 scripts/run_test_matrix.py --config .config --override-epochs $(EPOCHS); \
+	else \
+		YES=$(YES) python3 scripts/run_test_matrix.py --config .config; \
+	fi
 
 # Test matrix targets
 test-matrix: check-config
 	@echo "Running test matrix with configuration from .config..."
-	@python3 scripts/run_test_matrix.py --config .config
+	@if [ -n "$(EPOCHS)" ]; then \
+		echo "Overriding epochs to $(EPOCHS) for testing..."; \
+		YES=$(YES) python3 scripts/run_test_matrix.py --config .config --override-epochs $(EPOCHS); \
+	else \
+		YES=$(YES) python3 scripts/run_test_matrix.py --config .config; \
+	fi
+	@$(MAKE) summary
 
 test-matrix-yaml:
 	@echo "Running test matrix with YAML configuration..."
-	@python3 scripts/run_test_matrix.py --config-yaml test-matrix.yaml
+	@YES=$(YES) python3 scripts/run_test_matrix.py --config-yaml test-matrix.yaml
 
 test-matrix-dry-run: check-config
 	@echo "Test matrix dry run (shows what would be executed)..."
@@ -183,7 +234,58 @@ parallel-rerun:
 
 # Regenerate summary report from existing test results
 summary:
-	@python3 scripts/regenerate_summary.py
+	@if [ -f scripts/regenerate_summary_with_gpu.py ]; then \
+		echo "Regenerating summary with real GPU memory data..."; \
+		python3 scripts/regenerate_summary_with_gpu.py; \
+	else \
+		python3 scripts/regenerate_summary.py; \
+	fi
+
+# Defconfig targets - simple pattern rule for all defconfigs
+# Override kconfig's defconfig handling
+.PHONY: defconfig-%
+defconfig-%: FORCE
+	@# Check in main defconfigs directory first
+	@if [ -f defconfigs/$* ]; then \
+		echo "Loading defconfig: $*"; \
+		cp defconfigs/$* .config; \
+		python scripts/kconfig2py.py .config > config.py; \
+		echo "Configuration loaded: $*"; \
+		echo "Ready to run: make train"; \
+	elif [ -f lenet5/defconfigs/$* ]; then \
+		echo "Loading LeNet-5 defconfig: $*"; \
+		cp lenet5/defconfigs/$* .config; \
+		python scripts/kconfig2py.py .config > config.py; \
+		echo "Configuration loaded: $*"; \
+		echo "Ready to run: make train"; \
+	elif [ -f resnet18/defconfigs/$* ]; then \
+		echo "Loading ResNet-18 defconfig: $*"; \
+		cp resnet18/defconfigs/$* .config; \
+		python scripts/kconfig2py.py .config > config.py; \
+		echo "Configuration loaded: $*"; \
+		echo "Ready to run: make train"; \
+	else \
+		echo "Error: defconfig '$*' not found"; \
+		echo ""; \
+		$(MAKE) list-all-defconfigs; \
+		exit 1; \
+	fi
+
+FORCE:
+
+# Note: list-defconfigs is already defined in Makefile.kconfig
+# Use 'make list-all-defconfigs' for detailed view or 'make list-defconfigs' for basic view
+
+# Detailed listing of all defconfigs by category
+.PHONY: list-all-defconfigs
+list-all-defconfigs:
+	@echo "Available defconfigs by category:"
+	@echo "  Main configs:"
+	@ls defconfigs/ 2>/dev/null | sed 's/^/    /' || echo "    (none)"
+	@echo "  LeNet-5 configs:"
+	@ls lenet5/defconfigs/ 2>/dev/null | sed 's/^/    /' || echo "    (none)"
+	@echo "  ResNet-18 configs:"
+	@ls resnet18/defconfigs/ 2>/dev/null | sed 's/^/    /' || echo "    (none)"
 
 # Quick test matrix configurations
 test-all-optimizers:
@@ -221,6 +323,7 @@ help:
 	@echo "  all               - Run memory comparison and update graphs (default)"
 	@echo "  memory-comparison - Run all optimizer experiments with memory tracking"
 	@echo "  update-graphs     - Update visualization graphs with latest results"
+	@echo "  analyze-gpu       - Analyze GPU memory usage from battle results"
 	@echo ""
 	@echo "Cleaning targets:"
 	@echo "  clean             - Clean build artifacts only (keeps config & datasets)"
@@ -270,7 +373,7 @@ help:
 	@echo "                                  # Re-run only adamwprune tests with parallel execution"
 	@echo ""
 
-.PHONY: all memory-comparison update-graphs clean mrproper data-clean help \
+.PHONY: all memory-comparison update-graphs analyze-gpu clean mrproper data-clean help \
         train test-matrix test-matrix-yaml test-matrix-dry-run test-rerun summary \
         test-all-optimizers test-all-pruning test-everything \
         parallel parallel-4 parallel-8 parallel-16 parallel-rerun

@@ -35,8 +35,8 @@ parser.add_argument(
     "--pruning-method",
     type=str,
     default="none",
-    choices=["none", "movement", "magnitude"],
-    help="Pruning method to use (default: none)",
+    choices=["none", "movement", "magnitude", "state"],
+    help="Pruning method to use (state = AdamWPrune built-in, default: none)",
 )
 parser.add_argument(
     "--target-sparsity",
@@ -80,6 +80,33 @@ parser.add_argument(
     action="store_true",
     help="Enable SPAM spike-aware clipping using Adam's second moment",
 )
+
+# AdamWPrune tuning parameters
+parser.add_argument(
+    "--adamwprune-beta1",
+    type=float,
+    default=None,
+    help="Beta1 coefficient for AdamWPrune (default: 0.9)",
+)
+parser.add_argument(
+    "--adamwprune-beta2",
+    type=float,
+    default=None,
+    help="Beta2 coefficient for AdamWPrune (default: 0.999)",
+)
+parser.add_argument(
+    "--adamwprune-weight-decay",
+    type=float,
+    default=None,
+    help="Weight decay for AdamWPrune (default: 0.01)",
+)
+parser.add_argument(
+    "--adamwprune-amsgrad",
+    type=lambda x: x.lower() in ['true', '1', 'yes'],
+    default=None,
+    help="Enable AMSGrad for AdamWPrune (default: True)",
+)
+
 parser.add_argument(
     "--json-output",
     type=str,
@@ -93,6 +120,9 @@ if args.pruning_method == "movement":
     from lib.movement_pruning import MovementPruning
 elif args.pruning_method == "magnitude":
     from lib.magnitude_pruning import MagnitudePruning
+elif args.pruning_method == "state":
+    # State pruning is built into AdamWPrune, no external import needed
+    pass
 
 # Define relevant variables for the ML task
 batch_size = 512
@@ -275,7 +305,10 @@ scaler = GradScaler("cuda")
 
 # Initialize pruning if enabled
 pruner = None
-if enable_pruning and args.optimizer != "adamwprune":
+# For AdamWPrune with state pruning, don't create external pruner
+if enable_pruning and not (
+    args.optimizer == "adamwprune" and args.pruning_method == "state"
+):
     # Calculate total training steps for pruning schedule
     total_training_steps = len(train_loader) * ramp_end_epoch
 
@@ -578,6 +611,33 @@ logger.info(
 with open(args.json_output, "w") as f:
     json.dump(training_metrics, f, indent=2)
 logger.info(f"Training metrics saved to {args.json_output}")
+
+# Try to generate plots automatically
+try:
+    import subprocess
+    import os
+
+    # Try shared script first
+    plot_script = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "scripts",
+        "generate_training_plots.py",
+    )
+    if not os.path.exists(plot_script):
+        plot_script = "plot_training.py"  # Fallback to local
+
+    if os.path.exists(plot_script):
+        output_name = (
+            f"{args.optimizer}_{args.pruning_method}_{int(args.target_sparsity*100)}"
+        )
+        plot_cmd = ["python3", plot_script, args.json_output, "--output", output_name]
+        result = subprocess.run(plot_cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            logger.info(f"Training plots generated: {output_name}_plot.png")
+        else:
+            logger.debug(f"Could not generate plots: {result.stderr}")
+except Exception as e:
+    logger.debug(f"Plot generation skipped: {e}")
 
 # Training complete
 logger.info("Training script finished successfully")

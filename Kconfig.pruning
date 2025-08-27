@@ -43,27 +43,30 @@ choice
 
 config PRUNING_SELECT_MAGNITUDE
 	bool "Magnitude pruning"
-	depends on !OPTIMIZER_ADAMWPRUNE
+	depends on OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING
 	help
 	  Prune weights based on their absolute magnitude.
 	  This is the simplest and most widely used pruning technique.
 	  Removes the smallest magnitude weights.
+	  (Available for: SGD, Adam, AdamW, AdamWAdv, AdamWSPAM)
 
 config PRUNING_SELECT_MOVEMENT
 	bool "Movement pruning"
-	depends on !OPTIMIZER_ADAMWPRUNE
+	depends on OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING
 	help
 	  Movement pruning based on the paper:
 	  "Movement Pruning: Adaptive Sparsity by Fine-Tuning"
 	  Prunes weights based on their movement during training.
+	  (Available for: SGD, Adam, AdamW, AdamWAdv, AdamWSPAM)
 
 config PRUNING_SELECT_STATE
 	bool "State-based pruning (AdamWPrune)"
-	depends on OPTIMIZER_ADAMWPRUNE
+	depends on OPTIMIZER_SUPPORTS_STATE_PRUNING
 	help
 	  Built-in state-based pruning using Adam optimizer states.
 	  Uses momentum and variance information for pruning decisions.
 	  Zero memory overhead compared to external pruning methods.
+	  (ONLY available for: AdamWPrune)
 
 endchoice
 
@@ -83,18 +86,28 @@ config PRUNING_ENABLE_NONE
 config PRUNING_ENABLE_MAGNITUDE
 	bool "Enable magnitude pruning"
 	default y
+	depends on OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING
 	help
 	  Enable magnitude pruning for evaluation.
+	  Only available if at least one optimizer supports it.
 
 config PRUNING_ENABLE_MOVEMENT
 	bool "Enable movement pruning"
 	default y
+	depends on OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING
 	help
 	  Enable movement pruning for evaluation.
+	  Only available if at least one optimizer supports it.
 
-# State pruning is automatically enabled with AdamWPrune
-comment "State-based pruning is automatically enabled when AdamWPrune optimizer is selected"
-	depends on OPTIMIZER_ENABLED_ADAMWPRUNE
+# State pruning option for multiple mode
+config PRUNING_ENABLE_STATE
+	bool "Enable state-based pruning (AdamWPrune only)"
+	default y if OPTIMIZER_ENABLED_ADAMWPRUNE
+	depends on OPTIMIZER_SUPPORTS_STATE_PRUNING
+	help
+	  Enable state-based pruning for AdamWPrune optimizer.
+	  This is built-in to AdamWPrune and has zero memory overhead.
+	  Only AdamWPrune will use this; other optimizers will skip.
 
 endif # PRUNING_MODE_MULTIPLE
 
@@ -121,7 +134,7 @@ config PRUNING_ENABLED_MOVEMENT
 config PRUNING_ENABLED_STATE
 	bool
 	default y if PRUNING_MODE_SINGLE && PRUNING_SELECT_STATE
-	default y if PRUNING_MODE_MULTIPLE && OPTIMIZER_ENABLED_ADAMWPRUNE
+	default y if PRUNING_MODE_MULTIPLE && PRUNING_ENABLE_STATE
 	default n
 
 # Count of enabled pruning methods (for validation)

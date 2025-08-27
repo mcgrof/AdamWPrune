@@ -208,7 +208,11 @@ Dataset:
 
     # Adjust layout and save
     plt.tight_layout()
-    output_file = f"{output_prefix}_plot.png"
+    # Add _plot suffix only if not already present
+    if not output_prefix.endswith("_plot"):
+        output_file = f"{output_prefix}_plot.png"
+    else:
+        output_file = f"{output_prefix}.png"
     plt.savefig(output_file, dpi=150, bbox_inches="tight")
     print(f"Plot saved to {output_file}")
 
@@ -325,7 +329,11 @@ def plot_comparison(metrics_list, labels, output_prefix="comparison"):
 
     # Adjust layout and save
     plt.tight_layout()
-    output_file = f"{output_prefix}_plot.png"
+    # Add _plot suffix only if not already present
+    if not output_prefix.endswith("_plot"):
+        output_file = f"{output_prefix}_plot.png"
+    else:
+        output_file = f"{output_prefix}.png"
     plt.savefig(output_file, dpi=150, bbox_inches="tight")
     print(f"Comparison plot saved to {output_file}")
 

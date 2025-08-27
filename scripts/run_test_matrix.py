@@ -23,27 +23,46 @@ import threading
 # Global lock for thread-safe printing and result handling
 print_lock = threading.Lock()
 
+
 def get_gpu_memory_usage():
     """Get current GPU memory usage in MB."""
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, check=True, timeout=5
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
         )
         return int(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError, ValueError, subprocess.TimeoutExpired):
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        ValueError,
+        subprocess.TimeoutExpired,
+    ):
         return 0  # GPU monitoring failed, assume no memory usage
+
 
 def get_gpu_memory_total():
     """Get total GPU memory in MB."""
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, check=True, timeout=5
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
         )
         return int(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError, ValueError, subprocess.TimeoutExpired):
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        ValueError,
+        subprocess.TimeoutExpired,
+    ):
         return 48000  # Default for W7900, fallback if monitoring fails
+
 
 def should_start_job(max_memory_percent=90):
     """Check if we should start another job based on GPU memory usage."""
@@ -52,26 +71,50 @@ def should_start_job(max_memory_percent=90):
     memory_percent = (used_memory / total_memory) * 100
     return memory_percent < max_memory_percent
 
+
 def run_single_test_wrapper(args):
     """Wrapper for run_single_test to work with ThreadPoolExecutor."""
-    combo, config, output_dir, test_num, total_tests, max_memory_percent = args
+    (
+        combo,
+        config,
+        output_dir,
+        test_num,
+        total_tests,
+        max_memory_percent,
+        override_epochs,
+    ) = args
 
     # Wait for GPU memory to be available
     while not should_start_job(max_memory_percent):
         time.sleep(5)  # Wait 5 seconds before checking again
 
     with print_lock:
-        print(f"\n[{test_num}/{total_tests}] Starting parallel job: {combo['model']}_{combo['optimizer']}_{combo['pruning']}")
+        print(
+            f"\n[{test_num}/{total_tests}] Starting parallel job: {combo['model']}_{combo['optimizer']}_{combo['pruning']}"
+        )
 
-    result = run_single_test(combo, config, output_dir, test_num, total_tests, parallel_mode=True)
+    result = run_single_test(
+        combo,
+        config,
+        output_dir,
+        test_num,
+        total_tests,
+        parallel_mode=True,
+        override_epochs=override_epochs,
+    )
 
     with print_lock:
         if result and result.get("success", False):
-            print(f"✓ [{test_num}/{total_tests}] Completed: {result.get('test_id', 'unknown')}")
+            print(
+                f"✓ [{test_num}/{total_tests}] Completed: {result.get('test_id', 'unknown')}"
+            )
         else:
-            print(f"✗ [{test_num}/{total_tests}] Failed: {combo['model']}_{combo['optimizer']}_{combo['pruning']}")
+            print(
+                f"✗ [{test_num}/{total_tests}] Failed: {combo['model']}_{combo['optimizer']}_{combo['pruning']}"
+            )
 
     return result
+
 
 def parse_kconfig(config_path=".config"):
     """Parse Kconfig .config file and extract test matrix settings."""
@@ -177,12 +220,26 @@ def get_test_matrix(config):
         "sparsity_levels": [],
     }
 
-    # Check if in test matrix mode (check both old and new config names)
-    if config.get("TEST_MATRIX_MODE") != "y" and config.get("OPTIMIZER_MODE_MULTIPLE") != "y":
+    # Check if we should use test matrix framework
+    # Use it for both multiple modes AND single mode (for consistent logging)
+    use_test_framework = (
+        config.get("TEST_MATRIX_MODE") == "y"
+        or config.get("OPTIMIZER_MODE_MULTIPLE") == "y"
+        or config.get("MODEL_MODE_MULTIPLE") == "y"
+        or config.get("PRUNING_MODE_MULTIPLE") == "y"
+        or config.get("OPTIMIZER_MODE_SINGLE") == "y"
+        or config.get("MODEL_MODE_SINGLE") == "y"
+        or config.get("PRUNING_MODE_SINGLE") == "y"
+    )
+
+    # For backward compatibility, keep multiple_mode check
+    multiple_mode = use_test_framework
+
+    if not multiple_mode:
         # Single mode - use single selections
         if "MODEL" in config:
             matrix["models"] = [config["MODEL"]]
-        if "OPTIMIZER" in config:
+        if "OPTIMIZER" in config and config["OPTIMIZER"]:
             matrix["optimizers"] = [config["OPTIMIZER"]]
         if config.get("ENABLE_PRUNING") == "y" and "PRUNING_METHOD" in config:
             matrix["pruning_methods"] = [config["PRUNING_METHOD"]]
@@ -191,28 +248,115 @@ def get_test_matrix(config):
         return matrix
 
     # Test matrix mode - parse comma-separated lists
-    if "TEST_MODELS" in config:
-        matrix["models"] = [m.strip() for m in config["TEST_MODELS"].split(",")]
+    models = []
 
-    # Build optimizer list by scanning for TEST_OPTIMIZER_ENABLED_* flags
+    # Check new Kconfig model system first
+    if config.get("MODEL_MODE_MULTIPLE") == "y":
+        # Multiple model mode - check individual enables
+        if (
+            config.get("MODEL_ENABLE_LENET5") == "y"
+            or config.get("TEST_MODEL_LENET5") == "y"
+        ):
+            models.append("lenet5")
+        if (
+            config.get("MODEL_ENABLE_RESNET18") == "y"
+            or config.get("TEST_MODEL_RESNET18") == "y"
+        ):
+            models.append("resnet18")
+    elif config.get("MODEL_MODE_SINGLE") == "y":
+        # Single model mode - use the selected model
+        if config.get("MODEL_SELECT_LENET5") == "y":
+            models = ["lenet5"]
+        elif config.get("MODEL_SELECT_RESNET18") == "y":
+            models = ["resnet18"]
+
+    # Fall back to legacy TEST_MODELS if new system not configured
+    if not models and "TEST_MODELS" in config and config["TEST_MODELS"]:
+        models = [m.strip() for m in config["TEST_MODELS"].split(",")]
+
+    # Default to lenet5 if nothing found
+    if not models:
+        models = ["lenet5"]
+
+    matrix["models"] = models
+
+    # Build optimizer list
     optimizers = []
-    for config_key, value in config.items():
-        if config_key.startswith("TEST_OPTIMIZER_ENABLED_") and value == "y":
-            # Extract optimizer name from config key (e.g., TEST_OPTIMIZER_ENABLED_SGD -> sgd)
-            optimizer_name = config_key.replace("TEST_OPTIMIZER_ENABLED_", "").lower()
-            optimizers.append(optimizer_name)
+
+    # Check new Kconfig optimizer system first
+    if config.get("OPTIMIZER_MODE_MULTIPLE") == "y":
+        # Multiple optimizer mode - check individual enables
+        for config_key, value in config.items():
+            if config_key.startswith("OPTIMIZER_ENABLE_") and value == "y":
+                optimizer_name = config_key.replace("OPTIMIZER_ENABLE_", "").lower()
+                optimizers.append(optimizer_name)
+    elif config.get("OPTIMIZER_MODE_SINGLE") == "y":
+        # Single optimizer mode - use the selected optimizer
+        if config.get("OPTIMIZER_SELECT_SGD") == "y":
+            optimizers = ["sgd"]
+        elif config.get("OPTIMIZER_SELECT_ADAM") == "y":
+            optimizers = ["adam"]
+        elif config.get("OPTIMIZER_SELECT_ADAMW") == "y":
+            optimizers = ["adamw"]
+        elif config.get("OPTIMIZER_SELECT_ADAMWADV") == "y":
+            optimizers = ["adamwadv"]
+        elif config.get("OPTIMIZER_SELECT_ADAMWSPAM") == "y":
+            optimizers = ["adamwspam"]
+        elif config.get("OPTIMIZER_SELECT_ADAMWPRUNE") == "y":
+            optimizers = ["adamwprune"]
+
+    # Fall back to legacy TEST_OPTIMIZER_ENABLED_* flags
+    if not optimizers:
+        for config_key, value in config.items():
+            if config_key.startswith("TEST_OPTIMIZER_ENABLED_") and value == "y":
+                # Extract optimizer name from config key (e.g., TEST_OPTIMIZER_ENABLED_SGD -> sgd)
+                optimizer_name = config_key.replace("TEST_OPTIMIZER_ENABLED_", "").lower()
+                optimizers.append(optimizer_name)
 
     if optimizers:
         matrix["optimizers"] = optimizers
 
     # For pruning, check if any pruning methods are selected
-    if "TEST_PRUNING_METHODS" in config:
-        matrix["pruning_methods"] = [
-            p.strip() for p in config["TEST_PRUNING_METHODS"].split(",")
-        ]
-    else:
-        # Default to none if no pruning selected
-        matrix["pruning_methods"] = ["none"]
+    pruning_methods = []
+
+    # Check new Kconfig pruning system first
+    if config.get("PRUNING_MODE_MULTIPLE") == "y":
+        # Multiple pruning mode - check individual enables
+        if config.get("PRUNING_ENABLED_NONE") == "y":
+            pruning_methods.append("none")
+        if config.get("PRUNING_ENABLED_MAGNITUDE") == "y":
+            pruning_methods.append("magnitude")
+        if config.get("PRUNING_ENABLED_MOVEMENT") == "y":
+            pruning_methods.append("movement")
+        if config.get("PRUNING_ENABLED_STATE") == "y":
+            pruning_methods.append("state")
+    elif config.get("PRUNING_MODE_SINGLE") == "y":
+        # Single pruning mode - use the selected method
+        if config.get("PRUNING_SELECT_NONE") == "y":
+            pruning_methods = ["none"]
+        elif config.get("PRUNING_SELECT_MAGNITUDE") == "y":
+            pruning_methods = ["magnitude"]
+        elif config.get("PRUNING_SELECT_MOVEMENT") == "y":
+            pruning_methods = ["movement"]
+        elif config.get("PRUNING_SELECT_STATE") == "y":
+            pruning_methods = ["state"]
+    elif config.get("PRUNING_MODE_NONE") == "y":
+        # No pruning mode
+        pruning_methods = ["none"]
+
+    # Fall back to legacy TEST_PRUNING_METHODS if new system not configured
+    if (
+        not pruning_methods
+        and "TEST_PRUNING_METHODS" in config
+        and config["TEST_PRUNING_METHODS"]
+    ):
+        pruning_methods = [p.strip() for p in config["TEST_PRUNING_METHODS"].split(",")]
+
+    # Default to none if nothing found
+    if not pruning_methods:
+        pruning_methods = ["none"]
+
+    matrix["pruning_methods"] = pruning_methods
 
     # Special case: AdamWPrune always uses state-based pruning
     if (
@@ -237,8 +381,17 @@ def get_test_matrix(config):
         if config.get(config_name) == "y":
             matrix["sparsity_levels"].append(sparsity_value)
 
+    # If no sparsity levels selected from TEST_SPARSITY_* but we have TARGET_SPARSITY
+    if not matrix["sparsity_levels"] and config.get("TARGET_SPARSITY"):
+        target_sparsity = config["TARGET_SPARSITY"].strip('"')
+        matrix["sparsity_levels"] = [target_sparsity]
+
     # If no sparsity levels selected but pruning is enabled, use default
-    if not matrix["sparsity_levels"] and matrix["pruning_methods"]:
+    if (
+        not matrix["sparsity_levels"]
+        and matrix["pruning_methods"]
+        and matrix["pruning_methods"] != ["none"]
+    ):
         # Default to 90% if nothing specified
         matrix["sparsity_levels"] = ["0.9"]
 
@@ -288,7 +441,15 @@ def generate_combinations(matrix):
     return combinations
 
 
-def run_single_test(combination, config, output_dir, test_num, total_tests, parallel_mode=False):
+def run_single_test(
+    combination,
+    config,
+    output_dir,
+    test_num,
+    total_tests,
+    parallel_mode=False,
+    override_epochs=None,
+):
     """Run a single test combination."""
     model = combination["model"]
     optimizer = combination["optimizer"]
@@ -319,14 +480,18 @@ def run_single_test(combination, config, output_dir, test_num, total_tests, para
         print(f"Output: {test_output_dir}")
         print(f"{'='*60}")
 
-    # Build command based on model
-    if model == "lenet5":
-        # Run from the lenet5 directory
-        cmd = ["python3", "train.py"]
-        working_dir = "lenet5"
-    else:
-        print(f"Error: Model {model} not yet implemented")
-        return None
+    # Build command using GPU monitoring wrapper
+    cmd = ["python3", "scripts/train_with_monitoring.py"]
+    cmd.extend(["--model", model])
+    cmd.extend(["--config-name", test_id])
+    cmd.extend(["--output-dir", test_output_dir])
+    cmd.append("--generate-graphs")
+
+    # Set working directory to parent (where scripts/ is located)
+    working_dir = "."
+
+    # Add separator to indicate start of training script arguments
+    cmd.append("--")
 
     # Add configuration arguments that train.py actually accepts
     cmd.extend(["--optimizer", optimizer])
@@ -339,7 +504,7 @@ def run_single_test(combination, config, output_dir, test_num, total_tests, para
         cmd.extend(["--target-sparsity", sparsity])
         if "PRUNING_WARMUP" in config:
             cmd.extend(["--pruning-warmup", config["PRUNING_WARMUP"]])
-    elif pruning != "none":
+    elif pruning and pruning != "none":
         # For other optimizers, pass the pruning method
         cmd.extend(["--pruning-method", pruning])
         # Use the specific sparsity for this test
@@ -347,6 +512,9 @@ def run_single_test(combination, config, output_dir, test_num, total_tests, para
         if "PRUNING_WARMUP" in config:
             cmd.extend(["--pruning-warmup", config["PRUNING_WARMUP"]])
         # Note: train.py doesn't accept pruning-frequency as an argument
+    else:
+        # No pruning case
+        cmd.extend(["--pruning-method", "none"])
 
     # Add SPAM configuration if applicable
     if optimizer in ["adamwspam", "adamwprune"]:
@@ -359,11 +527,29 @@ def run_single_test(combination, config, output_dir, test_num, total_tests, para
         if config.get("SPAM_ENABLE_CLIP") == "y":
             cmd.append("--spam-enable-clip")
 
+    # Add AdamWPrune tuning parameters if present
+    if optimizer == "adamwprune":
+        if "ADAMWPRUNE_BETA1" in config:
+            cmd.extend(["--adamwprune-beta1", config["ADAMWPRUNE_BETA1"]])
+        if "ADAMWPRUNE_BETA2" in config:
+            cmd.extend(["--adamwprune-beta2", config["ADAMWPRUNE_BETA2"]])
+        if "ADAMWPRUNE_WEIGHT_DECAY" in config:
+            cmd.extend(["--adamwprune-weight-decay", config["ADAMWPRUNE_WEIGHT_DECAY"]])
+        if "ADAMWPRUNE_AMSGRAD" in config:
+            amsgrad_val = "true" if config["ADAMWPRUNE_AMSGRAD"] == "y" else "false"
+            cmd.extend(["--adamwprune-amsgrad", amsgrad_val])
+
     # Note: batch size is configured via config.py, not command line arguments
 
-    # JSON output for metrics - use relative path from working directory
-    json_output = os.path.join("..", test_output_dir, "training_metrics.json")
+    # JSON output for metrics - use absolute path since training runs from model dir
+    json_output = os.path.abspath(
+        os.path.join(test_output_dir, "training_metrics.json")
+    )
     cmd.extend(["--json-output", json_output])
+
+    # Override epochs if requested (for quick testing)
+    if override_epochs is not None:
+        cmd.extend(["--epochs", str(override_epochs)])
 
     # Capture timing
     start_time = time.time()
@@ -418,6 +604,7 @@ def run_single_test(combination, config, output_dir, test_num, total_tests, para
         metrics["model"] = model
         metrics["optimizer"] = optimizer
         metrics["pruning"] = pruning
+        metrics["target_sparsity"] = float(sparsity) if pruning != "none" else 0
         metrics["elapsed_time"] = elapsed_time
         metrics["success"] = True
 
@@ -450,6 +637,7 @@ def run_single_test(combination, config, output_dir, test_num, total_tests, para
             "model": model,
             "optimizer": optimizer,
             "pruning": pruning,
+            "target_sparsity": float(sparsity) if pruning != "none" else 0,
             "elapsed_time": time.time() - start_time,
             "success": False,
             "error": str(e),
@@ -538,6 +726,11 @@ def main():
     parser.add_argument(
         "--filter-optimizer",
         help="Only run tests for specific optimizer(s), comma-separated (e.g., adamwprune)",
+    )
+    parser.add_argument(
+        "--override-epochs",
+        type=int,
+        help="Override number of epochs for quick testing (e.g., 1 for smoke test)",
     )
     args = parser.parse_args()
 
@@ -639,6 +832,59 @@ def main():
 
     total_tests = len(combinations)
 
+    # Show test plan preview before starting
+    print("\n" + "=" * 60)
+    if total_tests == 1:
+        print("SINGLE TEST EXECUTION (using test matrix framework)")
+    else:
+        print("TEST MATRIX EXECUTION PLAN")
+    print("=" * 60)
+    print(f"Total tests to run: {total_tests}")
+    print(f"Parallel jobs: {args.parallel}")
+    print(f"Output directory: {output_dir}")
+    print("\nTests that will be executed:")
+
+    # Group tests by optimizer for clearer display
+    tests_by_optimizer = {}
+    for combo in combinations:
+        opt = combo["optimizer"]
+        if opt not in tests_by_optimizer:
+            tests_by_optimizer[opt] = []
+
+        if combo["pruning"] == "none":
+            test_desc = f"  - {combo['pruning']} (no sparsity)"
+        else:
+            sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
+            test_desc = f"  - {combo['pruning']} @ {sparsity_pct}% sparsity"
+        tests_by_optimizer[opt].append(test_desc)
+
+    for optimizer in sorted(tests_by_optimizer.keys()):
+        print(f"\n{optimizer.upper()} ({len(tests_by_optimizer[optimizer])} tests):")
+        for test in tests_by_optimizer[optimizer]:
+            print(test)
+
+    print("\n" + "=" * 60)
+
+    if not args.dry_run:
+        # Check if YES=1 environment variable is set to skip confirmation
+        auto_yes = os.environ.get("YES", "").strip() == "1"
+
+        # Always ask for confirmation unless YES=1 is set
+        if not auto_yes:
+            print(
+                f"\nAbout to run {total_tests} training job{'s' if total_tests != 1 else ''}."
+            )
+            response = input("Continue? (y/N): ").strip().lower()
+            if response != "y":
+                print("Aborted by user.")
+                sys.exit(0)
+        else:
+            print(
+                f"\nAuto-confirmed (YES=1): Running {total_tests} training job{'s' if total_tests != 1 else ''}."
+            )
+
+        print("\nStarting test matrix execution...")
+
     # Get parallel settings from config or args
     parallel_jobs = args.parallel
     if parallel_jobs == 1 and config.get("PARALLEL_JOBS"):
@@ -647,20 +893,35 @@ def main():
     max_memory_percent = int(config.get("MAX_GPU_MEMORY_PERCENT", 90))
 
     if parallel_jobs > 1:
-        print(f"\nRunning {parallel_jobs} parallel jobs with {max_memory_percent}% max GPU memory")
+        print(
+            f"\nRunning {parallel_jobs} parallel jobs with {max_memory_percent}% max GPU memory"
+        )
         print(f"Total GPU memory: {get_gpu_memory_total()}MB")
         print("Using parallel execution with GPU memory monitoring...")
 
         # Prepare arguments for parallel execution
         job_args = []
         for i, combo in enumerate(combinations, 1):
-            job_args.append((combo, config, output_dir, i, total_tests, max_memory_percent))
+            job_args.append(
+                (
+                    combo,
+                    config,
+                    output_dir,
+                    i,
+                    total_tests,
+                    max_memory_percent,
+                    args.override_epochs,
+                )
+            )
 
         # Run tests in parallel with thread pool
         completed_results = []
         with ThreadPoolExecutor(max_workers=parallel_jobs) as executor:
             # Submit all jobs
-            future_to_combo = {executor.submit(run_single_test_wrapper, args): args for args in job_args}
+            future_to_combo = {
+                executor.submit(run_single_test_wrapper, args): args
+                for args in job_args
+            }
 
             # Collect results as they complete
             for future in as_completed(future_to_combo):
@@ -686,7 +947,14 @@ def main():
     else:
         # Serial execution (original behavior)
         for i, combo in enumerate(combinations, 1):
-            result = run_single_test(combo, config, output_dir, i, total_tests)
+            result = run_single_test(
+                combo,
+                config,
+                output_dir,
+                i,
+                total_tests,
+                override_epochs=args.override_epochs,
+            )
             if result:
                 results.append(result)
 

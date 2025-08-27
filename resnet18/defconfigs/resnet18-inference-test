@@ -1,0 +1,32 @@
+# ResNet-18 State Pruning (AdamWPrune) with Inference Testing
+# Tests AdamWPrune with built-in state-based 70% pruning and measures inference memory
+
+CONFIG_MODEL="resnet18"
+CONFIG_NUM_EPOCHS=100
+CONFIG_BATCH_SIZE=128
+CONFIG_LEARNING_RATE="0.1"
+CONFIG_NUM_WORKERS=4
+
+# Pruning configuration (state = AdamWPrune built-in)
+CONFIG_PRUNING_METHOD="state"
+CONFIG_TARGET_SPARSITY=0.7
+CONFIG_PRUNING_WARMUP=1000
+CONFIG_PRUNING_FREQUENCY=100
+
+# Optimizer to test (can override with make OPTIMIZER=xxx)
+CONFIG_OPTIMIZER="adamwprune"
+
+# SPAM configuration for movement pruning
+CONFIG_SPAM_THETA=50.0
+CONFIG_SPAM_INTERVAL=0
+CONFIG_SPAM_WARMUP_STEPS=0
+CONFIG_SPAM_ENABLE_CLIP=n
+
+# Enable inference testing
+CONFIG_INFERENCE_TEST=y
+CONFIG_INFERENCE_BATCH_SIZES="1,16,32,64,128,256"
+CONFIG_SAVE_CHECKPOINT=y
+
+# Monitoring
+CONFIG_LOG_LEVEL="INFO"
+CONFIG_PROFILE=n

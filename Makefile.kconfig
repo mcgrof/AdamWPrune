@@ -65,7 +65,6 @@ defconfig: $(CONF)
 	fi; \
 	echo "Loading defconfig: $(DEFCONFIG) from $$found_config"; \
 	cp "$$found_config" $(CONFIG_FILE)
-	@$(CONF) --olddefconfig $(KCONFIG)
 
 # Save current config as defconfig
 savedefconfig: $(CONF)

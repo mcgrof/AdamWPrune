@@ -1,6 +1,23 @@
 # SPDX-License-Identifier: MIT
 # Optimizer Configuration
 
+# Capability flags - what each optimizer supports
+# These are hidden configs that get selected by optimizers
+config OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING
+	bool
+	help
+	  Optimizer supports external magnitude pruning
+
+config OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING
+	bool
+	help
+	  Optimizer supports external movement pruning
+
+config OPTIMIZER_SUPPORTS_STATE_PRUNING
+	bool
+	help
+	  Optimizer has built-in state-based pruning
+
 menu "Optimizer Selection"
 
 # Main optimizer mode selection
@@ -43,47 +60,64 @@ choice
 
 config OPTIMIZER_SELECT_SGD
 	bool "SGD (Stochastic Gradient Descent)"
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING
 	help
 	  Standard SGD optimizer with momentum support.
 	  Simple and reliable baseline optimizer.
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_SELECT_ADAM
 	bool "Adam"
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING
 	help
 	  Adam optimizer - adaptive learning rate optimization algorithm.
 	  Combines advantages of AdaGrad and RMSProp.
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_SELECT_ADAMW
 	bool "AdamW"
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING
 	help
 	  AdamW optimizer - Adam with decoupled weight decay regularization.
 	  Better generalization than standard Adam.
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_SELECT_ADAMWADV
 	bool "AdamW Advanced"
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING
 	help
 	  AdamW with additional enhancements:
 	  - AMSGrad for better convergence
 	  - Stronger weight decay (0.01)
 	  - Cosine annealing learning rate schedule
 	  - Gradient clipping
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_SELECT_ADAMWSPAM
 	bool "AdamW SPAM"
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING
 	help
 	  AdamW with SPAM (Spike-Aware Pruning-Adaptive Momentum):
 	  - Automatic spike detection and momentum reset
 	  - Optional periodic momentum reset
 	  - Spike-aware gradient clipping
 	  - Cosine warmup after reset
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_SELECT_ADAMWPRUNE
 	bool "AdamWPrune (Experimental)"
+	select OPTIMIZER_SUPPORTS_STATE_PRUNING
 	help
 	  AdamWPrune - All AdamW Advanced features plus state-based pruning:
 	  - Uses Adam momentum and variance for pruning decisions
 	  - Zero memory overhead pruning
 	  - Hybrid pruning strategy (momentum × stability)
+	  Supports: ONLY built-in state pruning (no external pruning)
 
 endchoice
 
@@ -97,38 +131,55 @@ comment "Select optimizers to enable"
 config OPTIMIZER_ENABLE_SGD
 	bool "Enable SGD"
 	default y
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING if OPTIMIZER_ENABLED_SGD
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING if OPTIMIZER_ENABLED_SGD
 	help
 	  Enable SGD optimizer for evaluation.
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_ENABLE_ADAM
 	bool "Enable Adam"
 	default y
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING if OPTIMIZER_ENABLED_ADAM
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING if OPTIMIZER_ENABLED_ADAM
 	help
 	  Enable Adam optimizer for evaluation.
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_ENABLE_ADAMW
 	bool "Enable AdamW"
 	default y
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING if OPTIMIZER_ENABLED_ADAMW
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING if OPTIMIZER_ENABLED_ADAMW
 	help
 	  Enable AdamW optimizer for evaluation.
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_ENABLE_ADAMWADV
 	bool "Enable AdamW Advanced"
 	default y
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING if OPTIMIZER_ENABLED_ADAMWADV
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING if OPTIMIZER_ENABLED_ADAMWADV
 	help
 	  Enable AdamW Advanced optimizer for evaluation.
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_ENABLE_ADAMWSPAM
 	bool "Enable AdamW SPAM"
 	default y
+	select OPTIMIZER_SUPPORTS_MAGNITUDE_PRUNING if OPTIMIZER_ENABLED_ADAMWSPAM
+	select OPTIMIZER_SUPPORTS_MOVEMENT_PRUNING if OPTIMIZER_ENABLED_ADAMWSPAM
 	help
 	  Enable AdamW SPAM optimizer for evaluation.
+	  Supports: magnitude pruning, movement pruning
 
 config OPTIMIZER_ENABLE_ADAMWPRUNE
 	bool "Enable AdamWPrune"
 	default y
+	select OPTIMIZER_SUPPORTS_STATE_PRUNING if OPTIMIZER_ENABLED_ADAMWPRUNE
 	help
 	  Enable AdamWPrune optimizer for evaluation.
+	  Supports: ONLY built-in state pruning
 
 endif # OPTIMIZER_MODE_MULTIPLE
 

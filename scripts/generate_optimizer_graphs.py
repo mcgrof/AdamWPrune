@@ -5,6 +5,9 @@
 import json
 import os
 import sys
+import matplotlib
+
+matplotlib.use("Agg")  # Use non-interactive backend
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
@@ -43,7 +46,11 @@ def group_by_optimizer(results):
 
 def extract_plot_data(metrics):
     """Extract data for plotting from metrics."""
-    if not metrics or "epochs" not in metrics:
+    if not metrics:
+        return None
+
+    # Check if we have data in either format
+    if "epochs" not in metrics and "test_accuracy" not in metrics:
         return None
 
     epochs = []
@@ -51,11 +58,27 @@ def extract_plot_data(metrics):
     losses = []
     sparsities = []
 
-    for epoch_data in metrics["epochs"]:
-        epochs.append(epoch_data["epoch"])
-        accuracies.append(epoch_data["accuracy"])
-        losses.append(epoch_data["avg_loss"])
-        sparsities.append(epoch_data.get("sparsity", 0) * 100)
+    # Handle different JSON formats
+    if "epochs" in metrics and isinstance(metrics["epochs"], list):
+        if metrics["epochs"] and isinstance(metrics["epochs"][0], dict):
+            # LeNet-5 format - epochs is a list of dictionaries
+            for epoch_data in metrics["epochs"]:
+                epochs.append(epoch_data["epoch"])
+                accuracies.append(epoch_data["accuracy"])
+                losses.append(epoch_data["avg_loss"])
+                sparsities.append(epoch_data.get("sparsity", 0) * 100)
+        else:
+            # ResNet-18 format - separate lists
+            epochs = metrics["epochs"]
+            accuracies = metrics.get("test_accuracy", [])
+            losses = metrics.get("train_loss", [])
+            sparsities = [s * 100 for s in metrics.get("sparsity", [])]
+    elif "test_accuracy" in metrics:
+        # Alternative ResNet-18 format
+        epochs = list(range(1, len(metrics["test_accuracy"]) + 1))
+        accuracies = metrics.get("test_accuracy", [])
+        losses = metrics.get("train_loss", [])
+        sparsities = [s * 100 for s in metrics.get("sparsity", [])]
 
     return {
         "epochs": epochs,
@@ -64,14 +87,18 @@ def extract_plot_data(metrics):
         "sparsities": sparsities,
         "final_accuracy": metrics.get("final_accuracy", 0),
         "final_sparsity": metrics.get("final_sparsity", 0) * 100,
-        "training_time": metrics.get("total_training_time", 0),
+        "training_time": metrics.get(
+            "total_time", metrics.get("total_training_time", 0)
+        ),
         "compression_ratio": metrics.get("compression_ratio", 1.0),
     }
 
 
 def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     """Create comparison graphs for a single optimizer."""
-    model_name = "lenet5"  # Currently only supporting lenet5
+    # Detect model from test results
+    model_name = tests[0].get("model", "unknown") if tests else "unknown"
+    display_name = model_name.upper() if model_name != "unknown" else "Model"
 
     # Sort tests by sparsity level
     tests.sort(key=lambda x: x.get("final_sparsity", 0))
@@ -107,7 +134,9 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     # Create figure 1: Model comparison (6 panels)
     fig1 = plt.figure(figsize=(18, 14))
     fig1.suptitle(
-        f"LeNet-5 Model Comparison: {optimizer.upper()}", fontsize=16, fontweight="bold"
+        f"{display_name} Model Comparison: {optimizer.upper()}",
+        fontsize=16,
+        fontweight="bold",
     )
 
     # Panel 1: Training Accuracy Evolution
@@ -117,7 +146,10 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     ax1.set_xlabel("Epoch")
     ax1.set_ylabel("Test Accuracy (%)")
     ax1.set_title("Accuracy Evolution")
-    ax1.legend(loc="best", fontsize=8)
+    # Extend y-axis for legend visibility
+    y_min, y_max = ax1.get_ylim()
+    ax1.set_ylim(y_min, y_max * 1.1)
+    ax1.legend(loc="upper left", fontsize=8)
     ax1.grid(True, alpha=0.3)
 
     # Panel 2: Training Loss Evolution
@@ -127,7 +159,7 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     ax2.set_xlabel("Epoch")
     ax2.set_ylabel("Training Loss")
     ax2.set_title("Loss Evolution")
-    ax2.legend(loc="best", fontsize=8)
+    ax2.legend(loc="upper right", fontsize=8)
     ax2.grid(True, alpha=0.3)
     ax2.set_yscale("log")
 
@@ -139,9 +171,9 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     ax3.set_xlabel("Epoch")
     ax3.set_ylabel("Sparsity (%)")
     ax3.set_title("Sparsity Progression")
-    ax3.legend(loc="best", fontsize=8)
+    ax3.legend(loc="lower right", fontsize=8)
     ax3.grid(True, alpha=0.3)
-    ax3.set_ylim([0, 100])
+    ax3.set_ylim([0, 110])  # Extra space for legend
 
     # Panel 4: Final Accuracy Comparison
     ax4 = plt.subplot(3, 3, 4)
@@ -155,7 +187,10 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     )
     ax4.set_ylabel("Final Accuracy (%)")
     ax4.set_title("Final Accuracy Comparison")
-    ax4.set_ylim([90, 100])
+    # Dynamic y-limits with padding
+    y_min = min(final_accs) * 0.98 if final_accs else 90
+    y_max = max(final_accs) * 1.02 if final_accs else 100
+    ax4.set_ylim([y_min, y_max])
     ax4.grid(True, alpha=0.3, axis="y")
 
     # Add value labels on bars
@@ -182,6 +217,19 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     ax5.set_title("Training Time")
     ax5.grid(True, alpha=0.3, axis="y")
 
+    # Add value labels on bars
+    for bar, time in zip(bars, times):
+        if time > 0:
+            height = bar.get_height()
+            ax5.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height,
+                f"{time:.1f}s",
+                ha="center",
+                va="bottom",
+                fontsize=7,
+            )
+
     # Panel 6: Accuracy vs Sparsity Trade-off
     ax6 = plt.subplot(3, 3, 6)
     sparsities = [data["final_sparsity"] for data in plot_data.values()]
@@ -202,7 +250,13 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     ax6.set_title("Accuracy vs Sparsity Trade-off")
     ax6.grid(True, alpha=0.3)
     ax6.set_xlim([-5, 105])
-    ax6.set_ylim([90, 100])
+    # Dynamic y-limits
+    if final_accs:
+        y_min = min(final_accs) * 0.98
+        y_max = max(final_accs) * 1.02
+        ax6.set_ylim([y_min, y_max])
+    else:
+        ax6.set_ylim([90, 100])
 
     # Panel 7: Memory Efficiency
     ax7 = plt.subplot(3, 3, 7)
@@ -272,7 +326,7 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     # Create figure 2: Accuracy evolution focused view
     fig2 = plt.figure(figsize=(12, 8))
     fig2.suptitle(
-        f"LeNet-5 Accuracy Evolution: {optimizer.upper()}",
+        f"{display_name} Accuracy Evolution: {optimizer.upper()}",
         fontsize=16,
         fontweight="bold",
     )
@@ -290,9 +344,11 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
 
     ax.set_xlabel("Epoch", fontsize=12)
     ax.set_ylabel("Test Accuracy (%)", fontsize=12)
-    ax.legend(loc="best", fontsize=10)
+    # Dynamic y-limits with space for legend
+    y_min, y_max = ax.get_ylim()
+    ax.set_ylim(y_min * 0.98, min(100, y_max * 1.05))
+    ax.legend(loc="lower right", fontsize=10)
     ax.grid(True, alpha=0.3)
-    ax.set_ylim([90, 100])
 
     plt.tight_layout()
 
