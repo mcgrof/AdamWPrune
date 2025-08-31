@@ -171,6 +171,7 @@ def create_optimizer(
             ),
             "warmup_steps": args.pruning_warmup if args else 100,
             "pruning_frequency": 50,
+            "ramp_end_epoch": getattr(args, 'pruning_ramp_end_epoch', 75) if args else 75,
             "step_count": 0,
             "masks": {},  # module -> bool mask buffer
             "pruning_strategy": "hybrid",  # hybrid of momentum and stability
@@ -341,7 +342,9 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, epoch):
     ):
 
         # Calculate current sparsity level (gradual ramp-up)
-        ramp_end_step = len(train_loader) * 8  # Ramp to target by epoch 8
+        # Use ramp_end_epoch from state
+        ramp_end_epoch = adamprune_state.get("ramp_end_epoch", 75)
+        ramp_end_step = len(train_loader) * ramp_end_epoch
         progress = min(
             1.0,
             (adamprune_state["step_count"] - adamprune_state["warmup_steps"])
