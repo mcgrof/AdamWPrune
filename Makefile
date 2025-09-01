@@ -212,6 +212,56 @@ parallel-16: check-config
 	@echo "Running test matrix with 16 parallel jobs..."
 	@scripts/run_parallel_test_matrix.sh -j 16
 
+# Hyperparameter sweep targets
+.PHONY: sweep-generate sweep-run sweep sweep-clean
+
+# Generate configurations for hyperparameter sweep
+sweep-generate:
+	@if [ -z "$(RANGE_CONFIG)" ]; then \
+		echo "Usage: make sweep-generate RANGE_CONFIG=path/to/range-config"; \
+		echo "Example: make sweep-generate RANGE_CONFIG=resnet18/defconfigs/resnet18-state-pruning-compare-range"; \
+		exit 1; \
+	fi
+	@echo "Generating config combinations from $(RANGE_CONFIG)..."
+	@python scripts/generate_config_combinations.py $(RANGE_CONFIG) sweep_configs
+	@echo "Configurations generated in sweep_configs/"
+
+# Run hyperparameter sweep with generated configs
+sweep-run:
+	@if [ ! -d "sweep_configs" ]; then \
+		echo "Error: sweep_configs directory not found. Run 'make sweep-generate' first."; \
+		exit 1; \
+	fi
+	@echo "Running hyperparameter sweep with configs from sweep_configs/..."
+	@python scripts/run_test_matrix.py --config-dir sweep_configs
+
+# Combined sweep: generate and run
+sweep:
+	@if [ -z "$(RANGE_CONFIG)" ]; then \
+		echo "Usage: make sweep RANGE_CONFIG=path/to/range-config"; \
+		echo "Example: make sweep RANGE_CONFIG=resnet18/defconfigs/resnet18-state-pruning-compare-range"; \
+		exit 1; \
+	fi
+	@$(MAKE) sweep-generate RANGE_CONFIG=$(RANGE_CONFIG)
+	@$(MAKE) sweep-run
+
+# Clean sweep configs
+sweep-clean:
+	@echo "Cleaning sweep configurations..."
+	@rm -rf sweep_configs
+
+# Monitor sweep progress
+sweep-monitor:
+	@python scripts/monitor_sweep.py
+
+# Watch sweep progress (continuous monitoring)
+sweep-watch:
+	@python scripts/monitor_sweep.py --watch
+
+# Show sweep leaderboard
+sweep-leaderboard:
+	@python scripts/sweep_leaderboard.py
+
 # Usage: make parallel-rerun TARGET=test_matrix_results_20250826_181029 [JOBS=8] [OPTIMIZER=adamwprune]
 parallel-rerun:
 	@if [ -z "$(TARGET)" ]; then \

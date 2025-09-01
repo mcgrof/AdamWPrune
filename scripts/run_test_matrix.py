@@ -310,7 +310,9 @@ def get_test_matrix(config):
         for config_key, value in config.items():
             if config_key.startswith("TEST_OPTIMIZER_ENABLED_") and value == "y":
                 # Extract optimizer name from config key (e.g., TEST_OPTIMIZER_ENABLED_SGD -> sgd)
-                optimizer_name = config_key.replace("TEST_OPTIMIZER_ENABLED_", "").lower()
+                optimizer_name = config_key.replace(
+                    "TEST_OPTIMIZER_ENABLED_", ""
+                ).lower()
                 optimizers.append(optimizer_name)
 
     if optimizers:
@@ -683,6 +685,75 @@ def create_summary_report(results, output_dir):
             print(f"JSON results saved to: {json_file}")
 
 
+def generate_sweep_analysis(output_dir, results):
+    """Generate analysis report for hyperparameter sweep."""
+    if not results:
+        return
+
+    # Sort results by test accuracy
+    sorted_results = sorted(results, key=lambda x: x.get("test_acc", 0), reverse=True)
+
+    # Write analysis report
+    report_file = output_dir / "sweep_analysis.txt"
+    with open(report_file, "w") as f:
+        f.write("Hyperparameter Sweep Analysis\n")
+        f.write("=" * 60 + "\n\n")
+
+        f.write(f"Total configurations tested: {len(results)}\n\n")
+
+        # Best configuration
+        if sorted_results:
+            best = sorted_results[0]
+            f.write("BEST CONFIGURATION:\n")
+            f.write("-" * 40 + "\n")
+            f.write(f"Config file: {best.get('config_file', 'unknown')}\n")
+            f.write(f"Test Accuracy: {best.get('test_acc', 0):.2f}%\n")
+            f.write(f"Final Sparsity: {best.get('final_sparsity', 0):.1%}\n")
+            f.write(f"Training Time: {best.get('total_time', 0):.1f}s\n")
+
+            # Extract hyperparameters from config
+            if "config_file" in best:
+                f.write("\nHyperparameters:\n")
+                # Parse the config file to extract key parameters
+                # The test_name might not be in the result, so construct it from config_file
+                config_num = best["config_file"].replace("config_", "").split("_")[0]
+                test_dirs = [d for d in output_dir.iterdir() if d.is_dir() and config_num in d.name]
+                if test_dirs:
+                    config_path = test_dirs[0] / "config.txt"
+                else:
+                    config_path = output_dir / best["config_file"] / "config.txt"
+                if config_path.exists():
+                    with open(config_path, "r") as cf:
+                        for line in cf:
+                            if (
+                                "ADAMWPRUNE" in line
+                                or "PRUNING_WARMUP" in line
+                                or "TARGET_SPARSITY" in line
+                            ):
+                                if "=" in line and not line.startswith("#"):
+                                    f.write(f"  {line.strip()}\n")
+
+        f.write("\n" + "=" * 60 + "\n")
+        f.write("TOP 10 CONFIGURATIONS:\n")
+        f.write("-" * 40 + "\n\n")
+
+        # Top 10 results
+        for i, result in enumerate(sorted_results[:10], 1):
+            f.write(f"{i}. {result.get('config_file', 'unknown')}\n")
+            f.write(f"   Test Acc: {result.get('test_acc', 0):.2f}% | ")
+            f.write(f"Sparsity: {result.get('final_sparsity', 0):.1%} | ")
+            f.write(f"Time: {result.get('total_time', 0):.1f}s\n")
+
+        f.write("\n" + "=" * 60 + "\n")
+        f.write("FAILED TESTS:\n")
+        f.write("-" * 40 + "\n")
+
+        failed_count = len([r for r in results if r.get("status") == "failed"])
+        f.write(f"Failed: {failed_count}/{len(results)}\n")
+
+    print(f"Analysis report saved to: {report_file}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Run test matrix for AdamWPrune training"
@@ -694,6 +765,10 @@ def main():
     )
     parser.add_argument(
         "--config-yaml", help="Path to YAML configuration file (overrides --config)"
+    )
+    parser.add_argument(
+        "--config-dir",
+        help="Path to directory containing multiple config files to test",
     )
     parser.add_argument(
         "--output-dir",
@@ -734,7 +809,89 @@ def main():
     )
     args = parser.parse_args()
 
-    # Parse configuration
+    # Handle config directory mode
+    if args.config_dir:
+        # Get all config files from directory
+        config_dir = Path(args.config_dir)
+        if not config_dir.exists():
+            print(f"Error: Config directory '{config_dir}' does not exist")
+            sys.exit(1)
+
+        config_files = sorted(config_dir.glob("config_*"))
+        if not config_files:
+            print(f"Error: No config files found in '{config_dir}'")
+            sys.exit(1)
+
+        print(f"Found {len(config_files)} configuration files to test")
+
+        # For config_dir mode, we'll run each config as a separate test
+        # Create output directory with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(args.output_dir) / f"sweep_{timestamp}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"\nOutput directory: {output_dir}")
+
+        # Run each configuration
+        all_results = []
+        for i, config_file in enumerate(config_files, 1):
+            print(f"\n{'='*60}")
+            print(f"Testing configuration {i}/{len(config_files)}: {config_file.name}")
+            print("=" * 60)
+
+            # Parse this config
+            config = parse_kconfig(str(config_file))
+
+            # Get single combination from this config (it's a fixed config)
+            matrix = get_test_matrix(config)
+            combinations = generate_combinations(matrix)
+
+            if len(combinations) != 1:
+                print(
+                    f"Warning: Config {config_file.name} generated {len(combinations)} combinations, expected 1"
+                )
+
+            # Run the test
+            combo = combinations[0]
+            test_name = f"{config_file.stem}_{combo['model']}_{combo['optimizer']}"
+            if combo["pruning"] != "none":
+                sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
+                test_name += f"_{combo['pruning']}_{sparsity_pct}"
+
+            test_output_dir = output_dir / test_name
+
+            # Copy config file to test directory for reference
+            test_output_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(config_file, test_output_dir / "config.txt")
+
+            result = run_single_test(
+                combo,
+                config,
+                test_output_dir,
+                i,
+                len(config_files),
+                override_epochs=args.override_epochs,
+            )
+
+            if result:
+                result["config_file"] = config_file.name
+                result["test_name"] = test_name  # Add test_name for analysis
+                all_results.append(result)
+
+        # Save combined results
+        summary_file = output_dir / "sweep_summary.json"
+        with open(summary_file, "w") as f:
+            json.dump(all_results, f, indent=2)
+
+        # Generate sweep analysis
+        generate_sweep_analysis(output_dir, all_results)
+
+        print(f"\n{'='*60}")
+        print(f"Sweep completed: {len(all_results)} successful tests")
+        print(f"Results saved to: {output_dir}")
+        return
+
+    # Parse configuration (normal mode)
     if args.config_yaml:
         config = parse_yaml_config(args.config_yaml)
         config_source = args.config_yaml
