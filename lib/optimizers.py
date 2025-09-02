@@ -155,23 +155,20 @@ def create_optimizer(
         }
 
         # AdamWPrune specific state for state-based pruning
-        # Only enable built-in state-based pruning when explicitly using "movement" or "state" method
-        # For "magnitude" pruning, use external MagnitudePruning class instead
+        # Use AdamWPrune-specific pruning method configuration
+        adamwprune_pruning_method = getattr(args, 'adamwprune_pruning_method', 'state') if args else 'state'
+        adamwprune_target_sparsity = float(getattr(args, 'adamwprune_target_sparsity', 0.7) if args else 0.7)
+
         adamprune_state = {
             "pruning_enabled": (
-                args.pruning_method in ["movement", "state", "adamwprune"]
-                and args.target_sparsity > 0
-                if args
-                else False
+                adamwprune_pruning_method == "state" and adamwprune_target_sparsity > 0
             ),
             "target_sparsity": (
-                args.target_sparsity
-                if args and args.pruning_method in ["movement", "state", "adamwprune"]
-                else 0
+                adamwprune_target_sparsity if adamwprune_pruning_method == "state" else 0
             ),
-            "warmup_steps": args.pruning_warmup if args else 100,
-            "pruning_frequency": 50,
-            "ramp_end_epoch": getattr(args, 'pruning_ramp_end_epoch', 75) if args else 75,
+            "warmup_steps": getattr(args, 'adamwprune_warmup_steps', 100) if args else 100,
+            "pruning_frequency": getattr(args, 'adamwprune_frequency', 50) if args else 50,
+            "ramp_end_epoch": getattr(args, 'adamwprune_ramp_end_epoch', 75) if args else 75,
             "step_count": 0,
             "masks": {},  # module -> bool mask buffer
             "pruning_strategy": "hybrid",  # hybrid of momentum and stability

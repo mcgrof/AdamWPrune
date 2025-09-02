@@ -418,6 +418,92 @@ endmenu
 
 endif # SPAM options
 
+# AdamWPrune specific options
+if OPTIMIZER_ENABLED_ADAMWPRUNE
+
+menu "AdamWPrune Configuration"
+
+config ADAMWPRUNE_ENABLE_PRUNING
+	bool "Enable built-in state-based pruning"
+	default y
+	help
+	  Enable AdamWPrune's built-in state-based pruning.
+	  When disabled, AdamWPrune acts as a regular AdamW optimizer
+	  with SPAM features but without pruning.
+
+config ADAMWPRUNE_PRUNING_METHOD
+	string
+	default "state" if ADAMWPRUNE_ENABLE_PRUNING
+	default "none"
+
+if ADAMWPRUNE_ENABLE_PRUNING
+
+config ADAMWPRUNE_TARGET_SPARSITY
+	string "Target sparsity (0.0-1.0)"
+	default "0.7"
+	help
+	  Target sparsity level for AdamWPrune's built-in pruning.
+	  0.5 = 50% sparsity, 0.7 = 70% sparsity, 0.9 = 90% sparsity.
+	  Default is 0.7 (70% sparsity).
+
+config ADAMWPRUNE_WARMUP_STEPS
+	int "Pruning warmup steps"
+	default 100
+	range 0 10000
+	help
+	  Number of training steps before pruning starts.
+	  Default is 100 steps.
+
+config ADAMWPRUNE_FREQUENCY
+	int "Pruning update frequency (steps)"
+	default 50
+	range 1 1000
+	help
+	  How often to update pruning masks (in steps).
+	  Default is 50 steps.
+
+config ADAMWPRUNE_RAMP_END_EPOCH
+	int "Ramp end epoch"
+	default 75
+	range 1 1000
+	help
+	  Epoch at which pruning ramp ends and sparsity stabilizes.
+	  Default is 75.
+
+endif # ADAMWPRUNE_ENABLE_PRUNING
+
+config ADAMWPRUNE_BETA1
+	string "Beta1 (momentum coefficient)"
+	default "0.9"
+	help
+	  Coefficient for computing running average of gradient.
+	  Lower values = less momentum smoothing.
+	  Default is 0.9.
+
+config ADAMWPRUNE_BETA2
+	string "Beta2 (variance coefficient)"
+	default "0.999"
+	help
+	  Coefficient for computing running average of squared gradient.
+	  Default is 0.999.
+
+config ADAMWPRUNE_WEIGHT_DECAY
+	string "Weight decay"
+	default "0.01"
+	help
+	  Weight decay for AdamWPrune optimizer.
+	  Default is 0.01.
+
+config ADAMWPRUNE_AMSGRAD
+	bool "Use AMSGrad"
+	default y
+	help
+	  Enable AMSGrad variant for better convergence stability.
+
+endmenu
+
+endif # OPTIMIZER_ENABLED_ADAMWPRUNE
+
 # Legacy compatibility - map old TEST_MATRIX_MODE configurations
 config TEST_MATRIX_MODE
 	def_bool OPTIMIZER_MODE_MULTIPLE

@@ -201,47 +201,6 @@ config PARALLEL_BATCH_SIZE
 
 endmenu
 
-menu "AdamWPrune Tuning"
-
-config ADAMWPRUNE_BETA1
-	string "AdamWPrune beta1 (momentum coefficient)"
-	default "0.9"
-	help
-	  Beta1 coefficient for AdamWPrune momentum (exp_avg).
-	  Controls how much history is kept for importance scoring.
-	  - Default: 0.9 (approximately 10 step history)
-	  - Lower (0.85): Faster adaptation, ~7 step history
-	  - Higher (0.95): More stable, ~20 step history
-
-config ADAMWPRUNE_BETA2
-	string "AdamWPrune beta2 (variance coefficient)"
-	default "0.999"
-	help
-	  Beta2 coefficient for AdamWPrune variance (exp_avg_sq).
-	  - Default: 0.999 (standard Adam setting)
-	  - Lower (0.99): More aggressive adaptation
-	  - Higher (0.9999): More conservative
-
-config ADAMWPRUNE_WEIGHT_DECAY
-	string "AdamWPrune weight decay"
-	default "0.01"
-	help
-	  Weight decay (L2 regularization) for AdamWPrune.
-	  - Default: 0.01 (aggressive regularization)
-	  - Lower (0.001): Gentler, better for pruned networks
-	  - Zero (0.0): No weight decay
-
-config ADAMWPRUNE_AMSGRAD
-	bool "Enable AMSGrad for AdamWPrune"
-	default y
-	help
-	  Enable AMSGrad variant for AdamWPrune.
-	  AMSGrad maintains max of exp_avg_sq for more stable convergence.
-	  May conflict with aggressive pruning - consider disabling for
-	  high sparsity targets.
-
-endmenu
-
 menu "Debugging"
 
 config DEBUG

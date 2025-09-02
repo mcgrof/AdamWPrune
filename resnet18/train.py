@@ -281,6 +281,12 @@ def main():
         spam_theta_default = getattr(cfg, "SPAM_THETA", 50.0)
         spam_interval_default = getattr(cfg, "SPAM_INTERVAL", 0)
         spam_warmup_default = getattr(cfg, "SPAM_WARMUP_STEPS", 0)
+        # AdamWPrune-specific configs
+        adamwprune_pruning_method_default = getattr(cfg, "ADAMWPRUNE_PRUNING_METHOD", "state")
+        adamwprune_target_sparsity_default = getattr(cfg, "ADAMWPRUNE_TARGET_SPARSITY", "0.7")
+        adamwprune_warmup_steps_default = getattr(cfg, "ADAMWPRUNE_WARMUP_STEPS", 100)
+        adamwprune_frequency_default = getattr(cfg, "ADAMWPRUNE_FREQUENCY", 50)
+        adamwprune_ramp_end_epoch_default = getattr(cfg, "ADAMWPRUNE_RAMP_END_EPOCH", 75)
     except ImportError:
         pruning_method_default = "none"
         target_sparsity_default = 0.9
@@ -289,6 +295,12 @@ def main():
         spam_theta_default = 50.0
         spam_interval_default = 0
         spam_warmup_default = 0
+        # AdamWPrune-specific defaults
+        adamwprune_pruning_method_default = "state"
+        adamwprune_target_sparsity_default = "0.7"
+        adamwprune_warmup_steps_default = 100
+        adamwprune_frequency_default = 50
+        adamwprune_ramp_end_epoch_default = 75
 
     parser = argparse.ArgumentParser(description="ResNet-18 training on CIFAR-10")
     parser.add_argument(
@@ -383,14 +395,27 @@ def main():
 
     args = parser.parse_args()
 
+    # Add AdamWPrune-specific configs to args
+    args.adamwprune_pruning_method = adamwprune_pruning_method_default
+    args.adamwprune_target_sparsity = float(adamwprune_target_sparsity_default)
+    args.adamwprune_warmup_steps = adamwprune_warmup_steps_default
+    args.adamwprune_frequency = adamwprune_frequency_default
+    args.adamwprune_ramp_end_epoch = adamwprune_ramp_end_epoch_default
+
     print("=" * 60)
     print("ResNet-18 Training on CIFAR-10")
     print("=" * 60)
     print(f"Device: {DEVICE}")
     print(f"Optimizer: {args.optimizer}")
-    print(f"Pruning: {args.pruning_method}")
-    if args.pruning_method != "none":
-        print(f"Target Sparsity: {args.target_sparsity:.1%}")
+    # Show pruning info based on optimizer type
+    if args.optimizer == "adamwprune":
+        print(f"AdamWPrune Pruning: {args.adamwprune_pruning_method}")
+        if args.adamwprune_pruning_method == "state":
+            print(f"AdamWPrune Target Sparsity: {args.adamwprune_target_sparsity:.1%}")
+    else:
+        print(f"Pruning: {args.pruning_method}")
+        if args.pruning_method != "none":
+            print(f"Target Sparsity: {args.target_sparsity:.1%}")
     print(f"Batch Size: {args.batch_size}")
     print(f"Epochs: {args.epochs}")
     print(f"Learning Rate: {args.lr}")
@@ -459,6 +484,12 @@ def main():
         spam_interval=args.spam_interval,
         spam_warmup_steps=getattr(args, "spam_warmup_steps", 0),
         spam_enable_clip=getattr(args, "spam_enable_clip", False),
+        # AdamWPrune-specific params
+        adamwprune_pruning_method=args.adamwprune_pruning_method,
+        adamwprune_target_sparsity=args.adamwprune_target_sparsity,
+        adamwprune_warmup_steps=args.adamwprune_warmup_steps,
+        adamwprune_frequency=args.adamwprune_frequency,
+        adamwprune_ramp_end_epoch=args.adamwprune_ramp_end_epoch,
     )
 
     # Create learning rate scheduler

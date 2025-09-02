@@ -107,6 +107,39 @@ parser.add_argument(
     help="Enable AMSGrad for AdamWPrune (default: True)",
 )
 
+# AdamWPrune-specific pruning configuration
+parser.add_argument(
+    "--adamwprune-pruning-method",
+    type=str,
+    default="state",
+    choices=["none", "state"],
+    help="AdamWPrune pruning method (state or none, default: state)",
+)
+parser.add_argument(
+    "--adamwprune-target-sparsity",
+    type=float,
+    default=0.7,
+    help="AdamWPrune target sparsity (default: 0.7)",
+)
+parser.add_argument(
+    "--adamwprune-warmup-steps",
+    type=int,
+    default=100,
+    help="AdamWPrune pruning warmup steps (default: 100)",
+)
+parser.add_argument(
+    "--adamwprune-frequency",
+    type=int,
+    default=50,
+    help="AdamWPrune pruning update frequency (default: 50)",
+)
+parser.add_argument(
+    "--adamwprune-ramp-end-epoch",
+    type=int,
+    default=75,
+    help="AdamWPrune pruning ramp end epoch (default: 75)",
+)
+
 parser.add_argument(
     "--json-output",
     type=str,
