@@ -64,7 +64,8 @@ defconfig: $(CONF)
 		exit 1; \
 	fi; \
 	echo "Loading defconfig: $(DEFCONFIG) from $$found_config"; \
-	cp "$$found_config" $(CONFIG_FILE)
+	cp "$$found_config" $(CONFIG_FILE); \
+	$(CONF) --olddefconfig $(KCONFIG)
 
 # Save current config as defconfig
 savedefconfig: $(CONF)
@@ -94,6 +95,7 @@ DEFCONFIGS := $(notdir $(wildcard $(DEFCONFIG_DIR)/*)) $(notdir $(wildcard */def
 define defconfig_rule
 defconfig-$(1): $$(CONF)
 	@$(MAKE) defconfig DEFCONFIG=$(1)
+	@$(MAKE) generate-config
 endef
 $(foreach config,$(DEFCONFIGS),$(eval $(call defconfig_rule,$(config))))
 
