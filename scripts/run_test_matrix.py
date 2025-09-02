@@ -141,6 +141,17 @@ def parse_kconfig(config_path=".config"):
                 value = value.strip('"')
                 config[key] = value
 
+    # Also try to load the generated Python config for derived values
+    try:
+        import config as pyconfig
+
+        if hasattr(pyconfig.config, "ADAMWPRUNE_BASE_OPTIMIZER_NAME"):
+            config["ADAMWPRUNE_BASE_OPTIMIZER_NAME"] = (
+                pyconfig.config.ADAMWPRUNE_BASE_OPTIMIZER_NAME
+            )
+    except ImportError:
+        pass  # config.py might not exist yet
+
     return config
 
 
@@ -360,9 +371,11 @@ def get_test_matrix(config):
 
     matrix["pruning_methods"] = pruning_methods
 
-    # Special case: AdamWPrune always uses state-based pruning
+    # Special case: AdamWPrune uses state-based pruning only when its pruning is enabled
+    adamwprune_pruning_enabled = getattr(config, "ADAMWPRUNE_ENABLE_PRUNING", False)
     if (
         "adamwprune" in matrix["optimizers"]
+        and adamwprune_pruning_enabled
         and "state" not in matrix["pruning_methods"]
     ):
         matrix["pruning_methods"].append("state")
@@ -717,7 +730,11 @@ def generate_sweep_analysis(output_dir, results):
                 # Parse the config file to extract key parameters
                 # The test_name might not be in the result, so construct it from config_file
                 config_num = best["config_file"].replace("config_", "").split("_")[0]
-                test_dirs = [d for d in output_dir.iterdir() if d.is_dir() and config_num in d.name]
+                test_dirs = [
+                    d
+                    for d in output_dir.iterdir()
+                    if d.is_dir() and config_num in d.name
+                ]
                 if test_dirs:
                     config_path = test_dirs[0] / "config.txt"
                 else:
@@ -1016,7 +1033,13 @@ def main():
         tests_by_optimizer[opt].append(test_desc)
 
     for optimizer in sorted(tests_by_optimizer.keys()):
-        print(f"\n{optimizer.upper()} ({len(tests_by_optimizer[optimizer])} tests):")
+        # Check if AdamWPrune has a base optimizer configured
+        optimizer_display = optimizer.upper()
+        if optimizer == "adamwprune" and "ADAMWPRUNE_BASE_OPTIMIZER_NAME" in config:
+            base_opt = config["ADAMWPRUNE_BASE_OPTIMIZER_NAME"]
+            optimizer_display = f"{optimizer.upper()} (base: {base_opt.upper()})"
+
+        print(f"\n{optimizer_display} ({len(tests_by_optimizer[optimizer])} tests):")
         for test in tests_by_optimizer[optimizer]:
             print(test)
 

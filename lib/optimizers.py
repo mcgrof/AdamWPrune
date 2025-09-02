@@ -114,61 +114,111 @@ def create_optimizer(
             )
 
     elif optimizer_type == "adamwprune":
-        # AdamWPrune - Experimental: All enhancements + state-based pruning
+        # AdamWPrune - Augments any Adam variant with state-based pruning
 
-        # Get tuning parameters from args or use defaults
-        beta1 = float(getattr(args, 'adamwprune_beta1', 0.9) if args else 0.9)
-        beta2 = float(getattr(args, 'adamwprune_beta2', 0.999) if args else 0.999)
-        weight_decay = float(getattr(args, 'adamwprune_weight_decay', 0.01) if args else 0.01)
-        amsgrad = bool(getattr(args, 'adamwprune_amsgrad', True) if args else True)
-
-        optimizer = torch.optim.AdamW(
-            model.parameters(),
-            lr=learning_rate,
-            betas=(beta1, beta2),
-            eps=1e-8,
-            weight_decay=weight_decay,
-            amsgrad=amsgrad,
+        # Get base optimizer name from config
+        base_optimizer_name = (
+            getattr(args, "adamwprune_base_optimizer_name", "adamw")
+            if args
+            else "adamw"
         )
 
-        logger.info(f"Using AdamWPrune with tuned parameters:")
-        logger.info(f"  - Beta1: {beta1} (momentum coefficient)")
-        logger.info(f"  - Beta2: {beta2} (variance coefficient)")
+        # Override hyperparameters if specified for AdamWPrune
+        beta1 = float(getattr(args, "adamwprune_beta1", 0.9) if args else 0.9)
+        beta2 = float(getattr(args, "adamwprune_beta2", 0.999) if args else 0.999)
+        weight_decay = float(
+            getattr(args, "adamwprune_weight_decay", 0.01) if args else 0.01
+        )
+        amsgrad = bool(getattr(args, "adamwprune_amsgrad", True) if args else True)
+
+        logger.info(f"Creating AdamWPrune with base optimizer: {base_optimizer_name}")
+
+        # Recursively create the base optimizer with overridden parameters
+        if base_optimizer_name in ["adam", "adamw", "adamwadv", "adamwspam"]:
+            # Create a modified args for the base optimizer
+            base_args = None
+            if args:
+
+                class BaseArgs:
+                    pass
+
+                base_args = BaseArgs()
+                # Copy all attributes from original args
+                for attr in dir(args):
+                    if not attr.startswith("_"):
+                        setattr(base_args, attr, getattr(args, attr))
+                # Override with AdamWPrune-specific values
+                if base_optimizer_name == "adamwspam":
+                    # Keep SPAM settings from original args
+                    pass
+                elif base_optimizer_name == "adamwadv":
+                    # Disable SPAM for AdamWAdv base
+                    base_args.spam_interval = 0
+                    base_args.spam_enable_clip = False
+
+            # Create base optimizer recursively
+            base_optimizer_tuple = create_optimizer(
+                model, base_optimizer_name, learning_rate, num_epochs, base_args
+            )
+            optimizer = base_optimizer_tuple[0]
+            scheduler = (
+                base_optimizer_tuple[1] if len(base_optimizer_tuple) > 1 else None
+            )
+            gradient_clip_norm = (
+                base_optimizer_tuple[2] if len(base_optimizer_tuple) > 2 else None
+            )
+            spam_state = (
+                base_optimizer_tuple[3] if len(base_optimizer_tuple) > 3 else None
+            )
+
+            # Override optimizer parameters with AdamWPrune-specific values
+            for group in optimizer.param_groups:
+                group["betas"] = (beta1, beta2)
+                group["weight_decay"] = weight_decay
+                if hasattr(optimizer, "amsgrad"):
+                    group["amsgrad"] = amsgrad
+        else:
+            # Fallback to creating AdamW directly
+            optimizer = torch.optim.AdamW(
+                model.parameters(),
+                lr=learning_rate,
+                betas=(beta1, beta2),
+                eps=1e-8,
+                weight_decay=weight_decay,
+                amsgrad=amsgrad,
+            )
+            scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
+            gradient_clip_norm = 1.0
+            spam_state = None
+
+        logger.info(f"  - Base: {base_optimizer_name}")
+        logger.info(f"  - Beta1: {beta1}, Beta2: {beta2}")
         logger.info(f"  - Weight decay: {weight_decay}")
         logger.info(f"  - AMSGrad: {amsgrad}")
 
-        # Initialize both SPAM and pruning state
-        spam_state = {
-            "gradient_history": deque(maxlen=100),
-            "gradient_norms": deque(maxlen=100),
-            "spike_threshold": 2.0,
-            "spike_events": [],
-            "last_reset_step": 0,
-            "global_step": 0,
-            "momentum_reset_count": 0,
-            # SPAM fidelity options
-            "theta": args.spam_theta if args else 50.0,
-            "interval": args.spam_interval if args else 0,
-            "warmup_steps": args.spam_warmup_steps if args else 0,
-            "enable_clip": args.spam_enable_clip if args else False,
-            "warmup_until": 0,
-        }
-
         # AdamWPrune specific state for state-based pruning
-        # Use AdamWPrune-specific pruning method configuration
-        adamwprune_pruning_method = getattr(args, 'adamwprune_pruning_method', 'state') if args else 'state'
-        adamwprune_target_sparsity = float(getattr(args, 'adamwprune_target_sparsity', 0.7) if args else 0.7)
+        adamwprune_enable_pruning = bool(
+            getattr(args, "adamwprune_enable_pruning", True) if args else True
+        )
+        adamwprune_pruning_method = "state" if adamwprune_enable_pruning else "none"
+        adamwprune_target_sparsity = (
+            float(getattr(args, "adamwprune_target_sparsity", 0.7) if args else 0.7)
+            if adamwprune_enable_pruning
+            else 0.0
+        )
 
         adamprune_state = {
-            "pruning_enabled": (
-                adamwprune_pruning_method == "state" and adamwprune_target_sparsity > 0
+            "pruning_enabled": adamwprune_enable_pruning,
+            "target_sparsity": adamwprune_target_sparsity,
+            "warmup_steps": (
+                getattr(args, "adamwprune_warmup_steps", 100) if args else 100
             ),
-            "target_sparsity": (
-                adamwprune_target_sparsity if adamwprune_pruning_method == "state" else 0
+            "pruning_frequency": (
+                getattr(args, "adamwprune_frequency", 50) if args else 50
             ),
-            "warmup_steps": getattr(args, 'adamwprune_warmup_steps', 100) if args else 100,
-            "pruning_frequency": getattr(args, 'adamwprune_frequency', 50) if args else 50,
-            "ramp_end_epoch": getattr(args, 'adamwprune_ramp_end_epoch', 75) if args else 75,
+            "ramp_end_epoch": (
+                getattr(args, "adamwprune_ramp_end_epoch", 75) if args else 75
+            ),
             "step_count": 0,
             "masks": {},  # module -> bool mask buffer
             "pruning_strategy": "hybrid",  # hybrid of momentum and stability
@@ -181,19 +231,12 @@ def create_optimizer(
                     mask = torch.ones_like(module.weight.data, dtype=torch.bool)
                     module.register_buffer("adamprune_mask", mask)
                     adamprune_state["masks"][module] = module.adamprune_mask
-
-        scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
-        gradient_clip_norm = 1.0
-
-        logger.info("Using AdamWPrune (Experimental) optimizer with:")
-        logger.info("  - All AdamWAdv + SPAM features")
-        logger.info("  - State-based pruning using Adam momentum/variance")
-        logger.info("  - Hybrid pruning strategy (momentum × stability)")
-        if adamprune_state["pruning_enabled"]:
             logger.info(
-                f"  - Target sparsity: {adamprune_state['target_sparsity']:.1%}"
+                f"  - Pruning: Enabled (target: {adamprune_state['target_sparsity']:.1%})"
             )
             logger.info(f"  - Pruning warmup: {adamprune_state['warmup_steps']} steps")
+        else:
+            logger.info("  - Pruning: Disabled")
 
     else:  # Default to SGD
         optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)

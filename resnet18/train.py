@@ -156,6 +156,10 @@ def create_resnet_optimizer(
             self.pruning_frequency = 100
             self.target_sparsity = target_sparsity
 
+            # AdamWPrune-specific defaults
+            self.adamwprune_base_optimizer_name = "adamw"
+            self.adamwprune_enable_pruning = True
+
             # Override with provided kwargs
             for k, v in kwargs.items():
                 setattr(self, k, v)
@@ -282,11 +286,23 @@ def main():
         spam_interval_default = getattr(cfg, "SPAM_INTERVAL", 0)
         spam_warmup_default = getattr(cfg, "SPAM_WARMUP_STEPS", 0)
         # AdamWPrune-specific configs
-        adamwprune_pruning_method_default = getattr(cfg, "ADAMWPRUNE_PRUNING_METHOD", "state")
-        adamwprune_target_sparsity_default = getattr(cfg, "ADAMWPRUNE_TARGET_SPARSITY", "0.7")
+        adamwprune_base_optimizer_name_default = getattr(
+            cfg, "ADAMWPRUNE_BASE_OPTIMIZER_NAME", "adamw"
+        )
+        adamwprune_enable_pruning_default = getattr(
+            cfg, "ADAMWPRUNE_ENABLE_PRUNING", True
+        )
+        adamwprune_pruning_method_default = getattr(
+            cfg, "ADAMWPRUNE_PRUNING_METHOD", "state"
+        )
+        adamwprune_target_sparsity_default = getattr(
+            cfg, "ADAMWPRUNE_TARGET_SPARSITY", "0.7"
+        )
         adamwprune_warmup_steps_default = getattr(cfg, "ADAMWPRUNE_WARMUP_STEPS", 100)
         adamwprune_frequency_default = getattr(cfg, "ADAMWPRUNE_FREQUENCY", 50)
-        adamwprune_ramp_end_epoch_default = getattr(cfg, "ADAMWPRUNE_RAMP_END_EPOCH", 75)
+        adamwprune_ramp_end_epoch_default = getattr(
+            cfg, "ADAMWPRUNE_RAMP_END_EPOCH", 75
+        )
     except ImportError:
         pruning_method_default = "none"
         target_sparsity_default = 0.9
@@ -296,6 +312,8 @@ def main():
         spam_interval_default = 0
         spam_warmup_default = 0
         # AdamWPrune-specific defaults
+        adamwprune_base_optimizer_name_default = "adamw"
+        adamwprune_enable_pruning_default = True
         adamwprune_pruning_method_default = "state"
         adamwprune_target_sparsity_default = "0.7"
         adamwprune_warmup_steps_default = 100
@@ -374,7 +392,7 @@ def main():
     )
     parser.add_argument(
         "--adamwprune-amsgrad",
-        type=lambda x: x.lower() in ['true', '1', 'yes'],
+        type=lambda x: x.lower() in ["true", "1", "yes"],
         default=None,
         help="Enable AMSGrad for AdamWPrune (default: True)",
     )
@@ -396,8 +414,28 @@ def main():
     args = parser.parse_args()
 
     # Add AdamWPrune-specific configs to args
-    args.adamwprune_pruning_method = adamwprune_pruning_method_default
-    args.adamwprune_target_sparsity = float(adamwprune_target_sparsity_default)
+    # For AdamWPrune, check if pruning is enabled via ADAMWPRUNE_ENABLE_PRUNING config
+    # or if the general pruning method is "none"
+    if args.optimizer == "adamwprune":
+        # Base configuration
+        args.adamwprune_base_optimizer_name = adamwprune_base_optimizer_name_default
+        args.adamwprune_enable_pruning = adamwprune_enable_pruning_default
+
+        # Check if AdamWPrune pruning is explicitly disabled
+        if not adamwprune_enable_pruning_default or args.pruning_method == "none":
+            args.adamwprune_enable_pruning = False
+            args.adamwprune_pruning_method = "none"
+            args.adamwprune_target_sparsity = 0.0
+        else:
+            args.adamwprune_pruning_method = adamwprune_pruning_method_default
+            args.adamwprune_target_sparsity = float(adamwprune_target_sparsity_default)
+    else:
+        # For other optimizers, set defaults (won't be used)
+        args.adamwprune_base_optimizer_name = "adamw"
+        args.adamwprune_enable_pruning = False
+        args.adamwprune_pruning_method = "none"
+        args.adamwprune_target_sparsity = 0.0
+
     args.adamwprune_warmup_steps = adamwprune_warmup_steps_default
     args.adamwprune_frequency = adamwprune_frequency_default
     args.adamwprune_ramp_end_epoch = adamwprune_ramp_end_epoch_default

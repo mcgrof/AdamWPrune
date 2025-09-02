@@ -33,6 +33,19 @@ def parse_config_file(config_file):
                 if key.startswith("CONFIG_"):
                     key = key[7:]  # Remove CONFIG_ prefix
 
+                    # Strip inline comments (anything after # that's not in quotes)
+                    # For quoted strings, find the closing quote first
+                    if value.startswith('"'):
+                        # Find the closing quote
+                        end_quote = value.find('"', 1)
+                        if end_quote != -1:
+                            # Check for comment after the closing quote
+                            if "#" in value[end_quote + 1 :]:
+                                value = value[: end_quote + 1].strip()
+                    elif "#" in value:
+                        # For non-quoted values, strip everything after #
+                        value = value.split("#")[0].strip()
+
                     # Process value based on type
                     if value == "y":
                         config[key] = True
@@ -68,6 +81,14 @@ def generate_python_config(config):
     lines.append("AdamWPrune configuration generated from Kconfig.")
     lines.append('"""')
     lines.append("")
+
+    # Add derived ADAMWPRUNE_BASE_OPTIMIZER_NAME based on base selection
+    if config.get("ADAMWPRUNE_BASE_ADAM", False):
+        config["ADAMWPRUNE_BASE_OPTIMIZER_NAME"] = "adam"
+    elif config.get("ADAMWPRUNE_BASE_ADAMW", False):
+        config["ADAMWPRUNE_BASE_OPTIMIZER_NAME"] = "adamw"
+    else:
+        config["ADAMWPRUNE_BASE_OPTIMIZER_NAME"] = "adamw"  # Default to AdamW
 
     # Group configurations by category
     categories = {
@@ -147,9 +168,9 @@ def generate_python_config(config):
     lines.append("    @property")
     lines.append("    def is_pruning_enabled(self):")
     lines.append('        """Check if pruning is enabled."""')
-    lines.append('        # Check both ENABLE_PRUNING and PRUNING_MODE_NONE')
+    lines.append("        # Check both ENABLE_PRUNING and PRUNING_MODE_NONE")
     lines.append('        if getattr(self, "PRUNING_MODE_NONE", False):')
-    lines.append('            return False')
+    lines.append("            return False")
     lines.append('        return getattr(self, "ENABLE_PRUNING", False)')
     lines.append("    ")
     lines.append("    @property")
@@ -165,7 +186,7 @@ def generate_python_config(config):
     lines.append("    @property")
     lines.append("    def pruning_method(self):")
     lines.append('        """Get the pruning method."""')
-    lines.append('        # Explicitly handle PRUNING_MODE_NONE')
+    lines.append("        # Explicitly handle PRUNING_MODE_NONE")
     lines.append('        if getattr(self, "PRUNING_MODE_NONE", False):')
     lines.append('            return "none"')
     lines.append("        if not self.is_pruning_enabled:")
@@ -214,6 +235,21 @@ def generate_python_config(config):
     lines.append("")
     lines.append("    # AdamWPrune tuning parameters")
     lines.append('    if config.OPTIMIZER == "adamwprune":')
+    lines.append("        # Determine base optimizer name from config")
+    lines.append('        if getattr(config, "ADAMWPRUNE_BASE_ADAM", False):')
+    lines.append('            args["adamwprune_base_optimizer_name"] = "adam"')
+    lines.append('        elif getattr(config, "ADAMWPRUNE_BASE_ADAMWADV", False):')
+    lines.append('            args["adamwprune_base_optimizer_name"] = "adamwadv"')
+    lines.append('        elif getattr(config, "ADAMWPRUNE_BASE_ADAMWSPAM", False):')
+    lines.append('            args["adamwprune_base_optimizer_name"] = "adamwspam"')
+    lines.append("        else:")
+    lines.append(
+        '            args["adamwprune_base_optimizer_name"] = "adamw"  # default'
+    )
+    lines.append("        ")
+    lines.append(
+        '        args["adamwprune_enable_pruning"] = getattr(config, "ADAMWPRUNE_ENABLE_PRUNING", True)'
+    )
     lines.append(
         '        args["adamwprune_beta1"] = float(getattr(config, "ADAMWPRUNE_BETA1", "0.9"))'
     )

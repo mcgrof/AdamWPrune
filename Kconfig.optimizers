@@ -421,6 +421,65 @@ endif # SPAM options
 # AdamWPrune specific options
 if OPTIMIZER_ENABLED_ADAMWPRUNE
 
+choice
+	prompt "AdamWPrune base optimizer"
+	default ADAMWPRUNE_BASE_ADAMW
+	help
+	  Select the base Adam variant for AdamWPrune to augment with state-based pruning.
+
+	  Each base optimizer provides different features:
+	  - Adam: Standard adaptive learning rate (no weight decay)
+	  - AdamW: Adam with decoupled weight decay
+	  - AdamWAdv: AdamW + AMSGrad + cosine annealing + gradient clipping
+	  - AdamWSPAM: AdamWAdv + spike-aware momentum resets
+
+config ADAMWPRUNE_BASE_ADAM
+	bool "Adam (standard)"
+	help
+	  Standard Adam optimizer with adaptive learning rates.
+	  Features:
+	  - Momentum (beta1) and variance (beta2) tracking
+	  - No weight decay
+	  - No additional enhancements
+
+config ADAMWPRUNE_BASE_ADAMW
+	bool "AdamW (with decoupled weight decay)"
+	help
+	  Adam with decoupled weight decay for better regularization.
+	  Features:
+	  - All Adam features
+	  - Decoupled weight decay (doesn't affect gradients)
+	  - Better for L2 regularization
+
+config ADAMWPRUNE_BASE_ADAMWADV
+	bool "AdamWAdv (AdamW + advanced features)"
+	help
+	  AdamW with additional training stability features.
+	  Features:
+	  - All AdamW features
+	  - AMSGrad for better convergence
+	  - Cosine annealing learning rate schedule
+	  - Gradient clipping for stability
+
+config ADAMWPRUNE_BASE_ADAMWSPAM
+	bool "AdamWSPAM (AdamWAdv + SPAM)"
+	help
+	  Most advanced base with spike-aware momentum management.
+	  Features:
+	  - All AdamWAdv features
+	  - SPAM: Spike-Aware Pruning-Adaptive Momentum
+	  - Automatic momentum reset on gradient spikes
+	  - Adaptive gradient clipping
+
+endchoice
+
+config ADAMWPRUNE_BASE_OPTIMIZER_NAME
+	string
+	default "adam" if ADAMWPRUNE_BASE_ADAM
+	default "adamw" if ADAMWPRUNE_BASE_ADAMW
+	default "adamwadv" if ADAMWPRUNE_BASE_ADAMWADV
+	default "adamwspam" if ADAMWPRUNE_BASE_ADAMWSPAM
+
 menu "AdamWPrune Configuration"
 
 config ADAMWPRUNE_ENABLE_PRUNING
@@ -428,8 +487,7 @@ config ADAMWPRUNE_ENABLE_PRUNING
 	default y
 	help
 	  Enable AdamWPrune's built-in state-based pruning.
-	  When disabled, AdamWPrune acts as a regular AdamW optimizer
-	  with SPAM features but without pruning.
+	  When disabled, AdamWPrune acts exactly like the selected base optimizer.
 
 config ADAMWPRUNE_PRUNING_METHOD
 	string
