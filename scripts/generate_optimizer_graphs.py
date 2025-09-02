@@ -165,13 +165,16 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
 
     # Panel 3: Sparsity Progression
     ax3 = plt.subplot(3, 3, 3)
+    has_sparsity = False
     for label, data in plot_data.items():
         if max(data["sparsities"]) > 0:
             ax3.plot(data["epochs"], data["sparsities"], marker="^", label=label)
+            has_sparsity = True
     ax3.set_xlabel("Epoch")
     ax3.set_ylabel("Sparsity (%)")
     ax3.set_title("Sparsity Progression")
-    ax3.legend(loc="lower right", fontsize=8)
+    if has_sparsity:
+        ax3.legend(loc="lower right", fontsize=8)
     ax3.grid(True, alpha=0.3)
     ax3.set_ylim([0, 110])  # Extra space for legend
 
