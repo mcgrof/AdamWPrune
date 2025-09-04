@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MIT
+
+menu "ResNet-50 Configuration"
+	depends on MODEL_RESNET50
+
+config RESNET50_DATASET
+	string "Dataset for ResNet-50"
+	default "cifar100"
+	help
+	  Dataset to use for training ResNet-50.
+	  Options: cifar100, imagenet
+	  
+	  cifar100: CIFAR-100 dataset (100 classes, 32x32 images resized to 224x224)
+	  imagenet: ImageNet dataset (1000 classes, 224x224 images)
+
+config RESNET50_DATA_DIR
+	string "Data directory path"
+	default "./data"
+	help
+	  Path to the dataset directory.
+	  For ImageNet, this should contain 'train' and 'val' subdirectories.
+
+config RESNET50_BATCH_SIZE
+	int "Batch size"
+	default 128 if RESNET50_DATASET = "cifar100"
+	default 256 if RESNET50_DATASET = "imagenet"
+	help
+	  Batch size for training.
+	  Recommended: 128 for CIFAR-100, 256 for ImageNet (adjust based on GPU memory)
+
+config RESNET50_LEARNING_RATE
+	string "Learning rate"
+	default "0.001" if OPTIMIZER_ADAMWPRUNE
+	default "0.1" if OPTIMIZER_SGD
+	help
+	  Initial learning rate for training.
+
+config RESNET50_EPOCHS
+	int "Number of epochs"
+	default 100 if RESNET50_DATASET = "cifar100"
+	default 90 if RESNET50_DATASET = "imagenet"
+	help
+	  Number of training epochs.
+
+config RESNET50_NUM_WORKERS
+	int "Number of data loading workers"
+	default 4
+	help
+	  Number of subprocesses for data loading.
+
+config RESNET50_LOG_INTERVAL
+	int "Logging interval (batches)"
+	default 10
+	help
+	  How many batches to wait before logging training status.
+
+config RESNET50_SAVE_MODEL
+	bool "Save best model"
+	default y
+	help
+	  Save the model with the best validation accuracy.
+
+config RESNET50_MONITOR_GPU
+	bool "Monitor GPU usage"
+	default y
+	help
+	  Enable GPU memory and utilization monitoring during training.
+
+config RESNET50_PRUNING_START_EPOCH
+	int "Pruning start epoch"
+	default 10
+	depends on !PRUNING_NONE
+	help
+	  Epoch to start pruning (gradual ramp-up).
+
+config RESNET50_PRUNING_END_EPOCH
+	int "Pruning end epoch"
+	default 80 if RESNET50_DATASET = "cifar100"
+	default 70 if RESNET50_DATASET = "imagenet"
+	depends on !PRUNING_NONE
+	help
+	  Epoch to reach target sparsity.
+
+endmenu
