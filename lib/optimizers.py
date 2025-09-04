@@ -127,9 +127,9 @@ def create_optimizer(
         beta1 = float(getattr(args, "adamwprune_beta1", 0.9) if args else 0.9)
         beta2 = float(getattr(args, "adamwprune_beta2", 0.999) if args else 0.999)
         weight_decay = float(
-            getattr(args, "adamwprune_weight_decay", 0.01) if args else 0.01
+            getattr(args, "adamwprune_weight_decay", 0.0) if args else 0.0
         )
-        amsgrad = bool(getattr(args, "adamwprune_amsgrad", True) if args else True)
+        amsgrad = bool(getattr(args, "adamwprune_amsgrad", False) if args else False)
 
         logger.info(f"Creating AdamWPrune with base optimizer: {base_optimizer_name}")
 
@@ -175,7 +175,8 @@ def create_optimizer(
             for group in optimizer.param_groups:
                 group["betas"] = (beta1, beta2)
                 group["weight_decay"] = weight_decay
-                if hasattr(optimizer, "amsgrad"):
+                # Only set amsgrad if it exists in the parameter group (Adam/AdamW support it)
+                if "amsgrad" in group:
                     group["amsgrad"] = amsgrad
         else:
             # Fallback to creating AdamW directly
@@ -198,7 +199,7 @@ def create_optimizer(
 
         # AdamWPrune specific state for state-based pruning
         adamwprune_enable_pruning = bool(
-            getattr(args, "adamwprune_enable_pruning", True) if args else True
+            getattr(args, "adamwprune_enable_pruning", False) if args else False
         )
         adamwprune_pruning_method = "state" if adamwprune_enable_pruning else "none"
         adamwprune_target_sparsity = (
@@ -207,25 +208,26 @@ def create_optimizer(
             else 0.0
         )
 
-        adamprune_state = {
-            "pruning_enabled": adamwprune_enable_pruning,
-            "target_sparsity": adamwprune_target_sparsity,
-            "warmup_steps": (
-                getattr(args, "adamwprune_warmup_steps", 100) if args else 100
-            ),
-            "pruning_frequency": (
-                getattr(args, "adamwprune_frequency", 50) if args else 50
-            ),
-            "ramp_end_epoch": (
-                getattr(args, "adamwprune_ramp_end_epoch", 75) if args else 75
-            ),
-            "step_count": 0,
-            "masks": {},  # module -> bool mask buffer
-            "pruning_strategy": "hybrid",  # hybrid of momentum and stability
-        }
+        # Only create adamprune_state if pruning is enabled
+        if adamwprune_enable_pruning:
+            adamprune_state = {
+                "pruning_enabled": True,
+                "target_sparsity": adamwprune_target_sparsity,
+                "warmup_steps": (
+                    getattr(args, "adamwprune_warmup_steps", 100) if args else 100
+                ),
+                "pruning_frequency": (
+                    getattr(args, "adamwprune_frequency", 50) if args else 50
+                ),
+                "ramp_end_epoch": (
+                    getattr(args, "adamwprune_ramp_end_epoch", 75) if args else 75
+                ),
+                "step_count": 0,
+                "masks": {},  # module -> bool mask buffer
+                "pruning_strategy": "hybrid",  # hybrid of momentum and stability
+            }
 
-        # Initialize masks for prunable layers as boolean buffers
-        if adamprune_state["pruning_enabled"]:
+            # Initialize masks for prunable layers as boolean buffers
             for _, module in model.named_modules():
                 if isinstance(module, (nn.Linear, nn.Conv2d)):
                     mask = torch.ones_like(module.weight.data, dtype=torch.bool)
@@ -236,6 +238,7 @@ def create_optimizer(
             )
             logger.info(f"  - Pruning warmup: {adamprune_state['warmup_steps']} steps")
         else:
+            adamprune_state = None
             logger.info("  - Pruning: Disabled")
 
     else:  # Default to SGD

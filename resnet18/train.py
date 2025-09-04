@@ -158,7 +158,7 @@ def create_resnet_optimizer(
 
             # AdamWPrune-specific defaults
             self.adamwprune_base_optimizer_name = "adamw"
-            self.adamwprune_enable_pruning = True
+            self.adamwprune_enable_pruning = False
 
             # Override with provided kwargs
             for k, v in kwargs.items():
@@ -290,7 +290,7 @@ def main():
             cfg, "ADAMWPRUNE_BASE_OPTIMIZER_NAME", "adamw"
         )
         adamwprune_enable_pruning_default = getattr(
-            cfg, "ADAMWPRUNE_ENABLE_PRUNING", True
+            cfg, "ADAMWPRUNE_ENABLE_PRUNING", False
         )
         adamwprune_pruning_method_default = getattr(
             cfg, "ADAMWPRUNE_PRUNING_METHOD", "state"
@@ -313,7 +313,7 @@ def main():
         spam_warmup_default = 0
         # AdamWPrune-specific defaults
         adamwprune_base_optimizer_name_default = "adamw"
-        adamwprune_enable_pruning_default = True
+        adamwprune_enable_pruning_default = False
         adamwprune_pruning_method_default = "state"
         adamwprune_target_sparsity_default = "0.7"
         adamwprune_warmup_steps_default = 100
