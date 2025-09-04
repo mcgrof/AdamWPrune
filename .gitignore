@@ -20,6 +20,8 @@ data/
 # Training metrics and test results
 training_metrics.json
 test_matrix_results_*/
+# But keep key_results archived test runs
+!key_results/test_matrix_results_*/
 model_*_metrics.json
 
 # Keep configuration and important JSONs
