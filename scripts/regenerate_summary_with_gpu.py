@@ -25,23 +25,21 @@ def get_gpu_memory_stats(test_dir):
     """Extract GPU memory statistics from monitoring files."""
     gpu_stats = {}
 
-    # Find GPU monitoring files in test dir and parent directories
-    search_dirs = [test_dir, os.path.dirname(test_dir), ".", "resnet18"]
+    # Find GPU monitoring files ONLY in the specified test directory
     gpu_files = []
-
-    for search_dir in search_dirs:
-        if os.path.exists(search_dir):
-            gpu_files.extend(
-                glob(os.path.join(search_dir, "**/gpu_stats_*.json"), recursive=True)
+    
+    if os.path.exists(test_dir):
+        gpu_files.extend(
+            glob(os.path.join(test_dir, "**/gpu_stats_*.json"), recursive=True)
+        )
+        gpu_files.extend(
+            glob(os.path.join(test_dir, "**/gpu_training_*.json"), recursive=True)
+        )
+        gpu_files.extend(
+            glob(
+                os.path.join(test_dir, "**/gpu_inference_*.json"), recursive=True
             )
-            gpu_files.extend(
-                glob(os.path.join(search_dir, "**/gpu_training_*.json"), recursive=True)
-            )
-            gpu_files.extend(
-                glob(
-                    os.path.join(search_dir, "**/gpu_inference_*.json"), recursive=True
-                )
-            )
+        )
 
     for gpu_file in gpu_files:
         # Extract test name from path
@@ -67,12 +65,25 @@ def get_gpu_memory_stats(test_dir):
         # Extract memory values
         samples = data if isinstance(data, list) else data.get("samples", [])
         if not samples:
+            # Check if data has summary field directly
+            if isinstance(data, dict) and "summary" in data:
+                summary = data["summary"]
+                if "mean_memory_mb" in summary:
+                    gpu_stats[test_name] = {
+                        "mean": summary.get("mean_memory_mb", 0),
+                        "max": summary.get("max_memory_mb", 0),
+                        "min": summary.get("min_memory_mb", 0),
+                        "std": 0,
+                    }
             continue
 
         memory_values = []
         for s in samples:
             if "memory_used" in s:
-                memory_values.append(s["memory_used"])
+                val = s["memory_used"]
+                # Filter out idle values (< 100 MB usually indicates idle)
+                if val > 100:
+                    memory_values.append(val)
             elif "memory_mb" in s:
                 memory_values.append(s["memory_mb"])
             elif "memory_used_mb" in s:
@@ -145,9 +156,16 @@ def regenerate_summary(results_dir, output_file="summary_report.txt"):
                 }
 
                 # Add real GPU memory data if available
+                # Try exact match first
                 if test_name in gpu_stats:
                     test_info["gpu_memory_mean"] = gpu_stats[test_name]["mean"]
                     test_info["gpu_memory_max"] = gpu_stats[test_name]["max"]
+                # For "none" pruning with _0 suffix, try without the suffix
+                elif pruning == "none" and test_name.endswith("_0"):
+                    alt_name = test_name[:-2]  # Remove "_0"
+                    if alt_name in gpu_stats:
+                        test_info["gpu_memory_mean"] = gpu_stats[alt_name]["mean"]
+                        test_info["gpu_memory_max"] = gpu_stats[alt_name]["max"]
                 # Also check for alternative naming (e.g., adamwprune state vs movement)
                 elif optimizer == "adamwprune":
                     # Try alternative naming patterns
@@ -180,9 +198,16 @@ def regenerate_summary(results_dir, output_file="summary_report.txt"):
                 }
 
                 # Add real GPU memory data if available
+                # Try exact match first
                 if test_name in gpu_stats:
                     test_info["gpu_memory_mean"] = gpu_stats[test_name]["mean"]
                     test_info["gpu_memory_max"] = gpu_stats[test_name]["max"]
+                # For "none" pruning with _0 suffix, try without the suffix
+                elif pruning == "none" and test_name.endswith("_0"):
+                    alt_name = test_name[:-2]  # Remove "_0"
+                    if alt_name in gpu_stats:
+                        test_info["gpu_memory_mean"] = gpu_stats[alt_name]["mean"]
+                        test_info["gpu_memory_max"] = gpu_stats[alt_name]["max"]
                 # Also check for alternative naming (e.g., adamwprune state vs movement)
                 elif optimizer == "adamwprune":
                     # Try alternative naming patterns

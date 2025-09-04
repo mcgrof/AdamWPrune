@@ -259,21 +259,24 @@ def create_memory_timeline_comparison(results_dir, output_dir):
         if os.path.isdir(os.path.join(results_dir, d)) and d.startswith("resnet18_")
     ]
 
-    # Colors for optimizers and line styles for pruning methods
-    optimizer_colors = {
-        "sgd": "#e74c3c",
-        "adam": "#3498db",
-        "adamw": "#2ecc71",
-        "adamwadv": "#f39c12",
-        "adamwspam": "#9b59b6",
-        "adamwprune": "#1abc9c",
+    # Unique colors for each configuration
+    config_colors = {
+        "adam_none": "#3498db",
+        "adam_magnitude_70": "#e67e22",
+        "adam_movement_70": "#27ae60",
+        "adamwprune_none": "#8e44ad",
+        "adamwprune_state_70": "#e74c3c",
+        "sgd_none": "#95a5a6",
+        "adamw_none": "#2ecc71",
+        "adamwadv_none": "#f39c12",
+        "adamwspam_none": "#9b59b6",
     }
 
     line_styles = {
         "movement_70": "-",
-        "state_70": "--",
-        "magnitude_70": ":",
-        "none": "-.",
+        "state_70": "-",
+        "magnitude_70": "-",
+        "none": "-",
     }
 
     # Process each test directory
@@ -283,6 +286,10 @@ def create_memory_timeline_comparison(results_dir, output_dir):
         if len(parts) >= 2:
             optimizer = parts[1]
             pruning_info = "_".join(parts[2:]) if len(parts) > 2 else "none"
+            
+            # Handle the "_0" suffix for baseline tests
+            if pruning_info == "none_0":
+                pruning_info = "none"
 
             gpu_files = list(
                 Path(os.path.join(results_dir, test_dir)).glob("gpu_stats*.json")
@@ -333,7 +340,9 @@ def create_memory_timeline_comparison(results_dir, output_dir):
 
     # Plot all lines
     for data in plot_data:
-        color = optimizer_colors.get(data["optimizer"], "#95a5a6")
+        # Create config key for color lookup
+        config_key = f"{data['optimizer']}_{data['pruning']}"
+        color = config_colors.get(config_key, "#95a5a6")
         style = line_styles.get(data["pruning"], "-")
 
         ax.plot(
