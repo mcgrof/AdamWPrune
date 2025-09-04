@@ -47,6 +47,13 @@ config MODEL_SELECT_RESNET18
 	  Modern architecture with skip connections.
 	  Parameters: ~11M
 
+config MODEL_SELECT_RESNET50
+	bool "ResNet-50"
+	help
+	  ResNet-50 for ImageNet/CIFAR-100 classification.
+	  Deeper architecture with bottleneck blocks.
+	  Parameters: ~25.6M
+
 endchoice
 
 endif # MODEL_MODE_SINGLE
@@ -68,6 +75,12 @@ config MODEL_ENABLE_RESNET18
 	help
 	  Include ResNet-18 in evaluation.
 
+config MODEL_ENABLE_RESNET50
+	bool "Enable ResNet-50"
+	default n
+	help
+	  Include ResNet-50 in evaluation.
+
 endif # MODEL_MODE_MULTIPLE
 
 # Namespace configuration for enabled models
@@ -83,11 +96,18 @@ config MODEL_RESNET18
 	default y if MODEL_MODE_MULTIPLE && MODEL_ENABLE_RESNET18
 	default n
 
+config MODEL_RESNET50
+	bool
+	default y if MODEL_MODE_SINGLE && MODEL_SELECT_RESNET50
+	default y if MODEL_MODE_MULTIPLE && MODEL_ENABLE_RESNET50
+	default n
+
 # Default model string
 config MODEL
 	string
 	default "lenet5" if MODEL_MODE_SINGLE && MODEL_SELECT_LENET5
 	default "resnet18" if MODEL_MODE_SINGLE && MODEL_SELECT_RESNET18
+	default "resnet50" if MODEL_MODE_SINGLE && MODEL_SELECT_RESNET50
 	default "lenet5" if MODEL_MODE_MULTIPLE
 
 # Test matrix model configuration (for backward compatibility)
@@ -115,6 +135,10 @@ endif
 
 if MODEL_RESNET18 || TEST_MODEL_RESNET18
 source "resnet18/Kconfig"
+endif
+
+if MODEL_RESNET50
+source "resnet50/Kconfig"
 endif
 
 endmenu

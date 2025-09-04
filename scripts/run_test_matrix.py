@@ -280,6 +280,8 @@ def get_test_matrix(config):
             models = ["lenet5"]
         elif config.get("MODEL_SELECT_RESNET18") == "y":
             models = ["resnet18"]
+        elif config.get("MODEL_SELECT_RESNET50") == "y":
+            models = ["resnet50"]
 
     # Fall back to legacy TEST_MODELS if new system not configured
     if not models and "TEST_MODELS" in config and config["TEST_MODELS"]:
@@ -428,8 +430,7 @@ def generate_combinations(matrix):
         # Skip invalid combinations
         if optimizer == "adamwprune" and pruning not in ["none", "state"]:
             continue  # AdamWPrune only works with state-based pruning
-        if optimizer != "adamwprune" and pruning == "state":
-            continue  # State-based pruning only works with AdamWPrune
+        # Note: State-based pruning can work with other optimizers too, so we don't skip them
 
         # For no pruning, sparsity is always 0
         if pruning == "none":
