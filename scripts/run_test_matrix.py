@@ -430,7 +430,8 @@ def generate_combinations(matrix):
         # Skip invalid combinations
         if optimizer == "adamwprune" and pruning not in ["none", "state"]:
             continue  # AdamWPrune only works with state-based pruning
-        # Note: State-based pruning can work with other optimizers too, so we don't skip them
+        if optimizer != "adamwprune" and pruning == "state":
+            continue  # State-based pruning is only for AdamWPrune (built-in)
 
         # For no pruning, sparsity is always 0
         if pruning == "none":
