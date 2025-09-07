@@ -298,7 +298,7 @@ def main(args):
     metrics["best_accuracy"] = best_accuracy
     metrics["final_sparsity"] = sparsity
     
-    with open("training_metrics.json", "w") as f:
+    with open(args.json_output, "w") as f:
         json.dump(metrics, f, indent=2)
     
     return best_accuracy
@@ -348,6 +348,8 @@ if __name__ == "__main__":
                        help="Save the best model")
     parser.add_argument("--monitor-gpu", action="store_true",
                        help="Monitor GPU usage")
+    parser.add_argument("--json-output", type=str, default="training_metrics.json",
+                       help="Path to save training metrics in JSON format")
     
     args = parser.parse_args()
     main(args)
