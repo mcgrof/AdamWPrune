@@ -146,6 +146,8 @@ parser.add_argument(
     default="training_metrics.json",
     help="json output file to use for stats, deafult is training_metrics.json",
 )
+parser.add_argument("--weight-decay", type=float, default=None,
+                    help="Weight decay (AdamW/SGD). If None, choose a sane default.")
 args = parser.parse_args()
 
 # Conditionally import pruning module
@@ -330,6 +332,7 @@ optimizer, scheduler, gradient_clip_norm, spam_state, adamprune_state = (
         learning_rate=learning_rate,
         num_epochs=num_epochs,
         args=args,
+        model_type="lenet",
     )
 )
 
