@@ -34,7 +34,11 @@ model_*_metrics.json
 
 # Model-specific data directories
 lenet5/data/
+lenet5/*.png
+resnet18/*.png
 resnet18/data/
+resnet50/*.png
+resnet50/data/
 
 # Temporary and backup files
 *_backup.py
