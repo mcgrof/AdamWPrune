@@ -27,7 +27,7 @@ def get_gpu_memory_stats(test_dir):
 
     # Find GPU monitoring files ONLY in the specified test directory
     gpu_files = []
-    
+
     if os.path.exists(test_dir):
         gpu_files.extend(
             glob(os.path.join(test_dir, "**/gpu_stats_*.json"), recursive=True)
@@ -36,9 +36,7 @@ def get_gpu_memory_stats(test_dir):
             glob(os.path.join(test_dir, "**/gpu_training_*.json"), recursive=True)
         )
         gpu_files.extend(
-            glob(
-                os.path.join(test_dir, "**/gpu_inference_*.json"), recursive=True
-            )
+            glob(os.path.join(test_dir, "**/gpu_inference_*.json"), recursive=True)
         )
 
     for gpu_file in gpu_files:
@@ -143,11 +141,16 @@ def regenerate_summary(results_dir, output_file="summary_report.txt"):
                 sparsity = int(result.get("target_sparsity", 0) * 100)
                 test_name = f"{model}_{optimizer}_{pruning}_{sparsity}"
 
+                # Get accuracy - handle both single value and list
+                accuracy = result.get("final_accuracy", result.get("test_accuracy", 0))
+                if isinstance(accuracy, list):
+                    accuracy = (
+                        accuracy[-1] if accuracy else 0
+                    )  # Get last epoch's accuracy
+
                 test_info = {
                     "test_id": test_name,
-                    "accuracy": result.get(
-                        "final_accuracy", result.get("test_accuracy", 0)
-                    ),
+                    "accuracy": accuracy,
                     "sparsity": result.get("final_sparsity", 0),
                     "time": result.get("total_time", 0),
                     "status": "✓ Success",
