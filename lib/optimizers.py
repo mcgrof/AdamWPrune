@@ -10,12 +10,86 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def param_groups_for_weight_decay(model, model_type="resnet"):
+    """
+    Separate model parameters into groups with and without weight decay.
+    Bias and normalization parameters should not have weight decay.
+
+    Args:
+        model: The model to get parameters from
+        model_type: Type of model ("lenet", "resnet", etc.) for appropriate decay values
+
+    Returns:
+        List of parameter groups with appropriate weight decay settings
+    """
+    decay, no_decay = [], []
+    for mn, m in model.named_modules():
+        for pn, p in m.named_parameters(recurse=False):
+            if not p.requires_grad:
+                continue
+            full = f"{mn}.{pn}" if mn else pn
+            if pn.endswith("bias") or isinstance(
+                m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.LayerNorm, nn.GroupNorm)
+            ):
+                no_decay.append(p)
+            else:
+                decay.append(p)
+
+    # Default weight decay values per model type
+    if model_type == "lenet":
+        default_wd = 1e-4
+    else:  # resnet18, resnet50, etc.
+        default_wd = 5e-4
+
+    return [
+        {"params": decay, "weight_decay": default_wd},
+        {"params": no_decay, "weight_decay": 0.0},
+    ]
+
+
+def resolve_weight_decay(optimizer_name, user_wd=None, model_type="resnet"):
+    """
+    Resolve weight decay value based on optimizer and user input.
+
+    Args:
+        optimizer_name: Name of the optimizer
+        user_wd: User-specified weight decay (overrides defaults)
+        model_type: Type of model for appropriate defaults
+
+    Returns:
+        Appropriate weight decay value
+    """
+    if user_wd is not None:
+        return user_wd
+
+    # Model-specific defaults
+    if model_type == "lenet":
+        # LeNet-5 defaults (smaller model, needs less regularization)
+        if optimizer_name == "sgd":
+            return 1e-4
+        elif optimizer_name in ["adamw", "adamwadv", "adamwspam", "adamwprune"]:
+            return 1e-4
+        elif optimizer_name == "adam":
+            return 0.0  # Coupled L2 with Adam is rarely helpful
+    else:
+        # ResNet/CIFAR defaults
+        if optimizer_name == "sgd":
+            return 5e-4
+        elif optimizer_name in ["adamw", "adamwadv", "adamwspam", "adamwprune"]:
+            return 5e-4  # 1e-4 to 1e-3 also fine; 1e-2 usually too strong
+        elif optimizer_name == "adam":
+            return 0.0  # Coupled L2 with Adam is rarely helpful
+
+    return 0.0
+
+
 def create_optimizer(
     model,
     optimizer_type,
     learning_rate,
     num_epochs=None,
     args=None,
+    model_type="resnet",
 ):
     """
     Create an optimizer based on the specified type.
@@ -26,6 +100,7 @@ def create_optimizer(
         learning_rate: Learning rate for the optimizer
         num_epochs: Number of epochs (needed for some schedulers)
         args: Additional arguments containing SPAM parameters
+        model_type: Type of model ("lenet", "resnet") for appropriate defaults
 
     Returns:
         optimizer, scheduler, gradient_clip_norm, spam_state, adamprune_state
@@ -35,24 +110,36 @@ def create_optimizer(
     spam_state = None
     adamprune_state = None
 
+    # Get user-specified weight decay if provided
+    user_wd = getattr(args, "weight_decay", None) if args else None
+
+    # Resolve the appropriate weight decay value
+    weight_decay = resolve_weight_decay(optimizer_type, user_wd, model_type)
+
+    # Get parameter groups (with and without weight decay)
+    param_groups = param_groups_for_weight_decay(model, model_type)
+
+    # Apply the resolved weight decay to the decay group
+    for group in param_groups:
+        if group["weight_decay"] != 0:
+            group["weight_decay"] = weight_decay
+
     if optimizer_type == "adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-        logger.info("Using Adam optimizer")
+        # Adam typically doesn't benefit from weight decay (coupled L2 regularization)
+        optimizer = torch.optim.Adam(param_groups, lr=learning_rate)
+        logger.info(f"Using Adam optimizer (no weight decay by default)")
 
     elif optimizer_type == "adamw":
-        optimizer = torch.optim.AdamW(
-            model.parameters(), lr=learning_rate, weight_decay=1e-4
-        )
-        logger.info("Using AdamW optimizer with weight decay=0.0001")
+        optimizer = torch.optim.AdamW(param_groups, lr=learning_rate)
+        logger.info(f"Using AdamW optimizer with weight decay={weight_decay}")
 
     elif optimizer_type == "adamwadv":
         # AdamW Advanced with all enhancements
         optimizer = torch.optim.AdamW(
-            model.parameters(),
+            param_groups,
             lr=learning_rate,
             betas=(0.9, 0.999),
             eps=1e-8,
-            weight_decay=0.01,  # Stronger weight decay for better regularization
             amsgrad=True,  # AMSGrad variant for better convergence
         )
         # Cosine annealing learning rate scheduler
@@ -68,11 +155,10 @@ def create_optimizer(
     elif optimizer_type == "adamwspam":
         # AdamW with SPAM (Spike-Aware Pruning-Adaptive Momentum)
         optimizer = torch.optim.AdamW(
-            model.parameters(),
+            param_groups,
             lr=learning_rate,
             betas=(0.9, 0.999),
             eps=1e-8,
-            weight_decay=0.01,
             amsgrad=True,
         )
         # Initialize SPAM state tracking
@@ -158,7 +244,12 @@ def create_optimizer(
 
             # Create base optimizer recursively
             base_optimizer_tuple = create_optimizer(
-                model, base_optimizer_name, learning_rate, num_epochs, base_args
+                model,
+                base_optimizer_name,
+                learning_rate,
+                num_epochs,
+                base_args,
+                model_type,
             )
             optimizer = base_optimizer_tuple[0]
             scheduler = (
@@ -179,14 +270,16 @@ def create_optimizer(
                 if "amsgrad" in group:
                     group["amsgrad"] = amsgrad
         else:
-            # Fallback to creating AdamW directly
+            # Fallback to creating AdamW directly with proper parameter groups
+            # Note: For AdamWPrune fallback, we use the resolved weight decay
+            for group in param_groups:
+                group["betas"] = (beta1, beta2)
+                group["eps"] = 1e-8
+                group["amsgrad"] = amsgrad
+                # Keep the weight decay from param_groups setup
             optimizer = torch.optim.AdamW(
-                model.parameters(),
+                param_groups,
                 lr=learning_rate,
-                betas=(beta1, beta2),
-                eps=1e-8,
-                weight_decay=weight_decay,
-                amsgrad=amsgrad,
             )
             scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
             gradient_clip_norm = 1.0
@@ -242,8 +335,10 @@ def create_optimizer(
             logger.info("  - Pruning: Disabled")
 
     else:  # Default to SGD
-        optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
-        logger.info("Using SGD optimizer with momentum=0.9")
+        optimizer = torch.optim.SGD(param_groups, lr=learning_rate, momentum=0.9)
+        logger.info(
+            f"Using SGD optimizer with momentum=0.9, weight_decay={weight_decay}"
+        )
 
     return optimizer, scheduler, gradient_clip_norm, spam_state, adamprune_state
 

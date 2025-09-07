@@ -197,7 +197,7 @@ def main(args):
     
     # Create optimizer
     # Create optimizer - create_optimizer returns a tuple
-    optimizer_tuple = create_optimizer(model, args.optimizer, args.lr, args=args, num_epochs=args.epochs)
+    optimizer_tuple = create_optimizer(model, args.optimizer, args.lr, args=args, num_epochs=args.epochs, model_type="resnet")
     if isinstance(optimizer_tuple, tuple) and len(optimizer_tuple) >= 1:
         optimizer = optimizer_tuple[0]
     else:
@@ -319,6 +319,8 @@ if __name__ == "__main__":
                        help="Number of epochs to train")
     parser.add_argument("--lr", type=float, default=0.001,
                        help="Learning rate")
+    parser.add_argument("--weight-decay", type=float, default=None,
+                       help="Weight decay (AdamW/SGD). If None, choose a sane default.")
     parser.add_argument("--optimizer", type=str, default="adamwprune",
                        help="Optimizer to use")
     

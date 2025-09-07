@@ -142,7 +142,7 @@ def create_resnet_optimizer(
 
     # Call shared create_optimizer - returns (optimizer, scheduler, gradient_clip_norm, spam_state, adamprune_state)
     optimizer_tuple = create_optimizer(
-        model, optimizer_name, scaled_lr, args=mock_args, num_epochs=num_epochs
+        model, optimizer_name, scaled_lr, args=mock_args, num_epochs=num_epochs, model_type="resnet"
     )
 
     if isinstance(optimizer_tuple, tuple) and len(optimizer_tuple) >= 5:
@@ -384,6 +384,8 @@ def main():
         "--batch-size", type=int, default=BATCH_SIZE, help="Batch size for training"
     )
     parser.add_argument("--lr", type=float, default=LEARNING_RATE, help="Learning rate")
+    parser.add_argument("--weight-decay", type=float, default=None,
+                        help="Weight decay (AdamW/SGD). If None, choose a sane default.")
 
     args = parser.parse_args()
 
