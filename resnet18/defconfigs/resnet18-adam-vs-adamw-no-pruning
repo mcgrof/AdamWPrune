@@ -1,0 +1,32 @@
+# ResNet-18: Adam vs AdamW comparison without pruning
+# Tests the impact of proper weight decay implementation
+
+# Model configuration
+CONFIG_MODEL_MODE_SINGLE=y
+CONFIG_MODEL_SELECT_RESNET18=y
+
+# Test both Adam and AdamW
+CONFIG_OPTIMIZER_MODE_MULTIPLE=y
+# CONFIG_OPTIMIZER_ENABLE_SGD is not set
+CONFIG_OPTIMIZER_ENABLE_ADAM=y
+CONFIG_OPTIMIZER_ENABLE_ADAMW=y
+# CONFIG_OPTIMIZER_ENABLE_ADAMWADV is not set
+# CONFIG_OPTIMIZER_ENABLE_ADAMWSPAM is not set
+# CONFIG_OPTIMIZER_ENABLE_ADAMWPRUNE is not set
+
+# No pruning - baseline comparison
+CONFIG_PRUNING_MODE_NONE=y
+
+# Standard training configuration
+CONFIG_NUM_EPOCHS=100
+CONFIG_BATCH_SIZE=128
+CONFIG_LEARNING_RATE=0.1
+
+# GPU monitoring
+CONFIG_GPU_MONITOR=y
+CONFIG_GPU_MONITOR_INTERVAL=10
+
+# Expected results:
+# - Adam: No weight decay (L2 regularization rarely helps with Adam)
+# - AdamW: 5e-4 weight decay on conv/fc weights only (not bias/BatchNorm)
+# - AdamW should achieve better test accuracy due to proper regularization
