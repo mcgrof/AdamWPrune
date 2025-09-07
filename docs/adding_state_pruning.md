@@ -8,21 +8,36 @@ State-based pruning uses the optimizer's internal states (like Adam's momentum a
 
 ## Key Findings from ResNet-18 Experiments
 
-Our extensive testing on ResNet-18 with CIFAR-10 revealed important insights:
+Our comprehensive testing on ResNet-18 with CIFAR-10 revealed important insights:
 
 ### Optimizer Performance (No Pruning)
-- **AdamWPrune (Adam base)**: 90.59% accuracy - **Best baseline performance**
-- **Plain Adam**: 90.31% accuracy
-- **AdamW**: ~89.8% accuracy (weight decay hurts on CIFAR-10)
-- **SGD**: ~89.5% accuracy
+- **AdamW**: 90.30% accuracy - Proper weight decay implementation
+- **AdamWPrune (AdamW base)**: 90.28% accuracy - Nearly identical to AdamW
+- **Memory usage**: Both use ~1307 MB (minimal overhead)
 
-### Pruning Performance at 70% Sparsity
-- **Adam + Movement Pruning**: 90.78% accuracy - **Best overall**
-- **AdamWPrune + State Pruning**: 90.66% accuracy - **Close second, most efficient**
-- **Adam + Magnitude Pruning**: 88.06% accuracy
+### Pruning Performance Comparison
 
-### Key Insight: Base Optimizer Matters
-Plain Adam consistently outperforms AdamW as a base optimizer for CIFAR-10/ResNet-18. This is why AdamWPrune supports configurable base optimizers.
+#### At 50% Sparsity (Optimal)
+- **AdamW + Movement Pruning**: 90.69% accuracy - **Tied for best**
+- **AdamWPrune + State Pruning**: 90.69% accuracy - **Tied for best**
+- **AdamW + Magnitude Pruning**: 88.97% accuracy
+
+#### At 70% Sparsity (Balanced)
+- **AdamW + Movement Pruning**: 89.68% accuracy - **Best at this level**
+- **AdamWPrune + State Pruning**: 89.37% accuracy - Close second
+- **AdamW + Magnitude Pruning**: 88.44% accuracy
+
+#### At 90% Sparsity (Extreme)
+- **AdamW + Movement Pruning**: 89.10% accuracy
+- **AdamWPrune + State Pruning**: 88.65% accuracy
+- **AdamW + Magnitude Pruning**: 86.85% accuracy
+
+### Key Insight: AdamW as Base
+AdamWPrune is now based on AdamW for critical reasons:
+1. **Proper weight decay**: Decoupled L2 regularization with parameter groups
+2. **No decay on bias/BatchNorm**: Critical for maintaining performance
+3. **Industry standard**: AdamW is the default for modern architectures
+4. **Consistent results**: AdamW and AdamWPrune perform identically without pruning
 
 ## Minimal Code Required
 
@@ -180,32 +195,35 @@ When `ADAMWPRUNE_ENABLE_PRUNING=n`:
 
 Based on actual GPU measurements from September 2025 testing:
 
-| Method | Code Complexity | GPU Memory | ResNet-18 Accuracy @ 70% |
-|--------|----------------|------------|--------------------------|
-| Adam Baseline | N/A | 1307.5 MB | 90.31% |
-| AdamWPrune (No Pruning) | N/A | 1307.2 MB | 90.59% |
-| Magnitude Pruning | ~30 lines | 1471.0 MB | 88.06% |
-| Movement Pruning | ~100 lines | 1489.4 MB | 90.78% |
-| **State-Based Pruning** | **~50 lines** | **1489.2 MB** | **90.66%** |
+| Method | Sparsity | Code Complexity | GPU Memory | Accuracy |
+|--------|----------|----------------|------------|----------|
+| AdamW Baseline | 0% | N/A | 1307.6 MB | 90.30% |
+| AdamWPrune (No Pruning) | 0% | N/A | 1307.4 MB | 90.28% |
+| Magnitude Pruning | 50% | ~30 lines | 1400.0 MB | 88.97% |
+| Magnitude Pruning | 70% | ~30 lines | 1399.9 MB | 88.44% |
+| Movement Pruning | 50% | ~100 lines | 1475.6 MB | **90.69%** |
+| Movement Pruning | 70% | ~100 lines | 1474.6 MB | 89.68% |
+| **State-Based Pruning** | **50%** | **~50 lines** | **1474.6 MB** | **90.69%** |
+| **State-Based Pruning** | **70%** | **~50 lines** | **1503.0 MB** | **89.37%** |
 
 ### Key Findings
 
-- **Zero overhead when disabled**: AdamWPrune without pruning matches Adam's memory (1307 MB)
-- **Better baseline accuracy**: AdamWPrune achieves 90.59% vs Adam's 90.31% even without pruning
-- **Similar pruning overhead**: State and movement pruning both add ~182 MB
-- **Competitive accuracy**: State pruning (90.66%) nearly matches movement (90.78%)
+- **Minimal overhead when disabled**: AdamWPrune matches AdamW's memory (~1307 MB)
+- **Identical baseline accuracy**: AdamW (90.30%) vs AdamWPrune (90.28%) with proper weight decay
+- **Best at 50% sparsity**: Both movement and state pruning achieve 90.69% (tied)
+- **Memory overhead varies**: Magnitude adds ~93 MB, movement/state add ~167-195 MB
 
 ### When to Use Each Method
 
-- **State-Based Pruning (AdamWPrune)**: Best balance - competitive accuracy with moderate complexity
-- **Movement Pruning**: Slightly better accuracy (0.12% gain) at same memory cost but more complex
-- **Magnitude Pruning**: Simplest but significantly lower accuracy (88.06%)
+- **State-Based Pruning (AdamWPrune)**: Best for memory-constrained environments, tied best at 50% sparsity
+- **Movement Pruning**: Best accuracy retention across all sparsity levels
+- **Magnitude Pruning**: Lowest memory overhead but worst accuracy
 
 ### Recommendations by Model/Dataset
 
 - **Small models (LeNet, ResNet-18) on CIFAR-10**:
-  - Use AdamWPrune with Adam base for best results
-  - State pruning nearly matches movement pruning with less memory
+  - Use AdamWPrune with AdamW base for proper weight decay
+  - State pruning ties with movement pruning at 50% sparsity
 
 - **Large models (ResNet-50+) on ImageNet**:
   - Use AdamW as base (weight decay helps)
