@@ -20,9 +20,10 @@ from torchvision import datasets, transforms
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.gpu_monitor import GPUMonitor
+from lib.gpu_monitoring import GPUMonitor
 from lib.optimizers import create_optimizer
-from lib.pruning import MovementPruning, PruningSchedule, apply_pruning_masks
+from lib.movement_pruning import MovementPruning
+from lib.magnitude_pruning import MagnitudePruning
 from model import resnet50
 
 
@@ -115,7 +116,7 @@ def train(model, device, train_loader, optimizer, criterion, epoch, pruning_meth
         
         # Apply pruning masks if using pruning
         if pruning_method:
-            apply_pruning_masks(model, pruning_method.get_masks())
+            pruning_method.apply_masks()
         
         optimizer.zero_grad()
         output = model(data)
@@ -208,17 +209,18 @@ def main(args):
     
     # Setup pruning if enabled
     pruning_method = None
-    if args.pruning_method != "none":
-        schedule = PruningSchedule(
-            method="linear",
-            initial_sparsity=0.0,
+    if args.pruning_method == "movement":
+        pruning_method = MovementPruning(
+            model,
             target_sparsity=args.target_sparsity,
-            begin_epoch=args.pruning_start_epoch,
-            end_epoch=args.pruning_end_epoch,
+            warmup_steps=args.pruning_warmup,
         )
-        
-        if args.pruning_method == "movement":
-            pruning_method = MovementPruning(model, schedule)
+    elif args.pruning_method == "magnitude":
+        pruning_method = MagnitudePruning(
+            model,
+            target_sparsity=args.target_sparsity,
+            warmup_steps=args.pruning_warmup,
+        )
     
     # GPU monitoring
     gpu_monitor = None
@@ -330,6 +332,8 @@ if __name__ == "__main__":
                        help="Pruning method")
     parser.add_argument("--target-sparsity", type=float, default=0.7,
                        help="Target sparsity level")
+    parser.add_argument("--pruning-warmup", type=int, default=100,
+                       help="Warmup steps before pruning starts")
     parser.add_argument("--pruning-start-epoch", type=int, default=10,
                        help="Epoch to start pruning")
     parser.add_argument("--pruning-end-epoch", type=int, default=80,
