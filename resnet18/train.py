@@ -25,20 +25,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model import create_model
 
 # Import pruning methods and optimizers from parent
-try:
-    from lib.magnitude_pruning import MagnitudePruning
-    from lib.movement_pruning import MovementPruning
-    from lib.optimizers import (
-        create_optimizer,
-        apply_adamprune_masking,
-        update_adamprune_masks,
-    )
-
-    OPTIMIZERS_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: Some modules not found: {e}")
-    print("Some optimizers or pruning methods may not be available")
-    OPTIMIZERS_AVAILABLE = False
+from lib.magnitude_pruning import MagnitudePruning
+from lib.movement_pruning import MovementPruning
+from lib.optimizers import (
+    create_optimizer,
+    apply_adamprune_masking,
+    update_adamprune_masks,
+)
 
 # Import config if available
 try:
@@ -117,25 +110,6 @@ def create_resnet_optimizer(
 ):
     """Create optimizer for ResNet-18, uses shared create_optimizer with ResNet-specific LR scaling."""
 
-    if not OPTIMIZERS_AVAILABLE:
-        # Fallback to basic optimizers if shared library not available
-        if optimizer_name == "sgd":
-            return (
-                optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4),
-                None,
-                None,
-            )
-        elif optimizer_name in ["adam", "adamw"]:
-            return (
-                optim.AdamW(model.parameters(), lr=lr * 0.001, weight_decay=0.01),
-                None,
-                None,
-            )
-        else:
-            raise ValueError(
-                f"Optimizer {optimizer_name} not available without shared library"
-            )
-
     # Use shared optimizer creation with ResNet-specific parameters
     # Scale learning rates for Adam-based optimizers on ResNet
     if optimizer_name in ["adam", "adamw", "adamwadv", "adamwspam", "adamwprune"]:
@@ -209,13 +183,13 @@ def train_epoch(
         loss.backward()
 
         # Apply AdamWPrune gradient masking before optimizer step
-        if optimizer_name == "adamwprune" and adamprune_state and OPTIMIZERS_AVAILABLE:
+        if optimizer_name == "adamwprune" and adamprune_state:
             apply_adamprune_masking(optimizer, adamprune_state)
 
         optimizer.step()
 
         # Update AdamWPrune masks periodically (per batch)
-        if optimizer_name == "adamwprune" and adamprune_state and OPTIMIZERS_AVAILABLE:
+        if optimizer_name == "adamwprune" and adamprune_state:
             update_adamprune_masks(optimizer, adamprune_state, train_loader, 0)
 
         # Apply external pruning if enabled (for non-AdamWPrune optimizers)
@@ -546,25 +520,17 @@ def main():
         print(f"  Warmup steps: {adamprune_state['warmup_steps']}")
         # No external pruner needed - using built-in
     elif args.pruning_method == "magnitude":
-        if OPTIMIZERS_AVAILABLE:
-            pruner = MagnitudePruning(
-                model,
-                target_sparsity=args.target_sparsity,
-                warmup_steps=args.pruning_warmup,
-            )
-        else:
-            print("Warning: MagnitudePruning not available - training without pruning")
-            pruner = None
+        pruner = MagnitudePruning(
+            model,
+            target_sparsity=args.target_sparsity,
+            warmup_steps=args.pruning_warmup,
+        )
     elif args.pruning_method == "movement":
-        if OPTIMIZERS_AVAILABLE:
-            pruner = MovementPruning(
-                model,
-                target_sparsity=args.target_sparsity,
-                warmup_steps=args.pruning_warmup,
-            )
-        else:
-            print("Warning: MovementPruning not available - training without pruning")
-            pruner = None
+        pruner = MovementPruning(
+            model,
+            target_sparsity=args.target_sparsity,
+            warmup_steps=args.pruning_warmup,
+        )
 
     # Training metrics
     # For adamwprune, always record as 'state' since it uses built-in state pruning
