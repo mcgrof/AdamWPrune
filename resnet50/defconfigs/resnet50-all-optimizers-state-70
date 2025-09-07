@@ -1,0 +1,53 @@
+# ResNet-50: All optimizers with state pruning at 70%
+# Comprehensive comparison of all optimizers with pruning
+
+# Model configuration
+CONFIG_MODEL_MODE_SINGLE=y
+CONFIG_MODEL_SELECT_RESNET50=y
+
+# Test all optimizers
+CONFIG_OPTIMIZER_MODE_MULTIPLE=y
+CONFIG_OPTIMIZER_ENABLE_SGD=y
+CONFIG_OPTIMIZER_ENABLE_ADAM=y
+CONFIG_OPTIMIZER_ENABLE_ADAMW=y
+CONFIG_OPTIMIZER_ENABLE_ADAMWADV=y
+CONFIG_OPTIMIZER_ENABLE_ADAMWSPAM=y
+CONFIG_OPTIMIZER_ENABLE_ADAMWPRUNE=y
+
+# State pruning at 70% sparsity
+CONFIG_PRUNING_MODE_SINGLE=y
+CONFIG_PRUNING_SELECT_STATE=y
+CONFIG_TARGET_SPARSITY="0.7"
+
+# Standard warmup for pruning
+CONFIG_PRUNING_WARMUP=100
+CONFIG_PRUNING_FREQUENCY=50
+
+# Training configuration for ResNet-50
+CONFIG_NUM_EPOCHS=100
+CONFIG_BATCH_SIZE=128
+CONFIG_LEARNING_RATE="0.001"
+
+# ResNet-50 specific settings
+CONFIG_RESNET50_DATASET="cifar100"
+CONFIG_RESNET50_BATCH_SIZE=128
+CONFIG_RESNET50_EPOCHS=100
+CONFIG_RESNET50_SAVE_MODEL=y
+
+# GPU monitoring
+CONFIG_GPU_MONITOR=y
+CONFIG_GPU_MONITOR_INTERVAL=10
+
+# Advanced options
+CONFIG_COMPILE_MODEL=y
+CONFIG_MIXED_PRECISION=y
+CONFIG_GPU_WARMUP=y
+CONFIG_PIN_MEMORY=y
+
+# Expected results with proper weight decay:
+# - SGD: 5e-4 weight decay on conv/fc weights
+# - Adam: No weight decay (coupled L2 rarely helps)
+# - AdamW: 5e-4 weight decay on conv/fc weights only
+# - AdamWAdv: 5e-4 weight decay + AMSGrad + cosine annealing
+# - AdamWSPAM: 5e-4 weight decay + spike-aware momentum
+# - AdamWPrune: Built-in state pruning + 5e-4 weight decay
