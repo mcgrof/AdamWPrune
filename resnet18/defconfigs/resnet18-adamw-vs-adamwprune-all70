@@ -1,0 +1,54 @@
+# ResNet-18: Comprehensive AdamW vs AdamWPrune comparison
+# Tests both optimizers with and without pruning
+
+# Model configuration
+CONFIG_MODEL_MODE_SINGLE=y
+CONFIG_MODEL_SELECT_RESNET18=y
+
+# Test both AdamW and AdamWPrune
+CONFIG_OPTIMIZER_MODE_MULTIPLE=y
+# CONFIG_OPTIMIZER_ENABLE_SGD is not set
+# CONFIG_OPTIMIZER_ENABLE_ADAM is not set
+CONFIG_OPTIMIZER_ENABLE_ADAMW=y
+# CONFIG_OPTIMIZER_ENABLE_ADAMWADV is not set
+# CONFIG_OPTIMIZER_ENABLE_ADAMWSPAM is not set
+CONFIG_OPTIMIZER_ENABLE_ADAMWPRUNE=y
+
+# Test multiple pruning methods
+# - none: baseline comparison
+# - movement: for AdamW (external pruning)
+# - state: for AdamWPrune (built-in pruning)
+CONFIG_PRUNING_MODE_MULTIPLE=y
+CONFIG_PRUNING_ENABLE_NONE=y
+CONFIG_PRUNING_ENABLE_MOVEMENT=y
+CONFIG_PRUNING_ENABLE_STATE=y
+
+# Sparsity targets
+CONFIG_TARGET_SPARSITY="0.7"
+CONFIG_TEST_SPARSITY_70=y
+
+# Pruning parameters
+CONFIG_PRUNING_WARMUP=100
+CONFIG_PRUNING_FREQUENCY=50
+
+# AdamWPrune specific settings
+CONFIG_ADAMWPRUNE_BASE_ADAMW=y
+CONFIG_ADAMWPRUNE_ENABLE_PRUNING=y
+CONFIG_ADAMWPRUNE_PRUNING_METHOD="state"
+CONFIG_ADAMWPRUNE_TARGET_SPARSITY="0.7"
+CONFIG_ADAMWPRUNE_WARMUP_STEPS=100
+
+# Training configuration
+CONFIG_NUM_EPOCHS=100
+CONFIG_BATCH_SIZE=128
+CONFIG_LEARNING_RATE="0.1"
+
+# GPU monitoring
+CONFIG_GPU_MONITOR=y
+CONFIG_GPU_MONITOR_INTERVAL=10
+
+# Expected test combinations:
+# 1. adamw_none - AdamW baseline without pruning
+# 2. adamwprune_none - AdamWPrune without pruning (should match AdamW)
+# 3. adamw_movement_70 - AdamW with movement pruning at 70%
+# 4. adamwprune_state_70 - AdamWPrune with built-in state pruning at 70%
