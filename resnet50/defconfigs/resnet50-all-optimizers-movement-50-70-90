@@ -1,0 +1,121 @@
+# ResNet-50: All optimizers with movement pruning at 50%, 70%, 90% sparsity - 1 epoch test
+# Forces movement pruning for regular optimizers, state for AdamWPrune
+
+# Model configuration
+CONFIG_MODEL_MODE_SINGLE=y
+CONFIG_MODEL_SELECT_RESNET50=y
+
+# Test all optimizers
+CONFIG_OPTIMIZER_MODE_MULTIPLE=y
+CONFIG_OPTIMIZER_ENABLE_SGD=y
+CONFIG_OPTIMIZER_ENABLE_ADAM=y
+CONFIG_OPTIMIZER_ENABLE_ADAMW=y
+CONFIG_OPTIMIZER_ENABLE_ADAMWADV=y
+CONFIG_OPTIMIZER_ENABLE_ADAMWSPAM=y
+CONFIG_OPTIMIZER_ENABLE_ADAMWPRUNE=y
+
+# FORCE: Movement and state pruning only
+CONFIG_PRUNING_MODE_MULTIPLE=y
+# CONFIG_PRUNING_ENABLE_NONE is not set
+# CONFIG_PRUNING_ENABLE_MAGNITUDE is not set
+CONFIG_PRUNING_ENABLE_MOVEMENT=y
+CONFIG_PRUNING_ENABLE_STATE=y
+
+# FORCE: Three sparsity levels: 50%, 70%, 90%
+CONFIG_SPARSITY_ENABLE_50=y
+CONFIG_SPARSITY_ENABLE_70=y
+CONFIG_SPARSITY_ENABLE_90=y
+# CONFIG_SPARSITY_ENABLE_95 is not set
+# CONFIG_SPARSITY_ENABLE_99 is not set
+
+# Pruning parameters for quick test
+CONFIG_PRUNING_WARMUP=10
+CONFIG_PRUNING_FREQUENCY=10
+CONFIG_PRUNING_RAMP_END_EPOCH=1
+
+# Test configuration - 1 epoch only for quick test
+CONFIG_NUM_EPOCHS=1
+CONFIG_BATCH_SIZE=128
+CONFIG_LEARNING_RATE="0.001"
+
+# ResNet-50 specific settings
+CONFIG_RESNET50_DATASET="cifar100"
+CONFIG_RESNET50_BATCH_SIZE=128
+CONFIG_RESNET50_EPOCHS=1
+CONFIG_RESNET50_SAVE_MODEL=n
+CONFIG_RESNET50_PRUNING_END_EPOCH=1
+
+# Optimizer configurations
+CONFIG_SGD_MOMENTUM="0.9"
+CONFIG_SGD_WEIGHT_DECAY="0.0001"
+
+CONFIG_ADAM_BETA1="0.9"
+CONFIG_ADAM_BETA2="0.999"
+CONFIG_ADAM_WEIGHT_DECAY="0.0"
+
+CONFIG_ADAMW_BETA1="0.9"
+CONFIG_ADAMW_BETA2="0.999"
+CONFIG_ADAMW_WEIGHT_DECAY="0.01"
+
+CONFIG_ADAMWADV_BETA1="0.9"
+CONFIG_ADAMWADV_BETA2="0.999"
+CONFIG_ADAMWADV_WEIGHT_DECAY="0.01"
+
+# SPAM configuration
+CONFIG_SPAM_THETA="50.0"
+CONFIG_SPAM_SPIKE_THRESHOLD="2.0"
+
+# AdamWPrune configuration
+CONFIG_ADAMWPRUNE_BASE_ADAMW=y
+CONFIG_ADAMWPRUNE_ENABLE_PRUNING=y
+CONFIG_ADAMWPRUNE_PRUNING_METHOD="state"
+CONFIG_ADAMWPRUNE_TARGET_SPARSITY="0.7"
+CONFIG_ADAMWPRUNE_WARMUP_STEPS=10
+CONFIG_ADAMWPRUNE_BETA1="0.9"
+CONFIG_ADAMWPRUNE_BETA2="0.999"
+CONFIG_ADAMWPRUNE_WEIGHT_DECAY="0.01"
+CONFIG_ADAMWPRUNE_AMSGRAD=y
+
+# GPU monitoring
+CONFIG_GPU_MONITOR=y
+CONFIG_GPU_MONITOR_INTERVAL=10
+
+# Advanced options - disabled for quick test
+CONFIG_COMPILE_MODEL=n
+CONFIG_MIXED_PRECISION=n
+CONFIG_GPU_WARMUP=n
+CONFIG_PIN_MEMORY=y
+
+# Movement pruning configuration
+CONFIG_MOVEMENT_PRUNING_BETA="0.9"
+CONFIG_MOVEMENT_PRUNING_USE_GRADIENT=y
+
+# State pruning configuration
+CONFIG_STATE_PRUNING_STRATEGY="hybrid"
+CONFIG_STATE_PRUNING_MOMENTUM_WEIGHT="0.5"
+
+# Expected test combinations (18 total):
+# SGD:
+#   1. resnet50_sgd_movement_50
+#   2. resnet50_sgd_movement_70
+#   3. resnet50_sgd_movement_90
+# Adam:
+#   4. resnet50_adam_movement_50
+#   5. resnet50_adam_movement_70
+#   6. resnet50_adam_movement_90
+# AdamW:
+#   7. resnet50_adamw_movement_50
+#   8. resnet50_adamw_movement_70
+#   9. resnet50_adamw_movement_90
+# AdamWAdv:
+#   10. resnet50_adamwadv_movement_50
+#   11. resnet50_adamwadv_movement_70
+#   12. resnet50_adamwadv_movement_90
+# AdamWSPAM:
+#   13. resnet50_adamwspam_movement_50
+#   14. resnet50_adamwspam_movement_70
+#   15. resnet50_adamwspam_movement_90
+# AdamWPrune (with state pruning):
+#   16. resnet50_adamwprune_state_50
+#   17. resnet50_adamwprune_state_70
+#   18. resnet50_adamwprune_state_90
