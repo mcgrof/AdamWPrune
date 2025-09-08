@@ -135,11 +135,11 @@ def train(
         loss = criterion(output, target)
         loss.backward()
 
-        # Update pruning scores if using movement pruning
-        if pruning_method and hasattr(pruning_method, "update_scores"):
-            pruning_method.update_scores()
-
         optimizer.step()
+
+        # Update pruning (step counter and potentially masks)
+        if pruning_method and hasattr(pruning_method, "step_pruning"):
+            pruning_method.step_pruning()
 
         train_loss += loss.item()
         _, predicted = output.max(1)
@@ -236,18 +236,28 @@ def main(args):
 
     # Setup pruning if enabled
     pruning_method = None
-    if args.pruning_method == "movement":
-        pruning_method = MovementPruning(
-            model,
-            target_sparsity=args.target_sparsity,
-            warmup_steps=args.pruning_warmup,
-        )
-    elif args.pruning_method == "magnitude":
-        pruning_method = MagnitudePruning(
-            model,
-            target_sparsity=args.target_sparsity,
-            warmup_steps=args.pruning_warmup,
-        )
+    if args.pruning_method in ["movement", "magnitude"]:
+        # Calculate total training steps for pruning schedule
+        steps_per_epoch = len(train_loader)
+        total_steps = steps_per_epoch * args.epochs
+        ramp_end_step = int(steps_per_epoch * args.pruning_end_epoch)
+
+        if args.pruning_method == "movement":
+            pruning_method = MovementPruning(
+                model,
+                target_sparsity=args.target_sparsity,
+                warmup_steps=args.pruning_warmup,
+                pruning_frequency=50,
+                ramp_end_step=ramp_end_step,
+            )
+        elif args.pruning_method == "magnitude":
+            pruning_method = MagnitudePruning(
+                model,
+                target_sparsity=args.target_sparsity,
+                warmup_steps=args.pruning_warmup,
+                pruning_frequency=50,
+                ramp_end_step=ramp_end_step,
+            )
 
     # GPU monitoring
     gpu_monitor = None
@@ -271,10 +281,6 @@ def main(args):
 
     for epoch in range(1, args.epochs + 1):
         epoch_start = time.time()
-
-        # Update pruning schedule
-        if pruning_method:
-            pruning_method.update_schedule(epoch)
 
         # Train
         train_loss, train_acc = train(
