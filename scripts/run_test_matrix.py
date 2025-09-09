@@ -881,11 +881,6 @@ def main():
         "--continue-dir",
         help="Continue from an existing test matrix directory (clean and resume incomplete tests)",
     )
-    parser.add_argument(
-        "--incomplete-only",
-        action="store_true",
-        help="With --continue-dir, only re-run incomplete tests instead of completing the full matrix",
-    )
     args = parser.parse_args()
 
     # Handle continuation mode
@@ -952,49 +947,25 @@ def main():
         complete_test_ids = set(complete_runs)
         tests_to_run = []
 
-        if args.incomplete_only:
-            # Only re-run the incomplete tests
-            for run_name in incomplete_runs:
-                # Parse the test ID to reconstruct the combination
-                parts = run_name.split("_")
-                if len(parts) >= 3:
-                    model = parts[0]  # e.g., "resnet50"
-                    optimizer = parts[1]  # e.g., "adam"
-                    pruning = parts[2]  # e.g., "movement"
-                    sparsity = "0.0"
-                    if len(parts) > 3 and parts[-1].isdigit():
-                        sparsity = str(int(parts[-1]) / 100)
+        # Complete the full matrix - run all tests not yet complete
+        for combo in all_combinations:
+            if combo["pruning"] == "none":
+                test_id = f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}"
+            else:
+                sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
+                test_id = f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}_{sparsity_pct}"
 
-                    combo = {
-                        "model": model,
-                        "optimizer": optimizer,
-                        "pruning": pruning,
-                        "sparsity": sparsity,
-                    }
-                    tests_to_run.append(combo)
-        else:
-            # Complete the full matrix - run all tests not yet complete
-            for combo in all_combinations:
-                if combo["pruning"] == "none":
-                    test_id = (
-                        f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}"
-                    )
-                else:
-                    sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
-                    test_id = f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}_{sparsity_pct}"
+            if test_id not in complete_test_ids:
+                tests_to_run.append(combo)
 
-                if test_id not in complete_test_ids:
-                    tests_to_run.append(combo)
-
-        # Determine if this is resuming incomplete or completing full matrix
+        # Show clear breakdown of what will be run
         total_expected = len(all_combinations)
-        if len(tests_to_run) > len(incomplete_runs):
-            print(
-                f"  Tests to complete matrix: {len(tests_to_run)} (includes {len(tests_to_run) - len(incomplete_runs)} never-started tests)"
-            )
-            print(f"  Total expected tests in matrix: {total_expected}")
-        else:
-            print(f"  Tests to re-run: {len(tests_to_run)}")
+        never_started = len(tests_to_run) - len(incomplete_runs)
+        print(f"  Tests to run: {len(tests_to_run)}")
+        if never_started > 0:
+            print(f"    - Re-running incomplete: {len(incomplete_runs)}")
+            print(f"    - Running never-started: {never_started}")
+        print(f"  Total tests in matrix: {total_expected}")
 
         # Calculate time estimate based on completed tests
         if complete_runs:
@@ -1033,15 +1004,10 @@ def main():
 
         print("\n" + "=" * 60)
 
-        # Clarify what will happen
-        if len(tests_to_run) > len(incomplete_runs):
-            prompt_msg = f"Remove {len(incomplete_runs)} incomplete run(s) and run {len(tests_to_run)} tests to complete the matrix? (y/N): "
-        else:
-            prompt_msg = (
-                f"Remove and re-run {len(incomplete_runs)} incomplete test(s)? (y/N): "
-            )
-
-        response = input(prompt_msg).strip().lower()
+        # Simple, clear prompt
+        response = (
+            input(f"Continue with {len(tests_to_run)} tests? (y/N): ").strip().lower()
+        )
         if response != "y":
             print("Aborted.")
             sys.exit(0)
