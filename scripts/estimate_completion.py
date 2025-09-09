@@ -211,15 +211,37 @@ def estimate_completion_time(analysis):
         if test["total_epochs"] > 0:
             progress = test["current_epoch"] / test["total_epochs"]
             elapsed = datetime.now().timestamp() - test["start_time"]
-            if progress > 0:
+
+            # For early epochs (< 5%), use average time instead of extrapolation
+            # which can be wildly inaccurate
+            if progress < 0.05 and avg_time > 0:
+                # Use historical average, adjusted for progress already made
+                remaining = avg_time * (1 - progress)
+            elif progress > 0:
+                # For later epochs, use actual progress-based estimation
                 total_expected = elapsed / progress
                 remaining = total_expected - elapsed
-                estimates[test["name"]] = {
-                    "remaining_time": remaining,
-                    "progress_percent": progress * 100,
-                    "current_epoch": test["current_epoch"],
-                    "total_epochs": test["total_epochs"],
-                }
+
+                # Sanity check: if estimated total time is way off from average,
+                # blend the estimates (this handles variations in early epochs)
+                if avg_time > 0 and total_expected > avg_time * 2:
+                    # Blend with historical average if estimate seems too high
+                    weight = min(
+                        progress * 2, 1.0
+                    )  # Give more weight to actual as progress increases
+                    remaining = (remaining * weight) + (
+                        avg_time * (1 - progress) * (1 - weight)
+                    )
+            else:
+                continue
+
+            estimates[test["name"]] = {
+                "remaining_time": max(0, remaining),  # Never negative
+                "progress_percent": progress * 100,
+                "current_epoch": test["current_epoch"],
+                "total_epochs": test["total_epochs"],
+                "using_average": progress < 0.05,  # Flag if using historical average
+            }
 
     # Add time for incomplete tests (will need full run)
     incomplete_count = len(analysis["incomplete_tests"])
@@ -309,7 +331,10 @@ def main():
                 print(
                     f"    Progress: {est['progress_percent']:.1f}% (Epoch {est['current_epoch']}/{est['total_epochs']})"
                 )
-                print(f"    Time remaining: {format_time(est['remaining_time'])}")
+                time_str = format_time(est["remaining_time"])
+                if est.get("using_average", False):
+                    time_str += " (based on average)"
+                print(f"    Time remaining: {time_str}")
 
             if estimates["incomplete_count"] > 0:
                 print(f"\nIncomplete tests to re-run: {estimates['incomplete_count']}")
