@@ -25,7 +25,7 @@ AdamWPrune demonstrates efficient neural network compression by reusing Adam opt
 - **Pruning method comparison**: Movement > State > Magnitude for accuracy retention
 - **Memory overhead**: Magnitude pruning adds ~93 MB, movement/state add ~167-195 MB
 
-| Configuration | Optimizer | Pruning Method | Sparsity | GPU Memory (Actual) | Accuracy | 
+| Configuration | Optimizer | Pruning Method | Sparsity | GPU Memory (Actual) | Accuracy |
 |--------------|-----------|----------------|----------|---------------------|----------|
 | **AdamW Baseline** | AdamW | None | 0% | **1307.6 MiB** | 90.30% |
 | **AdamWPrune Baseline** | AdamWPrune | None | 0% | **1307.4 MiB** | 90.28% |
@@ -172,6 +172,17 @@ pip install torch torchvision numpy matplotlib
 - `lenet5-sgd` - Baseline SGD configuration
 
 ## Advanced Usage
+
+### Continuing Interrupted Test Runs
+
+If your test matrix is interrupted (system crash, power failure, etc.), you can continue from where you left off:
+
+```bash
+# Continue the most recent interrupted test matrix
+make continue
+```
+
+See [Continuation Documentation](docs/continue.md) for detailed information on resuming interrupted experiments.
 
 ### Reproduce All Results
 
