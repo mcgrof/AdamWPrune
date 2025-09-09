@@ -156,7 +156,7 @@ test-matrix: check-config
 	fi
 	@$(MAKE) summary
 
-# Continue an interrupted test matrix run
+# Continue an interrupted test matrix run (complete the full matrix)
 continue:
 	@# Find the latest test_matrix* directory
 	@LATEST_DIR=$$(ls -d test_matrix_results_* 2>/dev/null | sort | tail -1); \
@@ -168,6 +168,20 @@ continue:
 	echo "Found latest test matrix directory: $$LATEST_DIR"; \
 	echo "Checking for incomplete runs..."; \
 	python3 scripts/run_test_matrix.py --continue-dir "$$LATEST_DIR"; \
+	$(MAKE) summary
+
+# Re-run only incomplete tests from an interrupted run
+continue-incomplete:
+	@# Find the latest test_matrix* directory
+	@LATEST_DIR=$$(ls -d test_matrix_results_* 2>/dev/null | sort | tail -1); \
+	if [ -z "$$LATEST_DIR" ]; then \
+		echo "Error: No test_matrix_results_* directories found"; \
+		echo "Run 'make test-matrix' first to start a test matrix"; \
+		exit 1; \
+	fi; \
+	echo "Found latest test matrix directory: $$LATEST_DIR"; \
+	echo "Checking for incomplete runs (will only re-run incomplete tests)..."; \
+	python3 scripts/run_test_matrix.py --continue-dir "$$LATEST_DIR" --incomplete-only; \
 	$(MAKE) summary
 
 test-matrix-yaml:
@@ -437,12 +451,13 @@ help:
 	@echo "                                  # Re-run only adamwprune tests with parallel execution"
 	@echo ""
 	@echo "Continuing interrupted test runs:"
-	@echo "  make continue                   # Continue latest interrupted test matrix"
-	@echo "                                  # Automatically finds latest test_matrix_results_*,"
-	@echo "                                  # removes incomplete runs, and continues remaining tests"
+	@echo "  make continue                   # Continue latest test matrix (completes all remaining tests)"
+	@echo "  make continue-incomplete        # Only re-run incomplete tests (doesn't add new tests)"
+	@echo "                                  # Both automatically find latest test_matrix_results_*"
+	@echo "                                  # and remove incomplete runs before continuing"
 	@echo ""
 
 .PHONY: all memory-comparison update-graphs analyze-gpu clean mrproper data-clean help \
         train test-matrix test-matrix-yaml test-matrix-dry-run test-rerun summary \
         test-all-optimizers test-all-pruning test-everything \
-        parallel parallel-4 parallel-8 parallel-16 parallel-rerun continue
+        parallel parallel-4 parallel-8 parallel-16 parallel-rerun continue continue-incomplete
