@@ -15,6 +15,7 @@ import sys
 import json
 import psutil
 import argparse
+import itertools
 from pathlib import Path
 from datetime import datetime, timedelta
 import re
@@ -78,6 +79,108 @@ def find_test_matrix_dirs(base_dir="."):
     return matrix_dirs
 
 
+def parse_test_config(config_path):
+    """Parse config.txt to extract test matrix settings."""
+    config = {}
+
+    if not config_path.exists():
+        return config
+
+    with open(config_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith("#"):
+                continue
+
+            # Parse CONFIG_KEY=value or CONFIG_KEY="value"
+            if "=" in line:
+                key, value = line.split("=", 1)
+                # Remove CONFIG_ prefix
+                if key.startswith("CONFIG_"):
+                    key = key[7:]
+                # Remove quotes from value
+                value = value.strip('"')
+                config[key] = value
+
+    return config
+
+
+def generate_expected_tests(config):
+    """Generate expected test combinations from config."""
+    combinations = []
+
+    # Determine models
+    models = []
+    if config.get("MODEL_SELECT_RESNET50") == "y":
+        models = ["resnet50"]
+    elif config.get("MODEL_SELECT_RESNET18") == "y":
+        models = ["resnet18"]
+    elif config.get("MODEL_SELECT_LENET5") == "y":
+        models = ["lenet5"]
+
+    # Determine optimizers
+    optimizers = []
+    if config.get("OPTIMIZER_MODE_MULTIPLE") == "y":
+        if config.get("OPTIMIZER_ENABLE_SGD") == "y":
+            optimizers.append("sgd")
+        if config.get("OPTIMIZER_ENABLE_ADAM") == "y":
+            optimizers.append("adam")
+        if config.get("OPTIMIZER_ENABLE_ADAMW") == "y":
+            optimizers.append("adamw")
+        if config.get("OPTIMIZER_ENABLE_ADAMWADV") == "y":
+            optimizers.append("adamwadv")
+        if config.get("OPTIMIZER_ENABLE_ADAMWSPAM") == "y":
+            optimizers.append("adamwspam")
+        if config.get("OPTIMIZER_ENABLE_ADAMWPRUNE") == "y":
+            optimizers.append("adamwprune")
+
+    # Determine pruning methods
+    pruning_methods = []
+    if config.get("PRUNING_MODE_MULTIPLE") == "y":
+        if config.get("PRUNING_ENABLE_MOVEMENT") == "y":
+            pruning_methods.append("movement")
+        if config.get("PRUNING_ENABLE_STATE") == "y":
+            pruning_methods.append("state")
+        if config.get("PRUNING_ENABLE_MAGNITUDE") == "y":
+            pruning_methods.append("magnitude")
+
+    # Determine sparsity levels
+    sparsity_levels = []
+    if config.get("SPARSITY_ENABLE_50") == "y" or config.get("TEST_SPARSITY_50") == "y":
+        sparsity_levels.append("50")
+    if config.get("SPARSITY_ENABLE_70") == "y" or config.get("TEST_SPARSITY_70") == "y":
+        sparsity_levels.append("70")
+    if config.get("SPARSITY_ENABLE_90") == "y" or config.get("TEST_SPARSITY_90") == "y":
+        sparsity_levels.append("90")
+    if config.get("SPARSITY_ENABLE_95") == "y" or config.get("TEST_SPARSITY_95") == "y":
+        sparsity_levels.append("95")
+    if config.get("SPARSITY_ENABLE_99") == "y" or config.get("TEST_SPARSITY_99") == "y":
+        sparsity_levels.append("99")
+
+    # Generate all valid combinations
+    for model, optimizer, pruning in itertools.product(
+        models, optimizers, pruning_methods
+    ):
+        # Skip invalid combinations
+        if optimizer == "adamwprune" and pruning not in ["none", "state"]:
+            continue  # AdamWPrune only works with state-based pruning
+        if optimizer != "adamwprune" and pruning == "state":
+            continue  # State-based pruning is only for AdamWPrune
+
+        # For no pruning, sparsity is always 0
+        if pruning == "none":
+            test_name = f"{model}_{optimizer}_none"
+            combinations.append(test_name)
+        else:
+            # For pruning methods, add each sparsity level
+            for sparsity in sparsity_levels:
+                test_name = f"{model}_{optimizer}_{pruning}_{sparsity}"
+                combinations.append(test_name)
+
+    return combinations
+
+
 def analyze_test_directory(matrix_dir):
     """Analyze a test matrix directory for completion status."""
     matrix_path = Path(matrix_dir)
@@ -87,20 +190,28 @@ def analyze_test_directory(matrix_dir):
         "complete_tests": [],
         "incomplete_tests": [],
         "in_progress_tests": [],
+        "not_started_tests": [],
         "total_tests": 0,
         "average_time": 0,
+        "expected_tests": [],
     }
 
-    # Check for config to understand total expected tests
+    # Parse config to understand total expected tests
     config_file = matrix_path / "config.txt"
-    if not config_file.exists():
-        config_file = matrix_path / "config.yaml"
+    if config_file.exists():
+        config = parse_test_config(config_file)
+        results["expected_tests"] = generate_expected_tests(config)
+        results["total_tests"] = len(results["expected_tests"])
+
+    # Track which expected tests we've seen
+    seen_tests = set()
 
     # Analyze each test subdirectory
     for test_dir in matrix_path.iterdir():
         if not test_dir.is_dir() or test_dir.name in ["graphs", "logs", ".git"]:
             continue
 
+        seen_tests.add(test_dir.name)
         output_log = test_dir / "output.log"
         metrics_file = test_dir / "training_metrics.json"
 
@@ -193,6 +304,11 @@ def analyze_test_directory(matrix_dir):
     if completed_times:
         results["average_time"] = sum(completed_times) / len(completed_times)
 
+    # Find tests that haven't been started yet
+    for expected_test in results["expected_tests"]:
+        if expected_test not in seen_tests:
+            results["not_started_tests"].append({"name": expected_test})
+
     return results
 
 
@@ -203,8 +319,9 @@ def estimate_completion_time(analysis):
     # Get average time per test
     avg_time = analysis["average_time"]
     if avg_time == 0:
-        # No completed tests to base estimate on
-        return None
+        # No completed tests to base estimate on - use a default estimate
+        # Typical test takes around 30-60 minutes for ResNet50 on CIFAR100
+        avg_time = 45 * 60  # 45 minutes as default
 
     # Estimate for in-progress tests
     for test in analysis["in_progress_tests"]:
@@ -247,16 +364,22 @@ def estimate_completion_time(analysis):
     incomplete_count = len(analysis["incomplete_tests"])
     incomplete_time = incomplete_count * avg_time
 
+    # Add time for not-started tests
+    not_started_count = len(analysis["not_started_tests"])
+    not_started_time = not_started_count * avg_time
+
     # Calculate total remaining
     in_progress_remaining = sum(
         e["remaining_time"] for e in estimates.values() if e["remaining_time"] > 0
     )
-    total_remaining = in_progress_remaining + incomplete_time
+    total_remaining = in_progress_remaining + incomplete_time + not_started_time
 
     return {
         "in_progress_estimates": estimates,
         "incomplete_count": incomplete_count,
         "incomplete_time": incomplete_time,
+        "not_started_count": not_started_count,
+        "not_started_time": not_started_time,
         "total_remaining": total_remaining,
         "average_test_time": avg_time,
     }
@@ -317,9 +440,13 @@ def main():
         estimates = estimate_completion_time(analysis)
 
         # Display results
+        total_expected = len(analysis.get('expected_tests', []))
+        if total_expected > 0:
+            print(f"Expected tests: {total_expected}")
         print(f"Complete tests: {len(analysis['complete_tests'])}")
         print(f"In-progress tests: {len(analysis['in_progress_tests'])}")
         print(f"Incomplete tests: {len(analysis['incomplete_tests'])}")
+        print(f"Not started tests: {len(analysis['not_started_tests'])}")
 
         if analysis["average_time"] > 0:
             print(f"Average test time: {format_time(analysis['average_time'])}")
@@ -340,6 +467,12 @@ def main():
                 print(f"\nIncomplete tests to re-run: {estimates['incomplete_count']}")
                 print(
                     f"Estimated time for incomplete: {format_time(estimates['incomplete_time'])}"
+                )
+
+            if estimates.get("not_started_count", 0) > 0:
+                print(f"Not started tests to run: {estimates['not_started_count']}")
+                print(
+                    f"Estimated time for not started: {format_time(estimates.get('not_started_time', 0))}"
                 )
 
             print("\n" + "=" * 60)
