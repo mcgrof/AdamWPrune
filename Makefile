@@ -451,7 +451,7 @@ help:
 	@echo "                                  # Re-run only adamwprune tests with parallel execution"
 	@echo ""
 	@echo "Continuing interrupted test runs:"
-	@echo "  make continue                   # Continue latest test matrix (completes all remaining tests)"
+	@echo "  make continue                   # Complete entire test matrix (default - adds remaining tests)"
 	@echo "  make continue-incomplete        # Only re-run incomplete tests (doesn't add new tests)"
 	@echo "                                  # Both automatically find latest test_matrix_results_*"
 	@echo "                                  # and remove incomplete runs before continuing"

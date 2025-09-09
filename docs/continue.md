@@ -13,9 +13,15 @@ make continue
 This will automatically:
 1. Find your latest test matrix directory
 2. Identify incomplete runs
-3. Show you what needs to be re-run
-4. Clean up incomplete runs after confirmation
-5. Continue with the remaining tests
+3. Clean up incomplete runs after confirmation
+4. Re-run the incomplete tests
+5. Continue with all remaining tests from the original test plan
+
+If you only want to re-run incomplete tests without adding new ones:
+
+```bash
+make continue-incomplete
+```
 
 ## How It Works
 
@@ -46,10 +52,18 @@ When you run `make continue` or use the `--continue-dir` flag, the system:
 
 ### Basic Continuation
 
-Continue the most recent interrupted test matrix:
+Complete the entire test matrix (re-run incomplete + run remaining tests):
 
 ```bash
 make continue
+```
+
+### Re-run Only Incomplete Tests
+
+Re-run only the tests that were started but didn't complete:
+
+```bash
+make continue-incomplete
 ```
 
 ### Continue Specific Directory
@@ -57,6 +71,10 @@ make continue
 Continue a specific test matrix directory:
 
 ```bash
+# Re-run only incomplete tests
+python3 scripts/run_test_matrix.py --continue-dir test_matrix_results_20250908_121537 --incomplete-only
+
+# Complete entire matrix
 python3 scripts/run_test_matrix.py --continue-dir test_matrix_results_20250908_121537
 ```
 
