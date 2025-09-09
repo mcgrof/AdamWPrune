@@ -132,15 +132,21 @@ def analyze_test_directory(matrix_dir):
         else:
             # Check if it's currently running
             is_running = False
+
+            # First check if this test has actually started (has output.log)
+            if not output_log.exists():
+                results["incomplete_tests"].append({"name": test_dir.name})
+                continue
+
             for proc in find_running_train_processes():
-                # Check if process is running for this test
-                # Look in command line args for the output directory
+                # Check if process is running for this SPECIFIC test
+                # Look for exact match in command line args for the output directory
                 cmdline_str = " ".join(proc["cmdline"])
+                # Need exact match to avoid matching "resnet50_adam_movement_9" with "resnet50_adam_movement_90"
+                # Look for the full path or the test name in the json output path
                 if (
-                    str(test_dir) in proc["cwd"]
-                    or test_dir.name in proc["cwd"]
-                    or str(test_dir) in cmdline_str
-                    or test_dir.name in cmdline_str
+                    str(test_dir.absolute()) in cmdline_str
+                    or f"/{test_dir.name}/training_metrics.json" in cmdline_str
                 ):
                     is_running = True
                     # Estimate progress based on output.log
