@@ -156,6 +156,11 @@ test-matrix: check-config
 	fi
 	@$(MAKE) summary
 
+# Estimate completion time for running test matrix
+estimate:
+	@echo "Estimating completion time for running test matrix..."
+	@python3 scripts/estimate_completion.py
+
 # Continue an interrupted test matrix run
 continue:
 	@# Find the latest test_matrix* directory
@@ -436,7 +441,8 @@ help:
 	@echo "  make parallel-rerun TARGET=test_matrix_results_20250826_181029 OPTIMIZER=adamwprune"
 	@echo "                                  # Re-run only adamwprune tests with parallel execution"
 	@echo ""
-	@echo "Continuing interrupted test runs:"
+	@echo "Monitoring and continuation:"
+	@echo "  make estimate                   # Estimate completion time for running tests"
 	@echo "  make continue                   # Continue latest interrupted test matrix"
 	@echo "                                  # Automatically finds latest test_matrix_results_*,"
 	@echo "                                  # removes incomplete runs, and continues remaining tests"
@@ -445,4 +451,4 @@ help:
 .PHONY: all memory-comparison update-graphs analyze-gpu clean mrproper data-clean help \
         train test-matrix test-matrix-yaml test-matrix-dry-run test-rerun summary \
         test-all-optimizers test-all-pruning test-everything \
-        parallel parallel-4 parallel-8 parallel-16 parallel-rerun continue
+        parallel parallel-4 parallel-8 parallel-16 parallel-rerun continue estimate
