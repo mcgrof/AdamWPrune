@@ -877,10 +877,156 @@ def main():
         type=int,
         help="Override number of epochs for quick testing (e.g., 1 for smoke test)",
     )
+    parser.add_argument(
+        "--continue-dir",
+        help="Continue from an existing test matrix directory (clean and resume incomplete tests)",
+    )
     args = parser.parse_args()
 
+    # Handle continuation mode
+    if args.continue_dir:
+        import subprocess
+        from pathlib import Path
+
+        continue_dir = Path(args.continue_dir)
+        if not continue_dir.exists():
+            print(f"Error: Directory '{continue_dir}' does not exist")
+            sys.exit(1)
+
+        print(f"Continuing test matrix from: {continue_dir}")
+        print("=" * 60)
+
+        # First, identify incomplete runs
+        clean_cmd = [
+            "python3",
+            "scripts/clean_incomplete_runs.py",
+            str(continue_dir),
+            "--json-output",
+            "/tmp/incomplete_runs.json",
+        ]
+        result = subprocess.run(clean_cmd, capture_output=True, text=True)
+        print(result.stdout)
+
+        # Load the results
+        incomplete_info = None
+        if os.path.exists("/tmp/incomplete_runs.json"):
+            with open("/tmp/incomplete_runs.json", "r") as f:
+                incomplete_info = json.load(f)
+
+        if not incomplete_info or not incomplete_info.get("incomplete_runs"):
+            print("No incomplete runs found. Test matrix is complete.")
+            sys.exit(0)
+
+        # Get configuration from the original directory
+        config_file = continue_dir / "config.txt"
+        if not config_file.exists():
+            config_file = continue_dir / "config.yaml"
+            if not config_file.exists():
+                print(f"Error: No config file found in {continue_dir}")
+                sys.exit(1)
+
+        # Ask for confirmation to clean and continue
+        incomplete_runs = incomplete_info["incomplete_runs"]
+        complete_runs = incomplete_info["complete_runs"]
+
+        print(f"\nTest Matrix Continuation Plan:")
+        print(f"  Complete runs: {len(complete_runs)}")
+        print(f"  Incomplete runs to remove: {len(incomplete_runs)}")
+
+        # Parse config to get total expected tests
+        if config_file.suffix == ".yaml":
+            config = parse_yaml_config(str(config_file))
+        else:
+            config = parse_kconfig(str(config_file))
+
+        matrix = get_test_matrix(config)
+        all_combinations = generate_combinations(matrix)
+
+        # Determine which tests need to be run
+        complete_test_ids = set(complete_runs)
+        tests_to_run = []
+        for combo in all_combinations:
+            if combo["pruning"] == "none":
+                test_id = f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}"
+            else:
+                sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
+                test_id = f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}_{sparsity_pct}"
+
+            if test_id not in complete_test_ids:
+                tests_to_run.append(combo)
+
+        print(f"  Tests to run: {len(tests_to_run)}")
+
+        # Calculate time estimate based on completed tests
+        if complete_runs:
+            # Try to get timing from completed runs
+            total_time = 0
+            count = 0
+            for run_name in complete_runs:
+                metrics_file = continue_dir / run_name / "training_metrics.json"
+                if metrics_file.exists():
+                    try:
+                        with open(metrics_file, "r") as f:
+                            metrics = json.load(f)
+                            if "elapsed_time" in metrics:
+                                total_time += metrics["elapsed_time"]
+                                count += 1
+                    except:
+                        pass
+
+            if count > 0:
+                avg_time = total_time / count
+                estimated_time = avg_time * len(tests_to_run)
+                print(
+                    f"  Estimated time: {format_time(estimated_time)} (based on {count} completed runs)"
+                )
+
+        print("\nTests to be run:")
+        for combo in tests_to_run[:5]:  # Show first 5
+            if combo["pruning"] == "none":
+                test_id = f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}"
+            else:
+                sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
+                test_id = f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}_{sparsity_pct}"
+            print(f"  - {test_id}")
+        if len(tests_to_run) > 5:
+            print(f"  ... and {len(tests_to_run) - 5} more")
+
+        print("\n" + "=" * 60)
+        response = input("Remove incomplete runs and continue? (y/N): ").strip().lower()
+        if response != "y":
+            print("Aborted.")
+            sys.exit(0)
+
+        # Clean incomplete runs
+        print("\nCleaning incomplete runs...")
+        for run_name in incomplete_runs:
+            run_path = continue_dir / run_name
+            if run_path.exists():
+                shutil.rmtree(run_path)
+                print(f"  Removed: {run_name}")
+
+        # Set up to continue with the remaining tests
+        args.rerun_dir = str(continue_dir)
+        combinations = tests_to_run
+        output_dir = str(continue_dir)
+
+        # Load existing results for the report
+        existing_results = []
+        json_file = continue_dir / "all_results.json"
+        if json_file.exists():
+            with open(json_file, "r") as f:
+                existing_data = json.load(f)
+                existing_results = (
+                    existing_data if isinstance(existing_data, list) else []
+                )
+
+        # Skip the normal flow and jump to test execution
+        print(f"\nContinuing with {len(tests_to_run)} remaining tests...")
+        total_tests = len(tests_to_run)
+
     # Handle config directory mode
-    if args.config_dir:
+    elif args.config_dir:
         # Get all config files from directory
         config_dir = Path(args.config_dir)
         if not config_dir.exists():
@@ -961,33 +1107,35 @@ def main():
         print(f"Results saved to: {output_dir}")
         return
 
-    # Parse configuration (normal mode)
-    if args.config_yaml:
-        config = parse_yaml_config(args.config_yaml)
-        config_source = args.config_yaml
-    else:
-        config = parse_kconfig(args.config)
-        config_source = args.config
+    # Skip configuration parsing if we're in continuation mode (already done above)
+    if not args.continue_dir:
+        # Parse configuration (normal mode)
+        if args.config_yaml:
+            config = parse_yaml_config(args.config_yaml)
+            config_source = args.config_yaml
+        else:
+            config = parse_kconfig(args.config)
+            config_source = args.config
 
-    # Get test matrix
-    matrix = get_test_matrix(config)
+        # Get test matrix
+        matrix = get_test_matrix(config)
 
-    # Apply optimizer filter if specified
-    if args.filter_optimizer:
-        filter_optimizers = [o.strip() for o in args.filter_optimizer.split(",")]
-        matrix["optimizers"] = [
-            o for o in matrix["optimizers"] if o in filter_optimizers
-        ]
-        print(f"Filtering to optimizers: {', '.join(filter_optimizers)}")
+        # Apply optimizer filter if specified
+        if args.filter_optimizer:
+            filter_optimizers = [o.strip() for o in args.filter_optimizer.split(",")]
+            matrix["optimizers"] = [
+                o for o in matrix["optimizers"] if o in filter_optimizers
+            ]
+            print(f"Filtering to optimizers: {', '.join(filter_optimizers)}")
 
-    print("Test Matrix Configuration:")
-    print(f"  Models: {', '.join(matrix['models'])}")
-    print(f"  Optimizers: {', '.join(matrix['optimizers'])}")
-    print(f"  Pruning methods: {', '.join(matrix['pruning_methods'])}")
+        print("Test Matrix Configuration:")
+        print(f"  Models: {', '.join(matrix['models'])}")
+        print(f"  Optimizers: {', '.join(matrix['optimizers'])}")
+        print(f"  Pruning methods: {', '.join(matrix['pruning_methods'])}")
 
-    # Generate combinations
-    combinations = generate_combinations(matrix)
-    print(f"\nTotal test combinations: {len(combinations)}")
+        # Generate combinations
+        combinations = generate_combinations(matrix)
+        print(f"\nTotal test combinations: {len(combinations)}")
 
     if args.dry_run:
         print("\nDry run - would execute:")
@@ -1001,24 +1149,29 @@ def main():
         return
 
     # Create or use existing output directory
-    if args.rerun_dir:
+    # Note: args.continue_dir sets args.rerun_dir internally
+    if args.rerun_dir or args.continue_dir:
         # Use existing directory
-        output_dir = args.rerun_dir
+        output_dir = (
+            args.rerun_dir if not args.continue_dir else output_dir
+        )  # output_dir already set in continue mode
         if not os.path.exists(output_dir):
             print(f"Error: Rerun directory '{output_dir}' does not exist")
             sys.exit(1)
-        print(f"\nReusing existing directory: {output_dir}")
+        if not args.continue_dir:  # Only print this in normal rerun mode
+            print(f"\nReusing existing directory: {output_dir}")
 
         # Load existing results if available
-        existing_results = []
-        json_file = os.path.join(output_dir, "all_results.json")
-        if os.path.exists(json_file):
-            with open(json_file, "r") as f:
-                existing_data = json.load(f)
-                existing_results = (
-                    existing_data if isinstance(existing_data, list) else []
-                )
-            print(f"Found {len(existing_results)} existing test results")
+        if not args.continue_dir:  # In continue mode, existing_results already loaded
+            existing_results = []
+            json_file = os.path.join(output_dir, "all_results.json")
+            if os.path.exists(json_file):
+                with open(json_file, "r") as f:
+                    existing_data = json.load(f)
+                    existing_results = (
+                        existing_data if isinstance(existing_data, list) else []
+                    )
+                print(f"Found {len(existing_results)} existing test results")
     else:
         # Create new directory with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1027,8 +1180,8 @@ def main():
         existing_results = []
         print(f"\nOutput directory: {output_dir}")
 
-    # Save configuration (only for new runs)
-    if not args.rerun_dir:
+    # Save configuration (only for new runs, not rerun or continue)
+    if not args.rerun_dir and not args.continue_dir:
         if args.config_yaml:
             shutil.copy2(config_source, os.path.join(output_dir, "config.yaml"))
         else:
@@ -1057,53 +1210,58 @@ def main():
     else:
         results = []
 
-    total_tests = len(combinations)
+    if not args.continue_dir:  # In continue mode, total_tests already set
+        total_tests = len(combinations)
 
-    # Show test plan preview before starting
-    print("\n" + "=" * 60)
-    if total_tests == 1:
-        print("SINGLE TEST EXECUTION (using test matrix framework)")
-    else:
-        print("TEST MATRIX EXECUTION PLAN")
-    print("=" * 60)
-    print(f"Total tests to run: {total_tests}")
-    print(f"Parallel jobs: {args.parallel}")
-    print(f"Output directory: {output_dir}")
-    print("\nTests that will be executed:")
-
-    # Group tests by optimizer for clearer display
-    tests_by_optimizer = {}
-    for combo in combinations:
-        opt = combo["optimizer"]
-        if opt not in tests_by_optimizer:
-            tests_by_optimizer[opt] = []
-
-        if combo["pruning"] == "none":
-            test_desc = f"  - {combo['pruning']} (no sparsity)"
+    # Show test plan preview before starting (skip for continuation mode)
+    if not args.continue_dir:
+        print("\n" + "=" * 60)
+        if total_tests == 1:
+            print("SINGLE TEST EXECUTION (using test matrix framework)")
         else:
-            sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
-            test_desc = f"  - {combo['pruning']} @ {sparsity_pct}% sparsity"
-        tests_by_optimizer[opt].append(test_desc)
+            print("TEST MATRIX EXECUTION PLAN")
+        print("=" * 60)
+        print(f"Total tests to run: {total_tests}")
+        print(f"Parallel jobs: {args.parallel}")
+        print(f"Output directory: {output_dir}")
+        print("\nTests that will be executed:")
 
-    for optimizer in sorted(tests_by_optimizer.keys()):
-        # Check if AdamWPrune has a base optimizer configured
-        optimizer_display = optimizer.upper()
-        if optimizer == "adamwprune" and "ADAMWPRUNE_BASE_OPTIMIZER_NAME" in config:
-            base_opt = config["ADAMWPRUNE_BASE_OPTIMIZER_NAME"]
-            optimizer_display = f"{optimizer.upper()} (base: {base_opt.upper()})"
+    # Group tests by optimizer for clearer display (skip for continuation)
+    if not args.continue_dir:
+        tests_by_optimizer = {}
+        for combo in combinations:
+            opt = combo["optimizer"]
+            if opt not in tests_by_optimizer:
+                tests_by_optimizer[opt] = []
 
-        print(f"\n{optimizer_display} ({len(tests_by_optimizer[optimizer])} tests):")
-        for test in tests_by_optimizer[optimizer]:
-            print(test)
+            if combo["pruning"] == "none":
+                test_desc = f"  - {combo['pruning']} (no sparsity)"
+            else:
+                sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
+                test_desc = f"  - {combo['pruning']} @ {sparsity_pct}% sparsity"
+            tests_by_optimizer[opt].append(test_desc)
 
-    print("\n" + "=" * 60)
+        for optimizer in sorted(tests_by_optimizer.keys()):
+            # Check if AdamWPrune has a base optimizer configured
+            optimizer_display = optimizer.upper()
+            if optimizer == "adamwprune" and "ADAMWPRUNE_BASE_OPTIMIZER_NAME" in config:
+                base_opt = config["ADAMWPRUNE_BASE_OPTIMIZER_NAME"]
+                optimizer_display = f"{optimizer.upper()} (base: {base_opt.upper()})"
+
+            print(
+                f"\n{optimizer_display} ({len(tests_by_optimizer[optimizer])} tests):"
+            )
+            for test in tests_by_optimizer[optimizer]:
+                print(test)
+
+        print("\n" + "=" * 60)
 
     if not args.dry_run:
         # Check if YES=1 environment variable is set to skip confirmation
         auto_yes = os.environ.get("YES", "").strip() == "1"
 
-        # Always ask for confirmation unless YES=1 is set
-        if not auto_yes:
+        # Always ask for confirmation unless YES=1 is set or in continuation mode (already asked)
+        if not auto_yes and not args.continue_dir:
             print(
                 f"\nAbout to run {total_tests} training job{'s' if total_tests != 1 else ''}."
             )
@@ -1111,12 +1269,13 @@ def main():
             if response != "y":
                 print("Aborted by user.")
                 sys.exit(0)
-        else:
+        elif auto_yes and not args.continue_dir:
             print(
                 f"\nAuto-confirmed (YES=1): Running {total_tests} training job{'s' if total_tests != 1 else ''}."
             )
 
-        print("\nStarting test matrix execution...")
+        if not args.continue_dir:
+            print("\nStarting test matrix execution...")
 
     # Get parallel settings from config or args
     parallel_jobs = args.parallel
