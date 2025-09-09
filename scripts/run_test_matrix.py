@@ -24,6 +24,42 @@ import threading
 print_lock = threading.Lock()
 
 
+def format_time(seconds):
+    """Format seconds into a human-readable string."""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    elif seconds < 3600:
+        minutes = seconds / 60
+        return f"{minutes:.1f}m"
+    else:
+        hours = seconds / 3600
+        return f"{hours:.1f}h"
+
+
+def calculate_time_estimates(completed_results, remaining_tests):
+    """Calculate time estimates based on completed tests."""
+    if not completed_results:
+        return {}
+
+    # Calculate average time per test from completed results
+    successful_times = [
+        r["elapsed_time"]
+        for r in completed_results
+        if r.get("success", False) and "elapsed_time" in r
+    ]
+
+    if not successful_times:
+        return {}
+
+    avg_time_per_test = sum(successful_times) / len(successful_times)
+
+    return {
+        "per_test": avg_time_per_test,
+        "total_remaining": avg_time_per_test * remaining_tests,
+        "completed_count": len(successful_times),
+    }
+
+
 def get_gpu_memory_usage():
     """Get current GPU memory usage in MB."""
     try:
@@ -82,6 +118,7 @@ def run_single_test_wrapper(args):
         total_tests,
         max_memory_percent,
         override_epochs,
+        time_estimates,
     ) = args
 
     # Wait for GPU memory to be available
@@ -101,6 +138,7 @@ def run_single_test_wrapper(args):
         total_tests,
         parallel_mode=True,
         override_epochs=override_epochs,
+        time_estimates=time_estimates,
     )
 
     with print_lock:
@@ -466,6 +504,7 @@ def run_single_test(
     total_tests,
     parallel_mode=False,
     override_epochs=None,
+    time_estimates=None,
 ):
     """Run a single test combination."""
     model = combination["model"]
@@ -495,6 +534,18 @@ def run_single_test(
         if pruning != "none":
             print(f"Sparsity: {float(sparsity)*100:.0f}%")
         print(f"Output: {test_output_dir}")
+
+        # Show time estimates if available
+        if time_estimates:
+            if "per_test" in time_estimates:
+                print(
+                    f"Estimated time for this test: {format_time(time_estimates['per_test'])}"
+                )
+            remaining_tests = total_tests - test_num + 1
+            if "per_test" in time_estimates:
+                remaining_time = time_estimates["per_test"] * remaining_tests
+                print(f"Estimated time remaining: {format_time(remaining_time)}")
+
         print(f"{'='*60}")
 
     # Build command using GPU monitoring wrapper
@@ -1093,6 +1144,7 @@ def main():
                     total_tests,
                     max_memory_percent,
                     args.override_epochs,
+                    None,  # time_estimates - will be calculated dynamically
                 )
             )
 
@@ -1129,6 +1181,19 @@ def main():
     else:
         # Serial execution (original behavior)
         for i, combo in enumerate(combinations, 1):
+            # Calculate time estimates based on completed tests
+            time_estimates = None
+            if i > 1:  # After first test completes
+                time_estimates = calculate_time_estimates(results, total_tests - i + 1)
+                if (
+                    i == 2 and time_estimates
+                ):  # After first test, show full test plan estimate
+                    print(f"\n{'='*60}")
+                    print(
+                        f"Time Estimate: Based on first test, full test plan will take approximately {format_time(time_estimates['per_test'] * total_tests)}"
+                    )
+                    print(f"{'='*60}")
+
             result = run_single_test(
                 combo,
                 config,
@@ -1136,6 +1201,7 @@ def main():
                 i,
                 total_tests,
                 override_epochs=args.override_epochs,
+                time_estimates=time_estimates,
             )
             if result:
                 results.append(result)
