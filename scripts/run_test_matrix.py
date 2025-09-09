@@ -896,11 +896,12 @@ def main():
         print(f"Continuing test matrix from: {continue_dir}")
         print("=" * 60)
 
-        # First, identify incomplete runs
+        # First, identify incomplete runs (use --dry-run to avoid prompts)
         clean_cmd = [
             "python3",
             "scripts/clean_incomplete_runs.py",
             str(continue_dir),
+            "--dry-run",  # Don't prompt or remove anything yet
             "--json-output",
             "/tmp/incomplete_runs.json",
         ]
