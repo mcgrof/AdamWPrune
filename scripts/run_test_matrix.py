@@ -667,6 +667,23 @@ def run_single_test(
         else:
             metrics = {}
 
+        # Extract GPU memory stats from gpu_stats files
+        gpu_stats_files = list(Path(test_output_dir).glob("gpu_stats*.json"))
+        if gpu_stats_files:
+            # Read the most recent gpu_stats file
+            gpu_stats_file = sorted(gpu_stats_files)[-1]
+            try:
+                with open(gpu_stats_file, "r") as f:
+                    gpu_data = json.load(f)
+                    if gpu_data and isinstance(gpu_data, list):
+                        # Calculate mean and max memory usage
+                        memory_values = [d.get("memory_used", 0) for d in gpu_data if "memory_used" in d]
+                        if memory_values:
+                            metrics["gpu_memory_mean"] = sum(memory_values) / len(memory_values)
+                            metrics["gpu_memory_max"] = max(memory_values)
+            except Exception as e:
+                print(f"  Warning: Could not extract GPU memory data: {e}")
+
         # Add test metadata
         metrics["test_id"] = test_id
         metrics["model"] = model
@@ -732,6 +749,25 @@ def fix_all_results_json(results_dir):
         try:
             with open(metrics_file, "r") as f:
                 data = json.load(f)
+
+            # Extract GPU memory stats if not already present
+            if "gpu_memory_mean" not in data or "gpu_memory_max" not in data:
+                gpu_stats_files = list(test_dir.glob("gpu_stats*.json"))
+                if gpu_stats_files:
+                    # Read the most recent gpu_stats file
+                    gpu_stats_file = sorted(gpu_stats_files)[-1]
+                    try:
+                        with open(gpu_stats_file, "r") as gf:
+                            gpu_data = json.load(gf)
+                            if gpu_data and isinstance(gpu_data, list):
+                                # Calculate mean and max memory usage
+                                memory_values = [d.get("memory_used", 0) for d in gpu_data if "memory_used" in d]
+                                if memory_values:
+                                    data["gpu_memory_mean"] = sum(memory_values) / len(memory_values)
+                                    data["gpu_memory_max"] = max(memory_values)
+                                    fixed_count += 1
+                    except Exception:
+                        pass  # Silently skip if GPU data can't be read
 
             # Ensure test_id is set
             if "test_id" not in data or not data["test_id"]:

@@ -37,13 +37,23 @@ def regenerate_summary(results_dir):
         f.write(f"Successful: {successful}\n")
         f.write(f"Failed: {failed}\n\n")
 
+        # Check if we have GPU memory data
+        has_gpu_data = any(
+            "gpu_memory_mean" in r or "gpu_memory_max" in r for r in results
+        )
+
         # Results table
         f.write("Results Table:\n")
-        f.write("-" * 80 + "\n")
-        f.write(
-            f"{'Test ID':<40} {'Accuracy':<12} {'Sparsity':<12} {'Time (s)':<12} {'Status':<10}\n"
-        )
-        f.write("-" * 80 + "\n")
+        f.write("-" * 105 + "\n")
+        if has_gpu_data:
+            f.write(
+                f"{'Test ID':<40} {'Accuracy':<8} {'Sparsity':<8} {'GPU Mean (MiB)':<14} {'GPU Max (MiB)':<13} {'Status':<10}\n"
+            )
+        else:
+            f.write(
+                f"{'Test ID':<40} {'Accuracy':<12} {'Sparsity':<12} {'Time (s)':<12} {'Status':<10}\n"
+            )
+        f.write("-" * 105 + "\n")
 
         for result in results:
             test_id = result.get("test_id", "unknown")
@@ -58,9 +68,18 @@ def regenerate_summary(results_dir):
             elapsed = result.get("elapsed_time", 0.0)
             status = "✓ Success" if result.get("success") else "✗ Failed"
 
-            f.write(
-                f"{test_id:<40} {accuracy:<12.4f} {sparsity:<12.4f} {elapsed:<12.2f} {status:<10}\n"
-            )
+            if has_gpu_data:
+                gpu_mean = result.get("gpu_memory_mean", None)
+                gpu_max = result.get("gpu_memory_max", None)
+                gpu_mean_str = f"{gpu_mean:.1f}" if gpu_mean is not None else "N/A"
+                gpu_max_str = f"{gpu_max:.1f}" if gpu_max is not None else "N/A"
+                f.write(
+                    f"{test_id:<40} {accuracy:>8.4f} {sparsity:>8.4f} {gpu_mean_str:>14} {gpu_max_str:>13} {status:<10}\n"
+                )
+            else:
+                f.write(
+                    f"{test_id:<40} {accuracy:<12.4f} {sparsity:<12.4f} {elapsed:<12.2f} {status:<10}\n"
+                )
 
         f.write("-" * 80 + "\n\n")
 
@@ -103,6 +122,44 @@ def regenerate_summary(results_dir):
                 f.write(f"  {opt}: {test_id} ({acc:.4f})\n")
 
             f.write("\n")
+
+            # GPU Memory Analysis (if real data available)
+            gpu_results = [
+                r for r in success_results
+                if r.get("gpu_memory_mean") is not None
+            ]
+            
+            if gpu_results:
+                f.write("GPU Memory Usage (Real Measurements):\n")
+                f.write("-" * 80 + "\n")
+                
+                # Sort by GPU memory usage
+                gpu_results.sort(key=lambda x: x.get("gpu_memory_mean", float('inf')))
+                
+                f.write("Most Memory-Efficient Tests:\n")
+                for i, result in enumerate(gpu_results[:10], 1):
+                    test_id = result.get("test_id", "unknown")
+                    acc = result.get("final_accuracy", result.get("best_accuracy", 0))
+                    gpu_mean = result.get("gpu_memory_mean", 0)
+                    gpu_max = result.get("gpu_memory_max", 0)
+                    f.write(f"{i}. {test_id}:\n")
+                    f.write(f"   Accuracy: {acc:.2f}%, GPU Mean: {gpu_mean:.1f} MiB, GPU Max: {gpu_max:.1f} MiB\n")
+                
+                # Group by optimizer
+                gpu_by_optimizer = {}
+                for r in gpu_results:
+                    opt = r.get("optimizer", "unknown")
+                    if opt not in gpu_by_optimizer:
+                        gpu_by_optimizer[opt] = []
+                    gpu_by_optimizer[opt].append(r)
+                
+                f.write("\nGPU Memory by Optimizer:\n")
+                for opt in sorted(gpu_by_optimizer.keys()):
+                    opt_results = gpu_by_optimizer[opt]
+                    avg_memory = sum(r.get("gpu_memory_mean", 0) for r in opt_results) / len(opt_results)
+                    f.write(f"  {opt:12}: {avg_memory:8.1f} MiB (avg of {len(opt_results)} runs)\n")
+                
+                f.write("\n")
 
             # Memory efficiency analysis
             f.write("Memory Efficiency Analysis:\n")
