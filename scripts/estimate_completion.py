@@ -189,6 +189,7 @@ def analyze_test_directory(matrix_dir):
         "directory": str(matrix_path),
         "complete_tests": [],
         "incomplete_tests": [],
+        "failed_tests": [],
         "in_progress_tests": [],
         "not_started_tests": [],
         "total_tests": 0,
@@ -241,6 +242,28 @@ def analyze_test_directory(matrix_dir):
                 {"name": test_dir.name, "elapsed_time": elapsed_time}
             )
         else:
+            # Check if test failed
+            is_failed = False
+            if output_log.exists():
+                try:
+                    with open(output_log, "r") as f:
+                        content = f.read()
+                        if "ERROR - Training failed" in content or "AttributeError" in content or "Traceback" in content:
+                            is_failed = True
+                            # Try to extract error message
+                            error_msg = ""
+                            lines = content.split("\n")
+                            for i, line in enumerate(lines):
+                                if "AttributeError" in line or "ERROR" in line:
+                                    error_msg = line.strip()
+                                    break
+                            results["failed_tests"].append({"name": test_dir.name, "error": error_msg})
+                except Exception:
+                    pass
+
+            if is_failed:
+                continue
+
             # Check if it's currently running
             is_running = False
 
@@ -364,6 +387,10 @@ def estimate_completion_time(analysis):
     incomplete_count = len(analysis["incomplete_tests"])
     incomplete_time = incomplete_count * avg_time
 
+    # Add time for failed tests (will need to be fixed and re-run)
+    failed_count = len(analysis.get("failed_tests", []))
+    failed_time = failed_count * avg_time
+
     # Add time for not-started tests
     not_started_count = len(analysis["not_started_tests"])
     not_started_time = not_started_count * avg_time
@@ -372,12 +399,14 @@ def estimate_completion_time(analysis):
     in_progress_remaining = sum(
         e["remaining_time"] for e in estimates.values() if e["remaining_time"] > 0
     )
-    total_remaining = in_progress_remaining + incomplete_time + not_started_time
+    total_remaining = in_progress_remaining + incomplete_time + failed_time + not_started_time
 
     return {
         "in_progress_estimates": estimates,
         "incomplete_count": incomplete_count,
         "incomplete_time": incomplete_time,
+        "failed_count": failed_count,
+        "failed_time": failed_time,
         "not_started_count": not_started_count,
         "not_started_time": not_started_time,
         "total_remaining": total_remaining,
@@ -444,6 +473,17 @@ def main():
         if total_expected > 0:
             print(f"Expected tests: {total_expected}")
         print(f"Complete tests: {len(analysis['complete_tests'])}")
+
+        # Show failed tests prominently
+        if len(analysis.get('failed_tests', [])) > 0:
+            print(f"\n⚠️  FAILED TESTS: {len(analysis['failed_tests'])}")
+            for failed in analysis['failed_tests']:
+                error_msg = failed.get('error', 'Unknown error')
+                if len(error_msg) > 60:
+                    error_msg = error_msg[:60] + "..."
+                print(f"   ✗ {failed['name']}: {error_msg}")
+            print()
+
         print(f"In-progress tests: {len(analysis['in_progress_tests'])}")
         print(f"Incomplete tests: {len(analysis['incomplete_tests'])}")
         print(f"Not started tests: {len(analysis['not_started_tests'])}")
@@ -462,6 +502,12 @@ def main():
                 if est.get("using_average", False):
                     time_str += " (based on average)"
                 print(f"    Time remaining: {time_str}")
+
+            if estimates.get("failed_count", 0) > 0:
+                print(f"\n⚠️  Failed tests to fix and re-run: {estimates['failed_count']}")
+                print(
+                    f"Estimated time for failed (after fixing): {format_time(estimates.get('failed_time', 0))}"
+                )
 
             if estimates["incomplete_count"] > 0:
                 print(f"\nIncomplete tests to re-run: {estimates['incomplete_count']}")

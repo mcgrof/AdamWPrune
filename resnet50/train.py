@@ -380,6 +380,15 @@ if __name__ == "__main__":
         "--spam-theta", type=float, default=50.0, help="SPAM theta parameter"
     )
     parser.add_argument(
+        "--spam-interval", type=int, default=0, help="SPAM interval (0=disabled)"
+    )
+    parser.add_argument(
+        "--spam-warmup-steps", type=int, default=0, help="SPAM warmup steps"
+    )
+    parser.add_argument(
+        "--spam-enable-clip", action="store_true", help="Enable SPAM gradient clipping"
+    )
+    parser.add_argument(
         "--adamwprune-beta1", type=float, default=0.9, help="AdamWPrune beta1"
     )
     parser.add_argument(
