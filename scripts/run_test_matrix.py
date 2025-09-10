@@ -712,13 +712,114 @@ def run_single_test(
         }
 
 
+def fix_all_results_json(results_dir):
+    """Fix all_results.json by rebuilding from individual training_metrics.json files."""
+    results_path = Path(results_dir)
+    all_results_file = results_path / "all_results.json"
+
+    # Collect all results from individual test directories
+    all_results = []
+    fixed_count = 0
+
+    for test_dir in sorted(results_path.glob("resnet*")):
+        if not test_dir.is_dir():
+            continue
+
+        metrics_file = test_dir / "training_metrics.json"
+        if not metrics_file.exists():
+            continue
+
+        try:
+            with open(metrics_file, "r") as f:
+                data = json.load(f)
+
+            # Ensure test_id is set
+            if "test_id" not in data or not data["test_id"]:
+                data["test_id"] = test_dir.name
+                fixed_count += 1
+
+            # Parse test directory name to get model, optimizer, pruning, sparsity
+            test_name = test_dir.name
+            parts = test_name.split("_")
+
+            # Expected format: model_optimizer_pruning_sparsity
+            if "model" not in data or not data["model"]:
+                data["model"] = parts[0] if len(parts) > 0 else "unknown"
+            if "optimizer" not in data or not data["optimizer"]:
+                data["optimizer"] = parts[1] if len(parts) > 1 else "unknown"
+            if "pruning" not in data or not data["pruning"]:
+                data["pruning"] = parts[2] if len(parts) > 2 else "none"
+
+            # Get sparsity from name or from data
+            if "target_sparsity" not in data:
+                if len(parts) > 3:
+                    data["target_sparsity"] = float(parts[3]) / 100.0
+                elif "final_sparsity" in data:
+                    data["target_sparsity"] = data["final_sparsity"]
+                else:
+                    data["target_sparsity"] = 0.0
+
+            # Ensure required fields exist
+            if "success" not in data:
+                data["success"] = True
+            if "total_time" not in data and "elapsed_time" in data:
+                data["total_time"] = data["elapsed_time"]
+
+            all_results.append(data)
+
+        except Exception as e:
+            print(f"Warning: Could not process {test_dir.name}: {e}")
+
+    # Check if we need to update the file
+    needs_update = False
+    if all_results_file.exists():
+        try:
+            with open(all_results_file, "r") as f:
+                existing_data = json.load(f)
+            if len(existing_data) != len(all_results) or fixed_count > 0:
+                needs_update = True
+        except:
+            needs_update = True
+    else:
+        needs_update = True
+
+    if needs_update:
+        # Save the fixed all_results.json
+        with open(all_results_file, "w") as f:
+            json.dump(all_results, f, indent=2)
+        print(f"Fixed all_results.json: {len(all_results)} tests found")
+        if fixed_count > 0:
+            print(f"  Repaired {fixed_count} test entries with missing metadata")
+
+    return all_results
+
+
 def create_summary_report(results, output_dir):
     """Create a summary report of all test results."""
     json_file = os.path.join(output_dir, "all_results.json")
 
-    # Save JSON results
+    # Load existing results if they exist (for continuation mode)
+    existing_results = []
+    if os.path.exists(json_file):
+        try:
+            with open(json_file, "r") as f:
+                existing_data = json.load(f)
+                if isinstance(existing_data, list):
+                    existing_results = existing_data
+        except Exception as e:
+            print(f"Warning: Could not load existing results: {e}")
+
+    # Merge existing and new results, avoiding duplicates
+    merged_results = existing_results.copy()
+    existing_test_ids = {r.get("test_id") for r in existing_results if "test_id" in r}
+
+    for result in results:
+        if result.get("test_id") not in existing_test_ids:
+            merged_results.append(result)
+
+    # Save merged JSON results
     with open(json_file, "w") as f:
-        json.dump(results, f, indent=2)
+        json.dump(merged_results, f, indent=2)
 
     # Import and use the regenerate_summary module for consistent reporting
     try:
@@ -889,6 +990,10 @@ def main():
     args = parser.parse_args()
 
     # Handle continuation mode
+    if args.continue_dir:
+        # First, fix any broken all_results.json by rebuilding from training_metrics.json files
+        fix_all_results_json(args.continue_dir)
+
     if args.continue_dir:
         import subprocess
         from pathlib import Path
