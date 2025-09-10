@@ -881,6 +881,11 @@ def main():
         "--continue-dir",
         help="Continue from an existing test matrix directory (clean and resume incomplete tests)",
     )
+    parser.add_argument(
+        "--yes", "-y",
+        action="store_true",
+        help="Automatically answer yes to all prompts"
+    )
     args = parser.parse_args()
 
     # Handle continuation mode
@@ -914,7 +919,40 @@ def main():
             with open("/tmp/incomplete_runs.json", "r") as f:
                 incomplete_info = json.load(f)
 
-        if not incomplete_info or not incomplete_info.get("incomplete_runs"):
+        # Check if we have failed tests but no incomplete ones (special case)
+        incomplete_runs = incomplete_info.get("incomplete_runs", [])
+        failed_runs = incomplete_info.get("failed_runs", [])
+
+        if not incomplete_runs and failed_runs:
+            # All tests completed but some failed - offer to re-run failed tests only
+            print(f"\n⚠️  All tests completed but {len(failed_runs)} test(s) FAILED:")
+            for failed_test in failed_runs:
+                print(f"   ✗ {failed_test}")
+
+            print(f"\nWould you like to remove and re-run only the failed tests?")
+            if not args.yes:
+                response = input("Continue? (y/N): ").strip().lower()
+                if response != "y":
+                    print("Aborted.")
+                    sys.exit(0)
+            else:
+                print("Auto-accepting due to --yes flag")
+
+            # Remove failed tests
+            for failed_test in failed_runs:
+                failed_dir = continue_dir / failed_test
+                if failed_dir.exists():
+                    import shutil
+                    shutil.rmtree(failed_dir)
+                    print(f"Removed: {failed_test}")
+
+            # Set incomplete_runs to failed_runs for processing below
+            incomplete_runs = failed_runs
+            incomplete_info["incomplete_runs"] = failed_runs
+        elif not incomplete_runs and not failed_runs:
+            print("No incomplete or failed runs found. Test matrix is complete!")
+            sys.exit(0)
+        elif not incomplete_runs:
             print("No incomplete runs found. Test matrix is complete.")
             sys.exit(0)
 
@@ -926,13 +964,19 @@ def main():
                 print(f"Error: No config file found in {continue_dir}")
                 sys.exit(1)
 
-        # Ask for confirmation to clean and continue
-        incomplete_runs = incomplete_info["incomplete_runs"]
-        complete_runs = incomplete_info["complete_runs"]
+        # Get run information
+        incomplete_runs = incomplete_info.get("incomplete_runs", [])
+        complete_runs = incomplete_info.get("complete_runs", [])
+        failed_runs_from_info = incomplete_info.get("failed_runs", [])
 
         print(f"\nTest Matrix Continuation Plan:")
         print(f"  Complete runs: {len(complete_runs)}")
-        print(f"  Incomplete runs to remove: {len(incomplete_runs)}")
+        if failed_runs_from_info and failed_runs == failed_runs_from_info:
+            print(f"  Failed runs to re-run: {len(failed_runs)}")
+        else:
+            print(f"  Incomplete runs to remove: {len(incomplete_runs)}")
+            if failed_runs_from_info:
+                print(f"  Failed runs: {len(failed_runs_from_info)} (not being re-run)")
 
         # Parse config to get total expected tests
         if config_file.suffix == ".yaml":
