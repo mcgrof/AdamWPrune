@@ -14,10 +14,10 @@ AdamWPrune demonstrates efficient neural network compression by reusing Adam opt
 |-------|------------|---------|----------|------------|----------|------------|
 | LeNet-5 | 61.7K | MNIST | 70% | 434.5 MiB* | 98.9% | 22.74/100MiB |
 | ResNet-18 | 11.2M | CIFAR-10 | 70% | 1489.2 MiB | 90.66% | 6.09/100MiB |
-| **ResNet-50** | **25.6M** | **ImageNet** | **0%** | **12,270 MiB** | **72.92%** | **5.94/100MiB** |
+| **ResNet-50** | **25.6M** | **ImageNet** | **0%†** | **12,270 MiB** | **72.92%** | **5.94/100MiB** |
 
-*CUDA/PyTorch baseline overhead (~450 MiB) dominates for small models
-**ResNet-50: Lowest memory usage among all optimizers tested
+*CUDA/PyTorch baseline overhead (~450 MiB) dominates for small models  
+†ResNet-50: State pruning didn't trigger (needs tuning), yet still achieved lowest memory usage
 
 ### GPU Memory Analysis
 
