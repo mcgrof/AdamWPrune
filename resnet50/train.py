@@ -446,6 +446,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--adamwprune-amsgrad", type=str, default="true", help="AdamWPrune AMSGrad"
     )
+    parser.add_argument(
+        "--adamwprune-base-optimizer-name",
+        type=str,
+        default="adamw",
+        choices=["adam", "adamw", "adamwadv", "adamwspam"],
+        help="Base optimizer for AdamWPrune (default: adamw)",
+    )
 
     # Pruning
     parser.add_argument(
