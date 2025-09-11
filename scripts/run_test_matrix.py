@@ -1125,13 +1125,44 @@ def main():
             
             if tests_to_run:
                 print(f"\nRunning {len(tests_to_run)} missing test(s)...")
-                all_results = run_test_matrix(
-                    tests_to_run, 
-                    config, 
-                    str(continue_dir),
-                    parallel=(config.get("TEST_PARALLEL_ENABLED") == "y")
-                )
-                create_summary_report(all_results, str(continue_dir))
+                
+                # Run the missing tests
+                all_results = []
+                for i, combo in enumerate(tests_to_run, 1):
+                    print(f"\n{'='*60}")
+                    result = run_single_test(
+                        combo,
+                        config,
+                        str(continue_dir),
+                        i,
+                        len(tests_to_run),
+                        parallel_mode=False,
+                        override_epochs=None,
+                        time_estimates=None
+                    )
+                    if result:
+                        all_results.append(result)
+                
+                # Update summary
+                if all_results:
+                    # Reload existing results
+                    json_file = os.path.join(str(continue_dir), "all_results.json")
+                    existing_results = []
+                    if os.path.exists(json_file):
+                        with open(json_file, "r") as f:
+                            existing_data = json.load(f)
+                            if isinstance(existing_data, list):
+                                existing_results = existing_data
+                    
+                    # Merge results
+                    for result in all_results:
+                        existing_results.append(result)
+                    
+                    # Save updated results
+                    with open(json_file, "w") as f:
+                        json.dump(existing_results, f, indent=2)
+                    
+                    create_summary_report(existing_results, str(continue_dir))
                 print(f"\n✓ Completed {len(tests_to_run)} missing test(s)")
                 sys.exit(0)
 
