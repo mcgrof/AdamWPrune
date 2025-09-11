@@ -21,7 +21,11 @@ from torchvision import datasets, transforms
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.gpu_monitoring import GPUMonitor
-from lib.optimizers import create_optimizer, apply_adamprune_masking, update_adamprune_masks
+from lib.optimizers import (
+    create_optimizer,
+    apply_adamprune_masking,
+    update_adamprune_masks,
+)
 from lib.movement_pruning import MovementPruning
 from lib.magnitude_pruning import MagnitudePruning
 from model import resnet50
@@ -255,10 +259,14 @@ def main(args):
         # State-based pruning is built into AdamWPrune
         if adamprune_state and adamprune_state.get("pruning_enabled"):
             print(f"Using built-in state-based pruning in AdamWPrune")
-            print(f"Target sparsity: {adamprune_state.get('target_sparsity', args.target_sparsity):.1%}")
+            print(
+                f"Target sparsity: {adamprune_state.get('target_sparsity', args.target_sparsity):.1%}"
+            )
             print(f"Warmup steps: {adamprune_state.get('warmup_steps', 100)}")
         else:
-            print("WARNING: State pruning requested but AdamWPrune pruning not enabled!")
+            print(
+                "WARNING: State pruning requested but AdamWPrune pruning not enabled!"
+            )
             print("Make sure to set pruning parameters when creating optimizer")
     elif args.pruning_method in ["movement", "magnitude"]:
         # Calculate total training steps for pruning schedule
