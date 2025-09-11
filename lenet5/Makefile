@@ -46,7 +46,7 @@ help:
 	@echo "  cd .. && make menuconfig        # Interactive configuration"
 	@echo "  cd .. && make list-defconfigs   # Show available presets"
 	@echo "  cd .. && make train             # Train with current config"
-	@echo "  cd .. && make test-matrix       # Run comprehensive tests"
+	@echo "  cd .. && make test-matrix       # Run full test matrix"
 	@echo ""
 	@echo "Local targets:"
 	@echo "  clean                           # Clean build artifacts"

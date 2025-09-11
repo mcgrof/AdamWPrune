@@ -161,7 +161,7 @@ The decision to base AdamWPrune on AdamW rather than Adam is validated by our re
 
 ## Conclusions
 
-The comprehensive ResNet-18 testing validates AdamWPrune's effectiveness:
+The ResNet-18 testing validates AdamWPrune's effectiveness:
 
 1. **Proper Foundation**: AdamW base with correct weight decay implementation
 2. **Competitive Performance**: Achieves 90.69% accuracy, tied with movement pruning

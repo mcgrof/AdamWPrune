@@ -8,7 +8,7 @@ State-based pruning uses the optimizer's internal states (like Adam's momentum a
 
 ## Key Findings from ResNet-18 Experiments
 
-Our comprehensive testing on ResNet-18 with CIFAR-10 revealed important insights:
+Our testing on ResNet-18 with CIFAR-10 revealed important insights:
 
 ### Optimizer Performance (No Pruning)
 - **AdamW**: 90.30% accuracy - Proper weight decay implementation

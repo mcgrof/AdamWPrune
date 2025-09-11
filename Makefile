@@ -23,7 +23,7 @@ MODEL ?= $(if $(CONFIG_MODEL),$(CONFIG_MODEL),lenet5)
 # Run memory comparison experiments using test matrix
 memory-comparison: check-config
 	@echo "Running memory comparison experiments..."
-	@echo "Use 'make test-matrix' for comprehensive optimizer/pruning comparisons"
+	@echo "Use 'make test-matrix' for full optimizer/pruning comparisons"
 	@echo "Or configure specific tests with 'make menuconfig' then 'make train'"
 
 # Update graphs with latest results

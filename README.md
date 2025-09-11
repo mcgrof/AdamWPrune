@@ -22,7 +22,7 @@ AdamWPrune demonstrates efficient neural network compression by reusing Adam opt
 
 #### Critical Finding: Optimal Optimizer Changes with Model Scale
 
-Our comprehensive testing reveals that **the best-performing optimizer depends on model size**:
+Our testing reveals that **the best-performing optimizer depends on model size**:
 
 **ResNet-18 (11.2M parameters, CIFAR-10):**
 - **Winner: AdamW** (90.30% accuracy)
@@ -88,7 +88,7 @@ Our comprehensive testing reveals that **the best-performing optimizer depends o
 ![Memory vs Accuracy Scatter](images/resnet18/memory_vs_accuracy_scatter.png)
 *Memory-accuracy trade-off: State and movement pruning achieve similar memory usage (~1489 MB) with comparable accuracy*
 
-→ See [ResNet-18 detailed findings](docs/resnet18.md) for comprehensive analysis
+→ See [ResNet-18 detailed findings](docs/resnet18.md) for detailed analysis
 
 #### LeNet-5 Comprehensive Analysis
 ![LeNet-5 Memory Analysis](images/lenet5/training_memory_comparison.png)
@@ -143,7 +143,7 @@ AdamWPrune is built on AdamW rather than Adam for critical reasons:
 ## Features
 
 - **Multi-Model Support**: Extensible architecture supporting LeNet-5, ResNet-18, and more
-- **GPU Optimization**: Optimized for modern GPUs with comprehensive monitoring
+- **GPU Optimization**: Optimized for modern GPUs with detailed monitoring
 - **Vendor-Agnostic GPU Monitoring**: Uses [gputop.py](https://github.com/mcgrof/gputop) for consistent memory tracking across NVIDIA/AMD/Intel GPUs
 - **Multiple Pruning Methods**: Movement, magnitude, and state-based pruning
 - **Kconfig System**: Linux kernel-style configuration for experiment management

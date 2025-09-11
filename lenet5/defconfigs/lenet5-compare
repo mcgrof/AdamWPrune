@@ -1,4 +1,4 @@
-# LeNet-5 comprehensive test matrix
+# LeNet-5 full test matrix
 # Tests all optimizers with all pruning methods at multiple sparsity levels
 CONFIG_MODEL_MODE_SINGLE=y
 CONFIG_MODEL_SELECT_LENET5=y
