@@ -191,8 +191,16 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     ax4.set_ylabel("Final Accuracy (%)")
     ax4.set_title("Final Accuracy Comparison")
     # Dynamic y-limits with padding
-    y_min = min(final_accs) * 0.98 if final_accs else 90
-    y_max = max(final_accs) * 1.02 if final_accs else 100
+    if final_accs:
+        y_min = min(final_accs) * 0.98
+        y_max = max(final_accs) * 1.02
+        # Ensure y_min and y_max are different to avoid matplotlib warning
+        if abs(y_max - y_min) < 0.1:
+            y_center = (y_min + y_max) / 2
+            y_min = y_center - 1
+            y_max = y_center + 1
+    else:
+        y_min, y_max = 90, 100
     ax4.set_ylim([y_min, y_max])
     ax4.grid(True, alpha=0.3, axis="y")
 
@@ -257,6 +265,11 @@ def create_optimizer_comparison(optimizer, tests, results_dir, output_dir):
     if final_accs:
         y_min = min(final_accs) * 0.98
         y_max = max(final_accs) * 1.02
+        # Ensure y_min and y_max are different to avoid matplotlib warning
+        if abs(y_max - y_min) < 0.1:
+            y_center = (y_min + y_max) / 2
+            y_min = y_center - 1
+            y_max = y_center + 1
         ax6.set_ylim([y_min, y_max])
     else:
         ax6.set_ylim([90, 100])
