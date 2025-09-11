@@ -239,6 +239,8 @@ python train.py --optimizer adamwprune --pruning-method state --target-sparsity 
 - **AdamWSpam**: Spike-aware pruning with momentum reset
 - **AdamWPrune**: State-based pruning using optimizer dynamics
 
+📚 **[Understanding Adam Optimizers: A Complete Guide](docs/adam-optimizers.md)** - Learn about the evolution from Adam to AdamW and modern variants, with practical guidelines for choosing the right optimizer for your model.
+
 ## Movement Pruning
 
 Based on ["Movement Pruning: Adaptive Sparsity by Fine-Tuning"](https://arxiv.org/abs/2005.07683) by Sanh et al. (2020). Tracks weight movement patterns to determine importance.
