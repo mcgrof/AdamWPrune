@@ -49,6 +49,8 @@ update-graphs: check-config generate-config
 		MODEL_DIR="lenet5"; \
 	elif ls "$$RESULTS_DIR" | grep -q "^resnet18_"; then \
 		MODEL_DIR="resnet18"; \
+	elif ls "$$RESULTS_DIR" | grep -q "^resnet50_"; then \
+		MODEL_DIR="resnet50"; \
 	else \
 		echo "Warning: Could not detect model type, defaulting to lenet5"; \
 		MODEL_DIR="lenet5"; \

@@ -5,7 +5,8 @@
 import os
 import json
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
+
+matplotlib.use("Agg")  # Use non-interactive backend
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
@@ -252,11 +253,14 @@ def create_memory_timeline_comparison(results_dir, output_dir):
 
     fig, ax = plt.subplots(figsize=(14, 8))
 
-    # Find all test directories
+    # Find all test directories (model-agnostic)
     test_dirs = [
         d
         for d in os.listdir(results_dir)
-        if os.path.isdir(os.path.join(results_dir, d)) and d.startswith("resnet18_")
+        if os.path.isdir(os.path.join(results_dir, d))
+        and any(
+            d.startswith(f"{model}_") for model in ["lenet5", "resnet18", "resnet50"]
+        )
     ]
 
     # Unique colors for each configuration
@@ -286,7 +290,7 @@ def create_memory_timeline_comparison(results_dir, output_dir):
         if len(parts) >= 2:
             optimizer = parts[1]
             pruning_info = "_".join(parts[2:]) if len(parts) > 2 else "none"
-            
+
             # Handle the "_0" suffix for baseline tests
             if pruning_info == "none_0":
                 pruning_info = "none"
@@ -366,7 +370,9 @@ def create_memory_timeline_comparison(results_dir, output_dir):
 
     # Legend with two columns (only if there's data to plot)
     if plot_data:
-        ax.legend(loc="upper right", fontsize=9, ncol=2, framealpha=0.95, edgecolor="black")
+        ax.legend(
+            loc="upper right", fontsize=9, ncol=2, framealpha=0.95, edgecolor="black"
+        )
 
     ax.grid(True, alpha=0.3)
 
