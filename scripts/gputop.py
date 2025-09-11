@@ -2443,7 +2443,7 @@ class GPUTop:
             axes[3, 0].set_yticks([])
 
         # All Temperature Sensors Overlay (Row 4, Column 2)
-        # Show all available temperature sensors for comprehensive view
+        # Show all available temperature sensors for complete view
         if common_sensors:
             for sensor in sorted(common_sensors):
                 # Plot Run 1

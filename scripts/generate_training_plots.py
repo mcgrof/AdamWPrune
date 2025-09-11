@@ -87,7 +87,7 @@ def extract_data(metrics):
 
 
 def create_plot(data, output_file):
-    """Create a comprehensive training plot."""
+    """Create a training plot."""
     # Determine subplot layout based on available data
     has_sparsity = any(s > 0 for s in data["sparsities"])
     num_plots = 4 if has_sparsity else 3

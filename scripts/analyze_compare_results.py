@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Analyze and visualize results from optimizer state pruning battle.
-Generates comprehensive comparison graphs for training and inference GPU memory usage.
+Generates comparison graphs for training and inference GPU memory usage.
 """
 
 import json
@@ -82,8 +82,8 @@ def collect_battle_data(directory):
     return data
 
 
-def create_comprehensive_battle_plot(data, output_file):
-    """Create comprehensive battle visualization."""
+def create_battle_plot(data, output_file):
+    """Create battle visualization."""
     fig = plt.figure(figsize=(20, 14))
     gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
 
@@ -456,7 +456,7 @@ def create_comprehensive_battle_plot(data, output_file):
 
     plt.tight_layout()
     plt.savefig(output_file, dpi=150, bbox_inches="tight")
-    print(f"Saved comprehensive battle analysis to {output_file}")
+    print(f"Saved battle analysis to {output_file}")
 
     return table_data
 
@@ -523,8 +523,8 @@ def main():
         print("Make sure to run the battle with CONFIG_GPU_MONITOR=y")
         return
 
-    # Create comprehensive visualization
-    table_data = create_comprehensive_battle_plot(data, args.output)
+    # Create visualization
+    table_data = create_battle_plot(data, args.output)
 
     # Print summary
     print_summary(data)

@@ -93,7 +93,7 @@ sorted_models = sorted(
     key=lambda x: x[1]["target_sparsity"] if x[1]["target_sparsity"] is not None else 0,
 )
 
-# Create a comprehensive comparison figure
+# Create a full comparison figure
 fig = plt.figure(figsize=(18, 14))
 fig.suptitle(
     f"LeNet-5 Model Comparison: {args.test_prefix} vs Movement Pruning",
@@ -286,7 +286,7 @@ ax6.set_ylim([94, 100])
 
 plt.tight_layout()
 plt.savefig(args.compare_output, dpi=150, bbox_inches="tight")
-print(f"Saved comprehensive comparison plot as {args.compare_output}")
+print(f"Saved full comparison plot as {args.compare_output}")
 
 # Create a detailed performance table
 print("\n" + "=" * 80)

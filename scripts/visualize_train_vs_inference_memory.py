@@ -69,7 +69,7 @@ def load_gpu_memory_stats(test_dir):
 
 
 def create_training_memory_comparison(results_dir, output_dir):
-    """Create comprehensive training memory comparison visualization."""
+    """Create training memory comparison visualization."""
 
     results = load_test_results(results_dir)
     if not results:

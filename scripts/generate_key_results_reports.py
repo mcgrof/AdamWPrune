@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate markdown reports for key test results in data/key_results/
-Each report provides comprehensive analysis of test matrix results.
+Each report provides detailed analysis of test matrix results.
 """
 
 import os

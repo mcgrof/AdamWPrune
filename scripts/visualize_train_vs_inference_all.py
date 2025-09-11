@@ -82,7 +82,7 @@ def get_optimizer_from_file(filepath):
 
 
 def create_comparison_plot(training_data, inference_data, output_file):
-    """Create comprehensive comparison plot."""
+    """Create comparison plot."""
     fig = plt.figure(figsize=(18, 12))
     gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
 
@@ -328,7 +328,7 @@ def create_comparison_plot(training_data, inference_data, output_file):
     ax_table = fig.add_subplot(gs[2, :])
     ax_table.axis("off")
 
-    # Create comprehensive summary table
+    # Create summary table
     table_data = [
         [
             "Optimizer",
@@ -422,7 +422,7 @@ def create_comparison_plot(training_data, inference_data, output_file):
 
     plt.tight_layout()
     plt.savefig(output_file, dpi=150, bbox_inches="tight")
-    print(f"Saved comprehensive comparison to {output_file}")
+    print(f"Saved comparison to {output_file}")
 
     return sorted_opts, training_data
 

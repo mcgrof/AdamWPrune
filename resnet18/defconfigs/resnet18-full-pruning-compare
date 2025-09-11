@@ -30,7 +30,7 @@ CONFIG_DATA_DIR="data"
 CONFIG_OUTPUT_DIR="results"
 CONFIG_JSON_OUTPUT="training_metrics.json"
 
-# Enable all optimizers for comprehensive comparison
+# Enable all optimizers for full comparison
 CONFIG_OPTIMIZER_ENABLE_SGD=y
 CONFIG_OPTIMIZER_ENABLE_ADAM=y
 CONFIG_OPTIMIZER_ENABLE_ADAMW=y
