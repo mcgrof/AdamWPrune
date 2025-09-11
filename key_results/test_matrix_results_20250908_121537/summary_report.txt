@@ -1,0 +1,114 @@
+Test Matrix Summary Report (Regenerated)
+Generated: 2025-09-10T16:52:33.977682
+From: test_matrix_results_20250908_121537
+================================================================================
+
+Total tests: 6
+Successful: 6
+Failed: 0
+
+Results Table:
+---------------------------------------------------------------------------------------------------------
+Test ID                                  Accuracy Sparsity GPU Mean (MiB) GPU Max (MiB) Status    
+---------------------------------------------------------------------------------------------------------
+resnet50_adam_movement_70                 71.2300   0.7000        12594.1       12607.0 ✓ Success 
+resnet50_adamw_movement_70                71.3400   0.7000        12595.3       12607.0 ✓ Success 
+resnet50_adamwadv_movement_70             70.6500   0.7000        12689.3       12702.0 ✓ Success 
+resnet50_adamwprune_state_70              72.9200   0.0000        12270.0       12281.0 ✓ Success 
+resnet50_adamwspam_movement_70            72.1800   0.7000        12690.2       12702.0 ✓ Success 
+resnet50_sgd_movement_70                  74.5700   0.7000        12493.4       12558.0 ✓ Success 
+--------------------------------------------------------------------------------
+
+Best Performers:
+--------------------------------------------------------------------------------
+Top 20 by Accuracy:
+1. resnet50_sgd_movement_70: 74.5700
+2. resnet50_adamwprune_state_70: 72.9200
+3. resnet50_adamwspam_movement_70: 72.1800
+4. resnet50_adamw_movement_70: 71.3400
+5. resnet50_adam_movement_70: 71.2300
+6. resnet50_adamwadv_movement_70: 70.6500
+
+Best by Optimizer:
+  adam: resnet50_adam_movement_70 (71.2300)
+  adamw: resnet50_adamw_movement_70 (71.3400)
+  adamwadv: resnet50_adamwadv_movement_70 (70.6500)
+  adamwprune: resnet50_adamwprune_state_70 (72.9200)
+  adamwspam: resnet50_adamwspam_movement_70 (72.1800)
+  sgd: resnet50_sgd_movement_70 (74.5700)
+
+GPU Memory Usage (Real Measurements):
+--------------------------------------------------------------------------------
+Most Memory-Efficient Tests:
+1. resnet50_adamwprune_state_70:
+   Accuracy: 72.92%, GPU Mean: 12270.0 MiB, GPU Max: 12281.0 MiB
+2. resnet50_sgd_movement_70:
+   Accuracy: 74.57%, GPU Mean: 12493.4 MiB, GPU Max: 12558.0 MiB
+3. resnet50_adam_movement_70:
+   Accuracy: 71.23%, GPU Mean: 12594.1 MiB, GPU Max: 12607.0 MiB
+4. resnet50_adamw_movement_70:
+   Accuracy: 71.34%, GPU Mean: 12595.3 MiB, GPU Max: 12607.0 MiB
+5. resnet50_adamwadv_movement_70:
+   Accuracy: 70.65%, GPU Mean: 12689.3 MiB, GPU Max: 12702.0 MiB
+6. resnet50_adamwspam_movement_70:
+   Accuracy: 72.18%, GPU Mean: 12690.2 MiB, GPU Max: 12702.0 MiB
+
+GPU Memory by Optimizer:
+  adam        :  12594.1 MiB (avg of 1 runs)
+  adamw       :  12595.3 MiB (avg of 1 runs)
+  adamwadv    :  12689.3 MiB (avg of 1 runs)
+  adamwprune  :  12270.0 MiB (avg of 1 runs)
+  adamwspam   :  12690.2 MiB (avg of 1 runs)
+  sgd         :  12493.4 MiB (avg of 1 runs)
+
+Memory Efficiency Analysis:
+--------------------------------------------------------------------------------
+Note: Memory shown as multiplier of weight tensor size
+Training memory = weights + optimizer states + pruning overhead
+Inference memory = active weights only (benefits from sparsity)
+
+Top 20 Most Memory-Efficient (Accuracy/Training Memory Ratio):
+1. resnet50_sgd_movement_70
+   Accuracy: 74.57%, Training Memory: 3.03x weights, Efficiency Score: 24.61
+2. resnet50_adamwprune_state_70
+   Accuracy: 72.92%, Training Memory: 3.03x weights, Efficiency Score: 24.07
+3. resnet50_adamw_movement_70
+   Accuracy: 71.34%, Training Memory: 5.03x weights, Efficiency Score: 14.18
+4. resnet50_adam_movement_70
+   Accuracy: 71.23%, Training Memory: 5.03x weights, Efficiency Score: 14.16
+5. resnet50_adamwspam_movement_70
+   Accuracy: 72.18%, Training Memory: 5.13x weights, Efficiency Score: 14.07
+6. resnet50_adamwadv_movement_70
+   Accuracy: 70.65%, Training Memory: 5.13x weights, Efficiency Score: 13.77
+
+Top 20 Lowest Inference Memory (with sparsity benefits):
+1. resnet50_sgd_movement_70
+   Accuracy: 74.57%, Sparsity: 70.0%, Inference Memory: 0.65x weights
+2. resnet50_adamw_movement_70
+   Accuracy: 71.34%, Sparsity: 70.0%, Inference Memory: 0.65x weights
+3. resnet50_adam_movement_70
+   Accuracy: 71.23%, Sparsity: 70.0%, Inference Memory: 0.65x weights
+4. resnet50_adamwspam_movement_70
+   Accuracy: 72.18%, Sparsity: 70.0%, Inference Memory: 0.65x weights
+5. resnet50_adamwadv_movement_70
+   Accuracy: 70.65%, Sparsity: 70.0%, Inference Memory: 0.65x weights
+6. resnet50_adamwprune_state_70
+   Accuracy: 72.92%, Sparsity: 0.0%, Inference Memory: 1.00x weights
+
+AdamWPrune Performance (State-Based Pruning with Minimal Overhead):
+--------------------------------------------------------------------------------
+Memory breakdown for AdamWPrune:
+  - Weights: 1.0x
+  - Adam states (exp_avg, exp_avg_sq): 2.0x
+  - Pruning overhead (boolean mask): 0.03x
+  - Total training memory: 3.03x weights
+
+Comparison with other pruning methods:
+  - SGD + movement pruning: 3.03x (1x weights + 2.03x pruning)
+  - AdamW + movement pruning: 5.03x (3x Adam + 2.03x pruning)
+  - AdamWPrune: 3.03x (3x Adam + 0.03x mask)
+
+Top AdamWPrune configurations:
+  resnet50_adamwprune_state_70:
+    Accuracy: 72.92%, Sparsity: 0.0%
+    Training Memory: 3.03x weights, Inference Memory: 1.00x weights

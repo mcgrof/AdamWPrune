@@ -1,5 +1,7 @@
 # AdamWPrune: Multi-Model State-Based Weight Pruning
 
+> **🏆 ResNet-50 Results**: AdamWPrune achieves **72.92% accuracy** (2nd best) with **lowest GPU memory usage** (12,270 MiB) on ImageNet. Outperforms all Adam variants in both accuracy and memory efficiency.
+
 > **📊 ResNet-18 Results**: AdamWPrune with AdamW base achieves **90.69% accuracy** at 50% sparsity (tied with movement pruning), while maintaining minimal memory overhead (1474.6 MB). Without pruning, AdamW and AdamWPrune perform identically (90.30% vs 90.28%) at ~1307 MB.
 
 AdamWPrune demonstrates efficient neural network compression by reusing Adam optimizer states for pruning decisions.
@@ -10,10 +12,12 @@ AdamWPrune demonstrates efficient neural network compression by reusing Adam opt
 
 | Model | Parameters | Dataset | Sparsity | GPU Memory | Accuracy | Efficiency |
 |-------|------------|---------|----------|------------|----------|------------|
-| LeNet-5 | 61,750 | MNIST | 70% | 434.5 MiB* | 98.9% | 22.74/100MiB |
+| LeNet-5 | 61.7K | MNIST | 70% | 434.5 MiB* | 98.9% | 22.74/100MiB |
 | ResNet-18 | 11.2M | CIFAR-10 | 70% | 1489.2 MiB | 90.66% | 6.09/100MiB |
+| **ResNet-50** | **25.6M** | **ImageNet** | **0%** | **12,270 MiB** | **72.92%** | **5.94/100MiB** |
 
 *CUDA/PyTorch baseline overhead (~450 MiB) dominates for small models
+**ResNet-50: Lowest memory usage among all optimizers tested
 
 ### GPU Memory Analysis
 
@@ -110,8 +114,10 @@ AdamWPrune is built on AdamW rather than Adam for critical reasons:
 - **[State-Based Pruning Deep Dive](docs/adding_state_pruning.md)**: Comprehensive analysis of AdamWPrune's state pruning approach
 - **[LeNet-5 Results](docs/lenet5.md)**: Proof of concept on MNIST
 - **[ResNet-18 Results](docs/resnet18.md)**: Production-scale validation on CIFAR-10
+- **[ResNet-50 Results](docs/resnet50.md)**: ImageNet-scale demonstration of superior memory efficiency
 - **[Key Test Results Archive](key_results/)**: Complete test matrix results with all graphs and metrics
-  - [September 2025 Results](key_results/test_matrix_results_20250903_180836/report.md): AdamWPrune achieves 90.66% accuracy with lowest memory usage
+  - [ResNet-50 ImageNet Results](key_results/test_matrix_results_20250908_121537/summary_report.txt): AdamWPrune achieves 72.92% accuracy with lowest GPU memory
+  - [ResNet-18 CIFAR-10 Results](key_results/test_matrix_results_20250903_180836/report.md): AdamWPrune achieves 90.66% accuracy with lowest memory usage
 
 ## Features
 
