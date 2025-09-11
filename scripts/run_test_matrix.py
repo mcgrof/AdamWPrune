@@ -564,11 +564,10 @@ def run_single_test(
     # Add configuration arguments that train.py actually accepts
     cmd.extend(["--optimizer", optimizer])
 
-    # AdamWPrune has built-in state-based pruning
+    # AdamWPrune uses state-based pruning
     if optimizer == "adamwprune" and pruning == "state":
-        # For AdamWPrune with state pruning, we don't pass pruning-method
-        # as it's handled internally by the optimizer
-        cmd.extend(["--pruning-method", "none"])  # No external pruning
+        # For AdamWPrune with state pruning, pass "state" as the method
+        cmd.extend(["--pruning-method", "state"])
         cmd.extend(["--target-sparsity", sparsity])
         if "PRUNING_WARMUP" in config:
             cmd.extend(["--pruning-warmup", config["PRUNING_WARMUP"]])
