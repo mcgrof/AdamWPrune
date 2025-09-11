@@ -119,7 +119,7 @@ def get_data_loaders(args):
 
 
 def train(
-    model, device, train_loader, optimizer, criterion, epoch, pruning_method=None
+    model, device, train_loader, optimizer, criterion, epoch, pruning_method=None, adamprune_state=None, args=None
 ):
     """Train for one epoch."""
     model.train()
@@ -140,13 +140,13 @@ def train(
         loss.backward()
 
         # Apply AdamWPrune gradient masking before optimizer step
-        if args.optimizer == "adamwprune" and adamprune_state:
+        if args and args.optimizer == "adamwprune" and adamprune_state:
             apply_adamprune_masking(optimizer, adamprune_state)
 
         optimizer.step()
 
         # Update AdamWPrune masks periodically (per batch)
-        if args.optimizer == "adamwprune" and adamprune_state:
+        if args and args.optimizer == "adamwprune" and adamprune_state:
             update_adamprune_masks(optimizer, adamprune_state, train_loader, epoch)
 
         # Update pruning (step counter and potentially masks)
@@ -158,7 +158,7 @@ def train(
         total += target.size(0)
         correct += predicted.eq(target).sum().item()
 
-        if batch_idx % args.log_interval == 0:
+        if args and batch_idx % args.log_interval == 0:
             print(
                 f"Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)} "
                 f"({100. * batch_idx / len(train_loader):.0f}%)]\t"
@@ -228,6 +228,13 @@ def main(args):
         f"Model: ResNet-50 with {sum(p.numel() for p in model.parameters()):,} parameters"
     )
 
+    # Set AdamWPrune pruning flag if using state pruning
+    if args.optimizer == "adamwprune" and args.pruning_method == "state":
+        args.adamwprune_enable_pruning = True
+        args.adamwprune_target_sparsity = args.target_sparsity
+        args.adamwprune_warmup_steps = args.pruning_warmup
+        args.adamwprune_ramp_end_epoch = args.pruning_end_epoch
+
     # Create optimizer
     # Create optimizer - create_optimizer returns a tuple
     optimizer_tuple = create_optimizer(
@@ -240,10 +247,14 @@ def main(args):
     )
 
     # Extract optimizer and adamprune_state from tuple
+    # create_optimizer returns: optimizer, scheduler, gradient_clip_norm, spam_state, adamprune_state
     adamprune_state = None
     if isinstance(optimizer_tuple, tuple):
-        if len(optimizer_tuple) >= 2:
-            optimizer, adamprune_state = optimizer_tuple[0], optimizer_tuple[1]
+        if len(optimizer_tuple) == 5:
+            optimizer, scheduler, gradient_clip_norm, spam_state, adamprune_state = optimizer_tuple
+        elif len(optimizer_tuple) >= 2:
+            optimizer = optimizer_tuple[0]
+            adamprune_state = optimizer_tuple[-1] if len(optimizer_tuple) > 4 else None
         else:
             optimizer = optimizer_tuple[0]
     else:
@@ -316,7 +327,7 @@ def main(args):
 
         # Train
         train_loss, train_acc = train(
-            model, device, train_loader, optimizer, criterion, epoch, pruning_method
+            model, device, train_loader, optimizer, criterion, epoch, pruning_method, adamprune_state, args
         )
 
         # Test
