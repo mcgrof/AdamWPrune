@@ -1059,9 +1059,81 @@ def main():
             with open("/tmp/incomplete_runs.json", "r") as f:
                 incomplete_info = json.load(f)
 
+        # Parse config to get expected test combinations
+        config = parse_kconfig()
+        matrix = get_test_matrix(config)
+        expected_combinations = generate_combinations(matrix)
+        
+        # Generate expected test directory names
+        expected_tests = set()
+        for combo in expected_combinations:
+            model = combo["model"]
+            optimizer = combo["optimizer"]
+            pruning = combo["pruning"]
+            sparsity = combo.get("sparsity", "0.0")
+            
+            if pruning == "none":
+                test_id = f"{model}_{optimizer}_{pruning}"
+            else:
+                sparsity_pct = int(float(sparsity) * 100)
+                test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
+            expected_tests.add(test_id)
+        
+        # Check what tests actually exist
+        existing_tests = set()
+        for test_dir in continue_dir.glob(f"{matrix['models'][0]}_*"):
+            if test_dir.is_dir():
+                existing_tests.add(test_dir.name)
+        
+        # Find missing tests
+        missing_tests = expected_tests - existing_tests
+        
         # Check if we have failed tests but no incomplete ones (special case)
         incomplete_runs = incomplete_info.get("incomplete_runs", [])
         failed_runs = incomplete_info.get("failed_runs", [])
+        
+        # Report on missing tests
+        if missing_tests:
+            print(f"\n⚠️  Found {len(missing_tests)} MISSING test(s) from expected configuration:")
+            for missing_test in sorted(missing_tests):
+                print(f"   ❌ {missing_test}")
+            
+            print(f"\nThese tests are configured but have not been run.")
+            print("Would you like to run these missing tests?")
+            if not args.yes:
+                response = input("Continue? (y/N): ").strip().lower()
+                if response != "y":
+                    print("Aborted.")
+                    sys.exit(0)
+            
+            # Add missing tests to the list of tests to run
+            tests_to_run = []
+            for combo in expected_combinations:
+                model = combo["model"]
+                optimizer = combo["optimizer"]
+                pruning = combo["pruning"]
+                sparsity = combo.get("sparsity", "0.0")
+                
+                if pruning == "none":
+                    test_id = f"{model}_{optimizer}_{pruning}"
+                else:
+                    sparsity_pct = int(float(sparsity) * 100)
+                    test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
+                
+                if test_id in missing_tests:
+                    tests_to_run.append(combo)
+            
+            if tests_to_run:
+                print(f"\nRunning {len(tests_to_run)} missing test(s)...")
+                all_results = run_test_matrix(
+                    tests_to_run, 
+                    config, 
+                    str(continue_dir),
+                    parallel=(config.get("TEST_PARALLEL_ENABLED") == "y")
+                )
+                create_summary_report(all_results, str(continue_dir))
+                print(f"\n✓ Completed {len(tests_to_run)} missing test(s)")
+                sys.exit(0)
 
         if not incomplete_runs and failed_runs:
             # All tests completed but some failed - offer to re-run failed tests only
