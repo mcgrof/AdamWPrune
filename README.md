@@ -1,6 +1,6 @@
 # AdamWPrune: Multi-Model State-Based Weight Pruning
 
-> **🏆 ResNet-50 Results**: AdamWPrune achieves **72.92% accuracy** (2nd best) with **lowest GPU memory usage** (12,270 MiB) on ImageNet. Outperforms all Adam variants in both accuracy and memory efficiency.
+> **🔄 ResNet-50 Update**: Previous results invalid due to bug that disabled state pruning. Tests being re-run with fix to properly evaluate 70% sparsity performance.
 
 > **📊 ResNet-18 Results**: AdamWPrune with AdamW base achieves **90.69% accuracy** at 50% sparsity (tied with movement pruning), while maintaining minimal memory overhead (1474.6 MB). Without pruning, AdamW and AdamWPrune perform identically (90.30% vs 90.28%) at ~1307 MB.
 
@@ -14,10 +14,10 @@ AdamWPrune demonstrates efficient neural network compression by reusing Adam opt
 |-------|------------|---------|----------|------------|----------|------------|
 | LeNet-5 | 61.7K | MNIST | 70% | 434.5 MiB* | 98.9% | 22.74/100MiB |
 | ResNet-18 | 11.2M | CIFAR-10 | 70% | 1489.2 MiB | 90.66% | 6.09/100MiB |
-| **ResNet-50** | **25.6M** | **ImageNet** | **0%†** | **12,270 MiB** | **72.92%** | **5.94/100MiB** |
+| **ResNet-50** | **25.6M** | **ImageNet** | **Bug†** | **Re-running** | **Re-running** | **TBD** |
 
 *CUDA/PyTorch baseline overhead (~450 MiB) dominates for small models  
-†ResNet-50: State pruning didn't trigger (needs tuning), yet still achieved lowest memory usage
+†ResNet-50: Bug in test configuration prevented state pruning - being re-run now with fix
 
 ### GPU Memory Analysis
 
