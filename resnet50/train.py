@@ -21,7 +21,7 @@ from torchvision import datasets, transforms
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.gpu_monitoring import GPUMonitor
-from lib.optimizers import create_optimizer
+from lib.optimizers import create_optimizer, apply_adamprune_masking, update_adamprune_masks
 from lib.movement_pruning import MovementPruning
 from lib.magnitude_pruning import MagnitudePruning
 from model import resnet50
@@ -135,7 +135,15 @@ def train(
         loss = criterion(output, target)
         loss.backward()
 
+        # Apply AdamWPrune gradient masking before optimizer step
+        if args.optimizer == "adamwprune" and adamprune_state:
+            apply_adamprune_masking(optimizer, adamprune_state)
+
         optimizer.step()
+
+        # Update AdamWPrune masks periodically (per batch)
+        if args.optimizer == "adamwprune" and adamprune_state:
+            update_adamprune_masks(optimizer, adamprune_state, train_loader, epoch)
 
         # Update pruning (step counter and potentially masks)
         if pruning_method and hasattr(pruning_method, "step_pruning"):
@@ -226,8 +234,14 @@ def main(args):
         num_epochs=args.epochs,
         model_type="resnet",
     )
-    if isinstance(optimizer_tuple, tuple) and len(optimizer_tuple) >= 1:
-        optimizer = optimizer_tuple[0]
+
+    # Extract optimizer and adamprune_state from tuple
+    adamprune_state = None
+    if isinstance(optimizer_tuple, tuple):
+        if len(optimizer_tuple) >= 2:
+            optimizer, adamprune_state = optimizer_tuple[0], optimizer_tuple[1]
+        else:
+            optimizer = optimizer_tuple[0]
     else:
         optimizer = optimizer_tuple
 
@@ -236,7 +250,17 @@ def main(args):
 
     # Setup pruning if enabled
     pruning_method = None
-    if args.pruning_method in ["movement", "magnitude"]:
+
+    if args.pruning_method == "state" and args.optimizer == "adamwprune":
+        # State-based pruning is built into AdamWPrune
+        if adamprune_state and adamprune_state.get("pruning_enabled"):
+            print(f"Using built-in state-based pruning in AdamWPrune")
+            print(f"Target sparsity: {adamprune_state.get('target_sparsity', args.target_sparsity):.1%}")
+            print(f"Warmup steps: {adamprune_state.get('warmup_steps', 100)}")
+        else:
+            print("WARNING: State pruning requested but AdamWPrune pruning not enabled!")
+            print("Make sure to set pruning parameters when creating optimizer")
+    elif args.pruning_method in ["movement", "magnitude"]:
         # Calculate total training steps for pruning schedule
         steps_per_epoch = len(train_loader)
         total_steps = steps_per_epoch * args.epochs
