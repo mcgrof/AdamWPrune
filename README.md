@@ -63,7 +63,7 @@ AdamWPrune demonstrates efficient neural network compression by reusing Adam opt
 ![Memory vs Accuracy Scatter](images/resnet18/memory_vs_accuracy_scatter.png)
 *Memory-accuracy trade-off: State and movement pruning achieve similar memory usage (~1489 MB) with comparable accuracy*
 
-→ See [ResNet-18 detailed findings](resnet18/findings.md) for comprehensive analysis
+→ See [ResNet-18 detailed findings](docs/resnet18.md) for comprehensive analysis
 
 #### LeNet-5 Comprehensive Analysis
 ![LeNet-5 Memory Analysis](images/lenet5/training_memory_comparison.png)
@@ -108,8 +108,8 @@ AdamWPrune is built on AdamW rather than Adam for critical reasons:
 ## Detailed Findings
 
 - **[State-Based Pruning Deep Dive](docs/adding_state_pruning.md)**: Comprehensive analysis of AdamWPrune's state pruning approach
-- **[LeNet-5 Results](lenet5/findings.md)**: Proof of concept on MNIST
-- **[ResNet-18 Results](resnet18/findings.md)**: Production-scale validation on CIFAR-10
+- **[LeNet-5 Results](docs/lenet5.md)**: Proof of concept on MNIST
+- **[ResNet-18 Results](docs/resnet18.md)**: Production-scale validation on CIFAR-10
 - **[Key Test Results Archive](key_results/)**: Complete test matrix results with all graphs and metrics
   - [September 2025 Results](key_results/test_matrix_results_20250903_180836/report.md): AdamWPrune achieves 90.66% accuracy with lowest memory usage
 
