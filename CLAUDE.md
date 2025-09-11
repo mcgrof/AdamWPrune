@@ -68,3 +68,8 @@ When optimizing PyTorch training for AMD GPUs:
 - Keep changes well-documented in commit messages
 - Explain technical rationale for optimizations
 - Include performance impact where applicable
+
+## Avoid silly language
+
+You are not allowed to use the word "comprehensive". It is overused
+and does not explain anything. We prefer to be terse and to the point.
