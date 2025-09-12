@@ -1,6 +1,6 @@
 # Test Matrix Results: test_matrix_results_20250903_180836
 
-*Generated: 2025-09-03 23:12:40*
+*Generated: 2025-09-11 16:55:01*
 
 ## Overview
 
@@ -20,6 +20,12 @@
 ### Adamwprune Model Comparison
 ![Adamwprune Model Comparison](graphs/adamwprune_model_comparison.png)
 
+### All Methods Comparison
+![All Methods Comparison](graphs/all_methods_comparison.png)
+
+### All Methods Memory Accuracy
+![All Methods Memory Accuracy](graphs/all_methods_memory_accuracy.png)
+
 ### Gpu Memory Comparison
 ![Gpu Memory Comparison](graphs/gpu_memory_comparison.png)
 
@@ -36,11 +42,6 @@
 
 | Test Configuration | Accuracy | Sparsity | GPU Mean | GPU Max | Training Time |
 |-------------------|----------|----------|----------|---------|---------------|
-| resnet18_adam_magnitude_70 | 88.06% | 70 | N/A | N/A | N/A |
-| resnet18_adam_movement_70 | 90.78% | 70 | N/A | N/A | N/A |
-| resnet18_adam_none | 90.31% | 0 | N/A | N/A | N/A |
-| resnet18_adamwprune_none | 90.59% | 0 | N/A | N/A | N/A |
-| resnet18_adamwprune_state_70 | 90.66% | 70 | N/A | N/A | N/A |
 
 ## Individual Training Plots
 
@@ -63,7 +64,7 @@
 
 ```
 Test Matrix Summary Report (With Real GPU Memory Data)
-Generated: 2025-09-03T20:43:14.299660
+Generated: 2025-09-03T23:31:17.343898
 From: test_matrix_results_20250903_180836
 ================================================================================
 
@@ -73,71 +74,74 @@ Failed: 0
 
 Results Table:
 ---------------------------------------------------------------------------------------------------------
-Test ID                                  Accuracy Sparsity GPU Mean (MiB) GPU Max (MiB) Status    
+Test ID                                  Accuracy Sparsity GPU Mean (MiB) GPU Max (MiB) Status
 ---------------------------------------------------------------------------------------------------------
-resnet18_adam_movement_70                 90.7800   0.7000         1486.2        1524.0 ✓ Success 
-resnet18_adamwprune_state_70              90.6600   0.7000         1337.1        1356.0 ✓ Success 
-resnet18_adamwprune_none_0                90.5900   0.0000         3664.2        4107.0 ✓ Success 
-resnet18_adam_none_0                      90.3100   0.0000            N/A           N/A ✓ Success 
-resnet18_adam_magnitude_70                88.0600   0.7000         1419.5        1445.0 ✓ Success 
+resnet18_adam_movement_70                 90.7800   0.7000         1489.4        1492.0 ✓ Success
+resnet18_adamwprune_state_70              90.6600   0.7000         1489.2        1492.0 ✓ Success
+resnet18_adamwprune_none_0                90.5900   0.0000         1307.2        1309.0 ✓ Success
+resnet18_adam_none_0                      90.3100   0.0000         1307.5        1309.0 ✓ Success
+resnet18_adam_magnitude_70                88.0600   0.7000         1471.0        1477.0 ✓ Success
 ---------------------------------------------------------------------------------------------------------
 
 Best Performers:
 --------------------------------------------------------------------------------
 Top Results by Accuracy:
-1. resnet18_adam_movement_70: 90.7800 (GPU: 1486.2 MB)
-2. resnet18_adamwprune_state_70: 90.6600 (GPU: 1337.1 MB)
-3. resnet18_adamwprune_none_0: 90.5900 (GPU: 3664.2 MB)
-4. resnet18_adam_none_0: 90.3100
-5. resnet18_adam_magnitude_70: 88.0600 (GPU: 1419.5 MB)
+1. resnet18_adam_movement_70: 90.7800 (GPU: 1489.4 MB)
+2. resnet18_adamwprune_state_70: 90.6600 (GPU: 1489.2 MB)
+3. resnet18_adamwprune_none_0: 90.5900 (GPU: 1307.2 MB)
+4. resnet18_adam_none_0: 90.3100 (GPU: 1307.5 MB)
+5. resnet18_adam_magnitude_70: 88.0600 (GPU: 1471.0 MB)
 
 Best by Optimizer:
-  adam: resnet18_adam_movement_70 (90.7800, GPU: 1486.2 MB)
-  adamwprune: resnet18_adamwprune_state_70 (90.6600, GPU: 1337.1 MB)
+  adam: resnet18_adam_movement_70 (90.7800, GPU: 1489.4 MB)
+  adamwprune: resnet18_adamwprune_state_70 (90.6600, GPU: 1489.2 MB)
 
 GPU Memory Efficiency Analysis (Real Measurements):
 --------------------------------------------------------------------------------
 Most Memory-Efficient (Accuracy per 100MB GPU):
-1. resnet18_adamwprune_state_70
-   Accuracy: 90.66%, GPU Memory: 1337.1 MB, Efficiency Score: 6.78
-2. resnet18_adam_magnitude_70
-   Accuracy: 88.06%, GPU Memory: 1419.5 MB, Efficiency Score: 6.20
+1. resnet18_adamwprune_none_0
+   Accuracy: 90.59%, GPU Memory: 1307.2 MB, Efficiency Score: 6.93
+2. resnet18_adam_none_0
+   Accuracy: 90.31%, GPU Memory: 1307.5 MB, Efficiency Score: 6.91
 3. resnet18_adam_movement_70
-   Accuracy: 90.78%, GPU Memory: 1486.2 MB, Efficiency Score: 6.11
-4. resnet18_adamwprune_none_0
-   Accuracy: 90.59%, GPU Memory: 3664.2 MB, Efficiency Score: 2.47
+   Accuracy: 90.78%, GPU Memory: 1489.4 MB, Efficiency Score: 6.10
+4. resnet18_adamwprune_state_70
+   Accuracy: 90.66%, GPU Memory: 1489.2 MB, Efficiency Score: 6.09
+5. resnet18_adam_magnitude_70
+   Accuracy: 88.06%, GPU Memory: 1471.0 MB, Efficiency Score: 5.99
 
 Lowest GPU Memory Usage:
-1. resnet18_adamwprune_state_70
-   GPU Memory: 1337.1 MB (max: 1356.0 MB), Accuracy: 90.66%
-2. resnet18_adam_magnitude_70
-   GPU Memory: 1419.5 MB (max: 1445.0 MB), Accuracy: 88.06%
-3. resnet18_adam_movement_70
-   GPU Memory: 1486.2 MB (max: 1524.0 MB), Accuracy: 90.78%
-4. resnet18_adamwprune_none_0
-   GPU Memory: 3664.2 MB (max: 4107.0 MB), Accuracy: 90.59%
+1. resnet18_adamwprune_none_0
+   GPU Memory: 1307.2 MB (max: 1309.0 MB), Accuracy: 90.59%
+2. resnet18_adam_none_0
+   GPU Memory: 1307.5 MB (max: 1309.0 MB), Accuracy: 90.31%
+3. resnet18_adam_magnitude_70
+   GPU Memory: 1471.0 MB (max: 1477.0 MB), Accuracy: 88.06%
+4. resnet18_adamwprune_state_70
+   GPU Memory: 1489.2 MB (max: 1492.0 MB), Accuracy: 90.66%
+5. resnet18_adam_movement_70
+   GPU Memory: 1489.4 MB (max: 1492.0 MB), Accuracy: 90.78%
 
 AdamWPrune Performance (Real GPU Measurements):
 --------------------------------------------------------------------------------
-Configuration: resnet18_adamwprune_state_70
-  Accuracy: 90.66%
-  Sparsity achieved: 70.0%
-  GPU Memory (mean): 1337.1 MB
-  GPU Memory (peak): 1356.0 MB
-  Memory savings vs others: 115.8 MB (8.0%)
 Configuration: resnet18_adamwprune_none_0
   Accuracy: 90.59%
   Sparsity achieved: 0.0%
-  GPU Memory (mean): 3664.2 MB
-  GPU Memory (peak): 4107.0 MB
-  Memory savings vs others: -2211.4 MB (-152.2%)
+  GPU Memory (mean): 1307.2 MB
+  GPU Memory (peak): 1309.0 MB
+  Memory savings vs others: 115.5 MB (8.1%)
+Configuration: resnet18_adamwprune_state_70
+  Accuracy: 90.66%
+  Sparsity achieved: 70.0%
+  GPU Memory (mean): 1489.2 MB
+  GPU Memory (peak): 1492.0 MB
+  Memory savings vs others: -66.5 MB (-4.7%)
 
 GPU Memory Comparison (All Optimizers):
-  adam        :  1452.8 MB (avg of 2 runs)
-  adamwprune  :  2500.6 MB (avg of 2 runs)
+  adam        :  1422.6 MB (avg of 3 runs)
+  adamwprune  :  1398.2 MB (avg of 2 runs)
 
 ```
 
 ## Key Findings
 
-- **Best Accuracy**: 90.31% (resnet18_adam_none)
