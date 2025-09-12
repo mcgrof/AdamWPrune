@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: MIT
 # ResNet-50 training Makefile
 
-include ../.config
-include ../Makefile.config
+-include ../.config
 
 # Model-specific variables
 MODEL_NAME := resnet50
