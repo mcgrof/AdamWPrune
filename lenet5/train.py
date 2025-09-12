@@ -324,6 +324,14 @@ else:
 # Setting the loss function
 cost = nn.CrossEntropyLoss()
 
+# Enable state pruning for AdamWPrune when requested
+if args.optimizer == "adamwprune" and args.pruning_method == "state":
+    args.adamwprune_enable_pruning = True
+    args.adamwprune_target_sparsity = args.target_sparsity
+    args.adamwprune_warmup_steps = args.pruning_warmup
+    # LeNet-5 trains for fewer epochs, so ramp up pruning faster
+    args.adamwprune_ramp_end_epoch = min(8, num_epochs - 2)
+
 # Create optimizer using the library function
 optimizer, scheduler, gradient_clip_norm, spam_state, adamprune_state = (
     create_optimizer(
