@@ -146,15 +146,28 @@ def analyze_accuracy_details(metrics_file):
 
     test_accs = metrics.get("test_accuracy", [])
     if not test_accs:
-        # Fallback to best_accuracy if no epoch data
-        return {
-            "best_accuracy": metrics.get("best_accuracy", 0),
-            "best_epoch": None,
-            "final_accuracy": metrics.get("best_accuracy", 0),
-            "final_epoch": None,
-            "final_sparsity": metrics.get("final_sparsity", 0),
-            "has_epoch_data": False,
-        }
+        # Try to extract from epochs data if available
+        epochs = metrics.get("epochs", [])
+        if epochs and isinstance(epochs[0], dict):
+            # Try to get test_accuracy from each epoch
+            test_accs = []
+            for epoch in epochs:
+                # Look for various possible field names
+                acc = epoch.get("test_accuracy") or epoch.get("accuracy") or epoch.get("val_accuracy")
+                if acc is not None:
+                    test_accs.append(acc)
+        
+        if not test_accs:
+            # Fallback to top-level accuracy fields
+            final_acc = metrics.get("final_accuracy", metrics.get("best_accuracy", 0))
+            return {
+                "best_accuracy": final_acc,
+                "best_epoch": None,
+                "final_accuracy": final_acc,
+                "final_epoch": None,
+                "final_sparsity": metrics.get("final_sparsity", 0),
+                "has_epoch_data": False,
+            }
 
     # Find best accuracy and when it occurred
     best_acc = max(test_accs)
@@ -228,7 +241,8 @@ def update_all_results(results_dir):
 
     # Find all test directories
     for test_dir in sorted(os.listdir(results_dir)):
-        if not test_dir.startswith("resnet"):
+        # Skip non-test directories (look for model names)
+        if not (test_dir.startswith("resnet") or test_dir.startswith("lenet")):
             continue
 
         metrics_file = os.path.join(results_dir, test_dir, "training_metrics.json")
