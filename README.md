@@ -158,7 +158,7 @@ AdamWPrune is built on AdamW rather than Adam for critical reasons:
 
 ### Model Checkpointing
 
-Following industry best practices, our experiments save model checkpoints at peak accuracy, not just at training completion. This is critical because:
+Industry best practices recommend saving model checkpoints at peak accuracy, not just at training completion. This is critical because:
 - **Peak ≠ Final**: Models often achieve best accuracy mid-training (e.g., AdamWPrune: 74.68% at epoch 63, final only 70.56%)
 - **Overfitting protection**: Later epochs may degrade performance
 - **Deployment ready**: Best checkpoints are production-ready models

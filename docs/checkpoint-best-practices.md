@@ -1,8 +1,8 @@
-# Model Checkpoint Best Practices: Industry Standards and Case Studies
+# Model Checkpoint Best Practices: Industry Standards and Recommendations
 
 ## Executive Summary
 
-Model checkpointing is a critical practice in production ML systems. Our AdamWPrune experiments demonstrate why: models often achieve peak performance mid-training, with significant accuracy degradation in later epochs. This guide covers industry-standard checkpointing strategies with real examples from our ResNet-50 experiments.
+Model checkpointing is a critical practice in production ML systems. Our AdamWPrune experiments reveal why this matters: models often achieve peak performance mid-training, with significant accuracy degradation in later epochs. This guide covers industry-standard checkpointing strategies and recommendations based on our ResNet-50 experiment observations.
 
 ## Research Foundation
 

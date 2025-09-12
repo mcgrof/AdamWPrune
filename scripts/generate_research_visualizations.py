@@ -13,11 +13,15 @@ import matplotlib.patches as mpatches
 from pathlib import Path
 import numpy as np
 from matplotlib.gridspec import GridSpec
-import seaborn as sns
 
-# Set style for publication-quality figures
-plt.style.use("seaborn-v0_8-paper")
-sns.set_palette("husl")
+# Try to import seaborn, but don't fail if it's not available
+try:
+    import seaborn as sns
+    sns.set_palette("husl")
+    plt.style.use("seaborn-v0_8-paper")
+except ImportError:
+    # Use a reasonable default style if seaborn is not available
+    plt.style.use("ggplot")
 
 
 def load_results(results_dir):
