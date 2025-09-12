@@ -1,6 +1,6 @@
 # AdamWPrune: Multi-Model State-Based Weight Pruning
 
-> **🔄 ResNet-50 Update**: Previous results invalid due to bug that disabled state pruning. Tests being re-run with fix to properly evaluate 70% sparsity performance.
+> **✅ ResNet-50 Results**: AdamWPrune achieves **72.38% accuracy** at 70% sparsity (best Adam variant), with lowest GPU memory usage (12428.6 MB) among all tested configurations.
 
 > **📊 ResNet-18 Results**: AdamWPrune with AdamW base achieves **90.69% accuracy** at 50% sparsity (tied with movement pruning), while maintaining minimal memory overhead (1474.6 MB). Without pruning, AdamW and AdamWPrune perform identically (90.30% vs 90.28%) at ~1307 MB.
 
@@ -14,7 +14,7 @@ AdamWPrune demonstrates efficient neural network compression by reusing Adam opt
 |-------|------------|---------|----------|------------|----------|------------|
 | LeNet-5 | 61.7K | MNIST | 70% | 434.5 MiB* | 98.9% | 22.74/100MiB |
 | ResNet-18 | 11.2M | CIFAR-10 | 70% | 1489.2 MiB | 90.66% | 6.09/100MiB |
-| **ResNet-50** | **25.6M** | **CIFAR-100** | **In Progress** | **Testing** | **Testing** | **TBD** |
+| **ResNet-50** | **25.6M** | **CIFAR-100** | **70%** | **12428.6 MiB** | **72.38%** | **5.98/100MiB** |
 
 *CUDA/PyTorch baseline overhead (~450 MiB) dominates for small models
 
@@ -31,12 +31,13 @@ Our testing reveals that **the best-performing optimizer depends on model size**
 - AdamWAdv: 89.42% (-0.88%)
 - SGD: 89.22% (-1.08%)
 
-**ResNet-50 (25.6M parameters, CIFAR-100) - Preliminary Results:**
-- **Winner: AdamWSPAM** (72.18% at 70% sparsity)
-- AdamW: 71.34% (-0.84%)
-- Adam: 71.23% (-0.95%)
-- AdamWAdv: 70.65% (-1.53%)
-- SGD: 74.57% (best overall, but not Adam-based)
+**ResNet-50 (25.6M parameters, CIFAR-100) - Final Results at 70% Sparsity:**
+- **Winner (overall): SGD** (74.57% accuracy)
+- **Winner (Adam-based): AdamWPrune** (72.38% with state pruning)
+- AdamWSPAM: 72.18% (-0.20%)
+- AdamW: 71.34% (-1.04%)
+- Adam: 71.23% (-1.15%)
+- AdamWAdv: 70.65% (-1.73%)
 
 **Key Insight**: As model complexity increases from ResNet-18 to ResNet-50, AdamWSPAM's spike-aware momentum adaptation becomes more beneficial than AdamW's simpler decoupled weight decay. This suggests that larger models with more complex loss landscapes benefit from SPAM's gradient spike detection and momentum reset mechanisms.
 
@@ -137,7 +138,7 @@ AdamWPrune is built on AdamW rather than Adam for critical reasons:
 - **[ResNet-18 Results](docs/resnet18.md)**: Production-scale validation on CIFAR-10
 - **[ResNet-50 Results](docs/resnet50.md)**: ImageNet-scale demonstration of superior memory efficiency
 - **[Key Test Results Archive](key_results/)**: Complete test matrix results with all graphs and metrics
-  - [ResNet-50 ImageNet Results](key_results/test_matrix_results_20250908_121537/summary_report.txt): AdamWPrune achieves 72.92% accuracy with lowest GPU memory
+  - [ResNet-50 CIFAR-100 Results](key_results/test_matrix_results_20250908_121537/summary_report.txt): AdamWPrune achieves 72.38% at 70% sparsity with lowest GPU memory
   - [ResNet-18 CIFAR-10 Results](key_results/test_matrix_results_20250903_180836/report.md): AdamWPrune achieves 90.66% accuracy with lowest memory usage
 
 ## Features

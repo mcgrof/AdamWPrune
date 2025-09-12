@@ -1,6 +1,6 @@
 # Test Matrix Results: test_matrix_results_20250903_180836
 
-*Generated: 2025-09-11 16:55:01*
+*Generated: 2025-09-11 17:11:46*
 
 ## Overview
 
@@ -74,13 +74,13 @@ Failed: 0
 
 Results Table:
 ---------------------------------------------------------------------------------------------------------
-Test ID                                  Accuracy Sparsity GPU Mean (MiB) GPU Max (MiB) Status
+Test ID                                  Accuracy Sparsity GPU Mean (MiB) GPU Max (MiB) Status    
 ---------------------------------------------------------------------------------------------------------
-resnet18_adam_movement_70                 90.7800   0.7000         1489.4        1492.0 ✓ Success
-resnet18_adamwprune_state_70              90.6600   0.7000         1489.2        1492.0 ✓ Success
-resnet18_adamwprune_none_0                90.5900   0.0000         1307.2        1309.0 ✓ Success
-resnet18_adam_none_0                      90.3100   0.0000         1307.5        1309.0 ✓ Success
-resnet18_adam_magnitude_70                88.0600   0.7000         1471.0        1477.0 ✓ Success
+resnet18_adam_movement_70                 90.7800   0.7000         1489.4        1492.0 ✓ Success 
+resnet18_adamwprune_state_70              90.6600   0.7000         1489.2        1492.0 ✓ Success 
+resnet18_adamwprune_none_0                90.5900   0.0000         1307.2        1309.0 ✓ Success 
+resnet18_adam_none_0                      90.3100   0.0000         1307.5        1309.0 ✓ Success 
+resnet18_adam_magnitude_70                88.0600   0.7000         1471.0        1477.0 ✓ Success 
 ---------------------------------------------------------------------------------------------------------
 
 Best Performers:
