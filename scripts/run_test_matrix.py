@@ -596,6 +596,8 @@ def run_single_test(
 
     # Add AdamWPrune tuning parameters if present
     if optimizer == "adamwprune":
+        if "ADAMWPRUNE_BASE_OPTIMIZER" in config:
+            cmd.extend(["--adamwprune-base-optimizer-name", config["ADAMWPRUNE_BASE_OPTIMIZER"]])
         if "ADAMWPRUNE_BETA1" in config:
             cmd.extend(["--adamwprune-beta1", config["ADAMWPRUNE_BETA1"]])
         if "ADAMWPRUNE_BETA2" in config:
