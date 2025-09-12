@@ -1187,7 +1187,6 @@ def main():
             for failed_test in failed_runs:
                 failed_dir = continue_dir / failed_test
                 if failed_dir.exists():
-                    import shutil
                     shutil.rmtree(failed_dir)
                     print(f"Removed: {failed_test}")
 
