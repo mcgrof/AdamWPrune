@@ -567,6 +567,10 @@ def create_summary_table(ax, optimizer_data):
             ]
         )
 
+    # Handle empty table case
+    if not table_data:
+        table_data = [["No data", "-", "-", "-", "-"]]
+
     # Create table
     table = ax.table(
         cellText=table_data,
