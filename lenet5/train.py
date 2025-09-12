@@ -106,6 +106,13 @@ parser.add_argument(
     default=None,
     help="Enable AMSGrad for AdamWPrune (default: True)",
 )
+parser.add_argument(
+    "--adamwprune-base-optimizer-name",
+    type=str,
+    default="adamw",
+    choices=["adamw", "adamwspam"],
+    help="Base optimizer for AdamWPrune (default: adamw)",
+)
 
 # AdamWPrune-specific pruning configuration
 parser.add_argument(
