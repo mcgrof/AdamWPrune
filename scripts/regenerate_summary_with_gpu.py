@@ -253,6 +253,7 @@ def update_all_results(results_dir):
         details = analyze_accuracy_details(metrics_file)
 
         result = {
+            "test_id": test_dir,  # Add test_id for directory mapping
             "model": model,
             "optimizer": optimizer,
             "pruning_method": pruning,

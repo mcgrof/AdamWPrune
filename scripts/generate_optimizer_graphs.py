@@ -38,7 +38,8 @@ def group_by_optimizer(results):
     """Group test results by optimizer."""
     grouped = defaultdict(list)
     for result in results:
-        if result.get("success", False):
+        # Consider result successful if it has final_accuracy
+        if result.get("final_accuracy") is not None:
             optimizer = result.get("optimizer", "unknown")
             grouped[optimizer].append(result)
     return grouped
