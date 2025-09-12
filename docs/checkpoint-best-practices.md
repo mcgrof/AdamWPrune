@@ -4,6 +4,18 @@
 
 Model checkpointing is a critical practice in production ML systems. Our AdamWPrune experiments demonstrate why: models often achieve peak performance mid-training, with significant accuracy degradation in later epochs. This guide covers industry-standard checkpointing strategies with real examples from our ResNet-50 experiments.
 
+## Research Foundation
+
+The importance of model checkpointing and early stopping is well-established in ML research:
+
+- **"Early Stopping - But When?"** by Lutz Prechelt (1998) [[PDF]](https://page.mi.fu-berlin.de/prechelt/Biblio/stop_nips97.pdf) - Seminal work showing models often achieve best generalization before training completion, with extensive empirical evidence across multiple datasets.
+
+- **"Overfitting in Neural Nets: Backpropagation, Conjugate Gradient, and Early Stopping"** by Rich Caruana et al. (2000) [[PDF]](https://papers.nips.cc/paper/2000/file/059fdcd96baeb75112f09fa1dcc740cc-Paper.pdf) - NIPS paper demonstrating that optimal stopping points vary significantly across optimizers and datasets.
+
+- **"Snapshot Ensembles: Train 1, get M for free"** by Huang et al. (2017) [[PDF]](https://arxiv.org/pdf/1704.00109.pdf) - Shows how cyclic learning rates with checkpointing can yield multiple high-quality models from a single training run.
+
+- **"The Lottery Ticket Hypothesis"** by Frankle & Carbin (2019) [[PDF]](https://arxiv.org/pdf/1803.03635.pdf) - Demonstrates that checkpointing early in training can identify winning "lottery ticket" initializations that train more effectively.
+
 ## Table of Contents
 1. [Why Checkpointing Matters](#why-checkpointing-matters)
 2. [Industry Standard Practices](#industry-standard-practices)
@@ -16,7 +28,7 @@ Model checkpointing is a critical practice in production ML systems. Our AdamWPr
 
 ### The Peak vs. Final Problem
 
-Our experiments reveal a critical pattern across all optimizers:
+This phenomenon is well-documented in research. Prechelt (1998) showed that "the optimal stopping point can be far before the training error minimum" with generalization error increasing by 5-30% after the optimal point. Our experiments confirm this pattern across all optimizers:
 
 | Optimizer | Best Accuracy | Best Epoch | Final Accuracy | Final Epoch | Degradation |
 |-----------|--------------|------------|----------------|-------------|-------------|
@@ -36,6 +48,8 @@ In production scenarios, a 4% accuracy difference can mean:
 - **NLP systems**: Degraded user experience in chatbots and assistants
 
 ## Industry Standard Practices
+
+The following practices are derived from both research and industry experience. As noted by Bengio (2012) in "Practical Recommendations for Gradient-Based Training of Deep Architectures" [[arXiv]](https://arxiv.org/pdf/1206.5533.pdf), "early stopping remains one of the most commonly used forms of regularization" and requires careful checkpoint management.
 
 ### 1. Best Model Checkpointing (Most Common)
 
