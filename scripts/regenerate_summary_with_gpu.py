@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Regenerate summary report using real GPU memory measurements.
+Regenerate summary report using real GPU memory measurements with detailed epoch analysis.
+Supports incremental updates when make continue adds new test results.
 """
 
 import json
@@ -10,6 +11,7 @@ from pathlib import Path
 from datetime import datetime
 from glob import glob
 import re
+import numpy as np
 
 
 def load_json(file_path):
@@ -88,8 +90,6 @@ def get_gpu_memory_stats(test_dir):
                 memory_values.append(s["memory_used_mb"])
 
         if memory_values:
-            import numpy as np
-
             # Store under multiple possible keys for matching
             gpu_stats[test_name] = {
                 "mean": np.mean(memory_values),
@@ -111,331 +111,333 @@ def get_gpu_memory_stats(test_dir):
     return gpu_stats
 
 
+def analyze_accuracy_details(metrics_file):
+    """Analyze detailed accuracy information from training metrics."""
+    metrics = load_json(metrics_file)
+    if not metrics:
+        return None
+    
+    test_accs = metrics.get('test_accuracy', [])
+    if not test_accs:
+        # Fallback to best_accuracy if no epoch data
+        return {
+            'best_accuracy': metrics.get('best_accuracy', 0),
+            'best_epoch': None,
+            'final_accuracy': metrics.get('best_accuracy', 0),
+            'final_epoch': None,
+            'final_sparsity': metrics.get('final_sparsity', 0),
+            'has_epoch_data': False
+        }
+    
+    # Find best accuracy and when it occurred
+    best_acc = max(test_accs)
+    best_epoch = test_accs.index(best_acc) + 1
+    final_acc = test_accs[-1]
+    final_epoch = len(test_accs)
+    
+    # Get sparsity information
+    sparsities = metrics.get('sparsity', [])
+    final_sparsity = metrics.get('final_sparsity', sparsities[-1] if sparsities else 0)
+    
+    # For state pruning, find best accuracy at target sparsity
+    best_at_target = None
+    best_at_target_epoch = None
+    if sparsities and len(sparsities) == len(test_accs):
+        target_sparsity = final_sparsity
+        # Find accuracies at or near target sparsity (within 1%)
+        at_target = [(i, test_accs[i]) for i in range(len(test_accs)) 
+                     if sparsities[i] >= target_sparsity - 0.01]
+        if at_target:
+            best_at_target_idx, best_at_target = max(at_target, key=lambda x: x[1])
+            best_at_target_epoch = best_at_target_idx + 1
+            best_sparsity_at_peak = sparsities[best_at_target_idx]
+        else:
+            best_sparsity_at_peak = sparsities[best_epoch - 1] if best_epoch <= len(sparsities) else final_sparsity
+    else:
+        best_sparsity_at_peak = final_sparsity
+    
+    # Check stability (standard deviation of last 10 epochs)
+    if len(test_accs) >= 10:
+        last_10 = test_accs[-10:]
+        stability = np.std(last_10)
+    else:
+        stability = 0
+    
+    return {
+        'best_accuracy': best_acc,
+        'best_epoch': best_epoch,
+        'best_sparsity': sparsities[best_epoch - 1] if sparsities and best_epoch <= len(sparsities) else final_sparsity,
+        'best_at_target': best_at_target,
+        'best_at_target_epoch': best_at_target_epoch,
+        'final_accuracy': final_acc,
+        'final_epoch': final_epoch,
+        'final_sparsity': final_sparsity,
+        'degradation': best_acc - final_acc,
+        'stability': stability,
+        'has_epoch_data': True
+    }
+
+
+def update_all_results(results_dir):
+    """Update all_results.json from individual test metrics files."""
+    all_results = []
+    
+    # Find all test directories
+    for test_dir in sorted(os.listdir(results_dir)):
+        if not test_dir.startswith('resnet'):
+            continue
+        
+        metrics_file = os.path.join(results_dir, test_dir, 'training_metrics.json')
+        if not os.path.exists(metrics_file):
+            continue
+        
+        # Parse test name
+        parts = test_dir.split('_')
+        if len(parts) >= 4:
+            model = parts[0]
+            optimizer = parts[1]
+            pruning = parts[2]
+            sparsity = int(parts[3]) / 100.0
+        else:
+            continue
+        
+        # Load and analyze metrics
+        metrics = load_json(metrics_file)
+        if not metrics:
+            continue
+        
+        details = analyze_accuracy_details(metrics_file)
+        
+        result = {
+            'model': model,
+            'optimizer': optimizer,
+            'pruning_method': pruning,
+            'target_sparsity': sparsity,
+            'final_accuracy': details['final_accuracy'],
+            'best_accuracy': details['best_accuracy'],
+            'best_epoch': details['best_epoch'],
+            'final_sparsity': details['final_sparsity'],
+            'test_accuracy': metrics.get('test_accuracy', [])[-1] if metrics.get('test_accuracy') else details['final_accuracy']
+        }
+        all_results.append(result)
+    
+    # Save updated results
+    all_results_file = os.path.join(results_dir, 'all_results.json')
+    with open(all_results_file, 'w') as f:
+        json.dump(all_results, f, indent=2)
+    
+    return all_results
+
+
 def regenerate_summary(results_dir, output_file="summary_report.txt"):
-    """Regenerate summary report with real GPU memory data."""
-
-    # Load all results
-    all_results_file = os.path.join(results_dir, "all_results.json")
-    if not os.path.exists(all_results_file):
-        print(f"Error: {all_results_file} not found")
+    """Regenerate summary report with real GPU memory data and detailed analysis."""
+    
+    # Update all_results.json first
+    all_results = update_all_results(results_dir)
+    
+    if not all_results:
+        print(f"Error: No test results found in {results_dir}")
         return False
-
-    with open(all_results_file, "r") as f:
-        all_results = json.load(f)
-
+    
     # Get GPU memory stats
     gpu_stats = get_gpu_memory_stats(results_dir)
-
-    # Process results
+    
+    # Process results with detailed analysis
     test_results = []
-
-    # Handle both dict and list formats
-    if isinstance(all_results, list):
-        # List format - construct test names from fields
-        for result in all_results:
-            if isinstance(result, dict):
-                # Construct test ID from fields
-                model = result.get("model", "unknown")
-                optimizer = result.get("optimizer", "unknown")
-                pruning = result.get("pruning_method", "none")
-                sparsity = int(result.get("target_sparsity", 0) * 100)
-                test_name = f"{model}_{optimizer}_{pruning}_{sparsity}"
-
-                # Get accuracy - handle both single value and list
-                accuracy = result.get("final_accuracy", result.get("test_accuracy", 0))
-                if isinstance(accuracy, list):
-                    accuracy = (
-                        accuracy[-1] if accuracy else 0
-                    )  # Get last epoch's accuracy
-
-                test_info = {
-                    "test_id": test_name,
-                    "accuracy": accuracy,
-                    "sparsity": result.get("final_sparsity", 0),
-                    "time": result.get("total_time", 0),
-                    "status": "✓ Success",
-                    "epochs": result.get("epochs", 0),
-                    "optimizer": optimizer,
-                }
-
-                # Add real GPU memory data if available
-                # Try exact match first
-                if test_name in gpu_stats:
-                    test_info["gpu_memory_mean"] = gpu_stats[test_name]["mean"]
-                    test_info["gpu_memory_max"] = gpu_stats[test_name]["max"]
-                # For "none" pruning with _0 suffix, try without the suffix
-                elif pruning == "none" and test_name.endswith("_0"):
-                    alt_name = test_name[:-2]  # Remove "_0"
-                    if alt_name in gpu_stats:
-                        test_info["gpu_memory_mean"] = gpu_stats[alt_name]["mean"]
-                        test_info["gpu_memory_max"] = gpu_stats[alt_name]["max"]
-                # Also check for alternative naming (e.g., adamwprune state vs movement)
-                elif optimizer == "adamwprune":
-                    # Try alternative naming patterns
-                    alt_names = [
-                        f"{model}_{optimizer}_state_{sparsity}",
-                        f"{model}_{optimizer}_movement_{sparsity}",
-                        f"{optimizer}_state_{sparsity}",
-                        f"{optimizer}_movement_{sparsity}",
-                    ]
-                    for alt_name in alt_names:
-                        if alt_name in gpu_stats:
-                            test_info["gpu_memory_mean"] = gpu_stats[alt_name]["mean"]
-                            test_info["gpu_memory_max"] = gpu_stats[alt_name]["max"]
-                            break
-
-                test_results.append(test_info)
-    else:
-        # Dict format
-        for test_name, result in all_results.items():
-            if isinstance(result, dict) and "final_accuracy" in result:
-                test_info = {
-                    "test_id": test_name,
-                    "accuracy": result.get("final_accuracy", 0),
-                    "sparsity": result.get("final_sparsity", 0),
-                    "time": result.get("total_time", 0),
-                    "status": (
-                        "✓ Success" if result.get("success", True) else "✗ Failed"
-                    ),
-                    "epochs": result.get("epochs_completed", 0),
-                }
-
-                # Add real GPU memory data if available
-                # Try exact match first
-                if test_name in gpu_stats:
-                    test_info["gpu_memory_mean"] = gpu_stats[test_name]["mean"]
-                    test_info["gpu_memory_max"] = gpu_stats[test_name]["max"]
-                # For "none" pruning with _0 suffix, try without the suffix
-                elif pruning == "none" and test_name.endswith("_0"):
-                    alt_name = test_name[:-2]  # Remove "_0"
-                    if alt_name in gpu_stats:
-                        test_info["gpu_memory_mean"] = gpu_stats[alt_name]["mean"]
-                        test_info["gpu_memory_max"] = gpu_stats[alt_name]["max"]
-                # Also check for alternative naming (e.g., adamwprune state vs movement)
-                elif optimizer == "adamwprune":
-                    # Try alternative naming patterns
-                    alt_names = [
-                        f"{model}_{optimizer}_state_{sparsity}",
-                        f"{model}_{optimizer}_movement_{sparsity}",
-                        f"{optimizer}_state_{sparsity}",
-                        f"{optimizer}_movement_{sparsity}",
-                    ]
-                    for alt_name in alt_names:
-                        if alt_name in gpu_stats:
-                            test_info["gpu_memory_mean"] = gpu_stats[alt_name]["mean"]
-                            test_info["gpu_memory_max"] = gpu_stats[alt_name]["max"]
-                            break
-
-                # Extract optimizer info
-                parts = test_name.split("_")
-                if len(parts) >= 2:
-                    test_info["optimizer"] = parts[1]
-
-                test_results.append(test_info)
-
-    # Sort by accuracy
+    accuracy_details = {}
+    
+    for result in all_results:
+        # Construct test ID
+        model = result.get("model", "unknown")
+        optimizer = result.get("optimizer", "unknown")
+        pruning = result.get("pruning_method", "none")
+        sparsity = int(result.get("target_sparsity", 0) * 100)
+        test_name = f"{model}_{optimizer}_{pruning}_{sparsity}"
+        
+        # Get detailed accuracy analysis
+        metrics_file = os.path.join(results_dir, test_name, 'training_metrics.json')
+        if os.path.exists(metrics_file):
+            details = analyze_accuracy_details(metrics_file)
+            accuracy_details[test_name] = details
+        else:
+            details = {
+                'best_accuracy': result.get('best_accuracy', result.get('final_accuracy', 0)),
+                'final_accuracy': result.get('final_accuracy', 0),
+                'best_epoch': result.get('best_epoch'),
+                'final_sparsity': result.get('final_sparsity', result.get('target_sparsity', 0))
+            }
+            accuracy_details[test_name] = details
+        
+        # Determine which accuracy to use for ranking
+        # For state pruning with gradual sparsity, use best at target
+        # For movement/magnitude pruning, use best overall
+        if pruning == "state" and details.get('best_at_target'):
+            display_accuracy = details['best_at_target']
+            accuracy_note = f"@{int(details['final_sparsity']*100)}%"
+        else:
+            display_accuracy = details['best_accuracy']
+            accuracy_note = ""
+        
+        # Get GPU stats
+        gpu_mean = gpu_stats.get(test_name, {}).get("mean", 0)
+        gpu_max = gpu_stats.get(test_name, {}).get("max", 0)
+        
+        test_results.append({
+            "test_id": test_name,
+            "model": model,
+            "optimizer": optimizer,
+            "pruning": pruning,
+            "accuracy": display_accuracy,
+            "accuracy_note": accuracy_note,
+            "best_accuracy": details['best_accuracy'],
+            "best_epoch": details.get('best_epoch'),
+            "final_accuracy": details['final_accuracy'],
+            "sparsity": details['final_sparsity'],
+            "gpu_mean": gpu_mean,
+            "gpu_max": gpu_max,
+            "status": "Success"
+        })
+    
+    # Sort by accuracy for ranking
     test_results.sort(key=lambda x: x["accuracy"], reverse=True)
-
+    
     # Generate report
+    timestamp = datetime.now().isoformat()
+    
     with open(os.path.join(results_dir, output_file), "w") as f:
-        f.write("Test Matrix Summary Report (With Real GPU Memory Data)\n")
-        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write("Test Matrix Summary Report (With Detailed Analysis)\n")
+        f.write(f"Generated: {timestamp}\n")
         f.write(f"From: {results_dir}\n")
         f.write("=" * 80 + "\n\n")
-
+        
         # Summary statistics
         total_tests = len(test_results)
-        successful_tests = sum(1 for t in test_results if "Success" in t["status"])
-        failed_tests = total_tests - successful_tests
-
+        successful = len([t for t in test_results if t["status"] == "Success"])
+        failed = total_tests - successful
+        
         f.write(f"Total tests: {total_tests}\n")
-        f.write(f"Successful: {successful_tests}\n")
-        f.write(f"Failed: {failed_tests}\n\n")
-
-        # Results table with GPU memory
-        f.write("Results Table:\n")
-        f.write("-" * 105 + "\n")
-        f.write(
-            f"{'Test ID':<40} {'Accuracy':>8} {'Sparsity':>8} {'GPU Mean (MiB)':>14} {'GPU Max (MiB)':>13} {'Status':<10}\n"
-        )
-        f.write("-" * 105 + "\n")
-
+        f.write(f"Successful: {successful}\n")
+        f.write(f"Failed: {failed}\n\n")
+        
+        # Results table with detailed accuracy info
+        f.write("Detailed Results Table:\n")
+        f.write("-" * 120 + "\n")
+        f.write(f"{'Test ID':<40} {'Best Acc':<10} {'Final Acc':<10} {'Epoch':<8} {'Sparsity':<10} {'GPU (MB)':<12} {'Status':<10}\n")
+        f.write("-" * 120 + "\n")
+        
         for result in test_results:
-            gpu_mean = (
-                f"{result.get('gpu_memory_mean', 0):.1f}"
-                if "gpu_memory_mean" in result
-                else "N/A"
-            )
-            gpu_max = (
-                f"{result.get('gpu_memory_max', 0):.1f}"
-                if "gpu_memory_max" in result
-                else "N/A"
-            )
-
-            f.write(
-                f"{result['test_id']:<40} "
-                f"{result['accuracy']:>8.4f} "
-                f"{result['sparsity']:>8.4f} "
-                f"{gpu_mean:>14} "
-                f"{gpu_max:>13} "
-                f"{result['status']:<10}\n"
-            )
-
-        f.write("-" * 105 + "\n\n")
-
-        # Best performers by accuracy
-        f.write("Best Performers:\n")
+            test_id = result["test_id"][:40]
+            best_acc = f"{result['best_accuracy']:.2f}%" if result['best_accuracy'] else "N/A"
+            final_acc = f"{result['final_accuracy']:.2f}%" if result['final_accuracy'] else "N/A"
+            epoch = f"@{result['best_epoch']}" if result['best_epoch'] else "N/A"
+            sparsity = f"{result['sparsity']*100:.1f}%"
+            gpu = f"{result['gpu_mean']:.1f}" if result['gpu_mean'] > 0 else "N/A"
+            status = "✓" if result["status"] == "Success" else "✗"
+            
+            f.write(f"{test_id:<40} {best_acc:<10} {final_acc:<10} {epoch:<8} {sparsity:<10} {gpu:<12} {status:<10}\n")
+        
+        f.write("-" * 120 + "\n\n")
+        
+        # Accuracy Analysis Section
+        f.write("Accuracy Analysis:\n")
         f.write("-" * 80 + "\n")
-        f.write("Top Results by Accuracy:\n")
-        for i, result in enumerate(test_results[:10], 1):
-            gpu_info = ""
-            if "gpu_memory_mean" in result:
-                gpu_info = f" (GPU: {result['gpu_memory_mean']:.1f} MB)"
-            f.write(f"{i}. {result['test_id']}: {result['accuracy']:.4f}{gpu_info}\n")
-
-        f.write("\n")
-
-        # Best by optimizer (with GPU memory)
-        optimizer_best = {}
+        
+        # Group by optimizer
+        by_optimizer = {}
         for result in test_results:
-            opt = result.get("optimizer", "unknown")
-            if (
-                opt not in optimizer_best
-                or result["accuracy"] > optimizer_best[opt]["accuracy"]
-            ):
-                optimizer_best[opt] = result
-
-        f.write("Best by Optimizer:\n")
-        for opt in sorted(optimizer_best.keys()):
-            result = optimizer_best[opt]
-            gpu_info = ""
-            if "gpu_memory_mean" in result:
-                gpu_info = f", GPU: {result['gpu_memory_mean']:.1f} MB"
-            f.write(
-                f"  {opt}: {result['test_id']} ({result['accuracy']:.4f}{gpu_info})\n"
-            )
-
-        f.write("\n")
-
-        # GPU Memory Efficiency Analysis (using real data)
-        f.write("GPU Memory Efficiency Analysis (Real Measurements):\n")
+            opt = result['optimizer']
+            if opt not in by_optimizer:
+                by_optimizer[opt] = []
+            by_optimizer[opt].append(result)
+        
+        f.write("Performance by Optimizer:\n\n")
+        for opt in sorted(by_optimizer.keys()):
+            results = by_optimizer[opt]
+            best_result = max(results, key=lambda x: x['best_accuracy'])
+            
+            f.write(f"{opt.upper()}:\n")
+            f.write(f"  Best accuracy: {best_result['best_accuracy']:.2f}%")
+            if best_result['best_epoch']:
+                f.write(f" (epoch {best_result['best_epoch']})")
+            f.write(f"\n")
+            f.write(f"  Final accuracy: {best_result['final_accuracy']:.2f}%\n")
+            
+            # Check if state pruning
+            if best_result['pruning'] == 'state':
+                details = accuracy_details.get(best_result['test_id'], {})
+                if details.get('best_at_target'):
+                    f.write(f"  Best at target sparsity: {details['best_at_target']:.2f}%")
+                    if details.get('best_at_target_epoch'):
+                        f.write(f" (epoch {details['best_at_target_epoch']})")
+                    f.write(f"\n")
+            
+            # Stability analysis
+            details = accuracy_details.get(best_result['test_id'], {})
+            if details.get('stability') is not None:
+                f.write(f"  Stability (std last 10 epochs): {details['stability']:.2f}%\n")
+            if details.get('degradation') is not None and details['degradation'] != 0:
+                f.write(f"  Degradation from peak: {details['degradation']:.2f}%\n")
+            f.write("\n")
+        
+        # Best performers with fair comparison
+        f.write("\nFair Comparison (at target sparsity):\n")
         f.write("-" * 80 + "\n")
-
-        # Filter results with GPU data
-        gpu_results = [r for r in test_results if "gpu_memory_mean" in r]
-
-        if gpu_results:
-            # Sort by GPU memory efficiency (accuracy per MB)
-            for r in gpu_results:
-                r["efficiency"] = r["accuracy"] / r["gpu_memory_mean"] * 100
-
-            gpu_results.sort(key=lambda x: x["efficiency"], reverse=True)
-
-            f.write("Most Memory-Efficient (Accuracy per 100MB GPU):\n")
-            for i, result in enumerate(gpu_results[:10], 1):
-                f.write(
-                    f"{i}. {result['test_id']}\n"
-                    f"   Accuracy: {result['accuracy']:.2f}%, "
-                    f"GPU Memory: {result['gpu_memory_mean']:.1f} MB, "
-                    f"Efficiency Score: {result['efficiency']:.2f}\n"
-                )
-
-            f.write("\n")
-
-            # Sort by absolute GPU memory usage
-            gpu_results.sort(key=lambda x: x["gpu_memory_mean"])
-
-            f.write("Lowest GPU Memory Usage:\n")
-            for i, result in enumerate(gpu_results[:10], 1):
-                f.write(
-                    f"{i}. {result['test_id']}\n"
-                    f"   GPU Memory: {result['gpu_memory_mean']:.1f} MB (max: {result['gpu_memory_max']:.1f} MB), "
-                    f"Accuracy: {result['accuracy']:.2f}%\n"
-                )
-
-            f.write("\n")
-
-            # AdamWPrune specific analysis
-            adamwprune_results = [
-                r for r in gpu_results if "adamwprune" in r["test_id"].lower()
-            ]
-            if adamwprune_results:
-                f.write("AdamWPrune Performance (Real GPU Measurements):\n")
-                f.write("-" * 80 + "\n")
-
-                for result in adamwprune_results:
-                    f.write(f"Configuration: {result['test_id']}\n")
-                    f.write(f"  Accuracy: {result['accuracy']:.2f}%\n")
-                    f.write(f"  Sparsity achieved: {result['sparsity']:.1%}\n")
-                    f.write(
-                        f"  GPU Memory (mean): {result['gpu_memory_mean']:.1f} MB\n"
-                    )
-                    f.write(f"  GPU Memory (peak): {result['gpu_memory_max']:.1f} MB\n")
-
-                    # Compare with other optimizers
-                    other_opts = [
-                        r
-                        for r in gpu_results
-                        if "adamwprune" not in r["test_id"].lower()
-                    ]
-                    if other_opts:
-                        avg_other_memory = sum(
-                            r["gpu_memory_mean"] for r in other_opts
-                        ) / len(other_opts)
-                        memory_savings = avg_other_memory - result["gpu_memory_mean"]
-                        savings_pct = (memory_savings / avg_other_memory) * 100
-
-                        f.write(
-                            f"  Memory savings vs others: {memory_savings:.1f} MB ({savings_pct:.1f}%)\n"
-                        )
-
-                f.write("\n")
-
-            # Overall GPU memory comparison
-            f.write("GPU Memory Comparison (All Optimizers):\n")
-            optimizer_memory = {}
-            for result in gpu_results:
-                opt = result.get("optimizer", "unknown")
-                if opt not in optimizer_memory:
-                    optimizer_memory[opt] = []
-                optimizer_memory[opt].append(result["gpu_memory_mean"])
-
-            import numpy as np
-
-            for opt in sorted(optimizer_memory.keys()):
-                memories = optimizer_memory[opt]
-                mean_mem = np.mean(memories)
-                f.write(
-                    f"  {opt:12s}: {mean_mem:7.1f} MB (avg of {len(memories)} runs)\n"
-                )
-        else:
-            f.write("No GPU memory data available. Run with GPU monitoring enabled.\n")
-
+        
+        rank = 1
+        for result in test_results[:10]:
+            details = accuracy_details.get(result['test_id'], {})
+            
+            # Determine which accuracy to display
+            if result['pruning'] == 'state' and details.get('best_at_target'):
+                acc = details['best_at_target']
+                note = f" (best at {int(round(details['final_sparsity']*100))}% sparsity)"
+            else:
+                acc = result['best_accuracy']
+                note = ""
+            
+            f.write(f"{rank}. {result['optimizer']}: {acc:.2f}%{note}")
+            # Use appropriate epoch based on which accuracy we're showing
+            if result['pruning'] == 'state' and details.get('best_at_target_epoch'):
+                f.write(f" @ epoch {details['best_at_target_epoch']}")
+            elif details.get('best_epoch'):
+                f.write(f" @ epoch {details['best_epoch']}")
+            f.write(f"\n")
+            rank += 1
+        
+        # GPU Memory Analysis
+        if any(r['gpu_mean'] > 0 for r in test_results):
+            f.write("\n" + "GPU Memory Analysis:\n")
+            f.write("-" * 80 + "\n")
+            
+            # Sort by GPU memory
+            gpu_results = [r for r in test_results if r['gpu_mean'] > 0]
+            gpu_results.sort(key=lambda x: x['gpu_mean'])
+            
+            f.write("Memory Usage Ranking:\n")
+            for i, result in enumerate(gpu_results[:5], 1):
+                f.write(f"{i}. {result['test_id']}: {result['gpu_mean']:.1f} MB")
+                f.write(f" (accuracy: {result['best_accuracy']:.2f}%)\n")
+            
+            # Memory efficiency
+            f.write("\nMemory Efficiency (Accuracy per GB):\n")
+            for result in gpu_results[:5]:
+                efficiency = result['best_accuracy'] / (result['gpu_mean'] / 1024)
+                f.write(f"  {result['optimizer']}: {efficiency:.2f}%/GB\n")
+    
     print(f"Summary report regenerated: {os.path.join(results_dir, output_file)}")
     return True
 
 
 def main():
     if len(sys.argv) < 2:
-        # Try to find the most recent test results directory
-        results_dirs = sorted(
-            [d for d in os.listdir(".") if d.startswith("test_matrix_results_")],
-            reverse=True,
-        )
-        if results_dirs:
-            results_dir = results_dirs[0]
-            print(f"Using most recent results: {results_dir}")
-        else:
-            print("Usage: python regenerate_summary_with_gpu.py <results_directory>")
-            print("No test_matrix_results_* directories found in current directory")
-            sys.exit(1)
-    else:
-        results_dir = sys.argv[1]
-
-    if not os.path.exists(results_dir):
-        print(f"Error: Directory {results_dir} not found")
+        print("Usage: python regenerate_summary_with_gpu.py <test_results_dir>")
         sys.exit(1)
-
+    
+    results_dir = sys.argv[1]
+    if not os.path.exists(results_dir):
+        print(f"Error: Directory {results_dir} does not exist")
+        sys.exit(1)
+    
     regenerate_summary(results_dir)
 
 
