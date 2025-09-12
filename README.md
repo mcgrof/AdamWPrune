@@ -138,6 +138,15 @@ AdamWPrune is built on AdamW rather than Adam for critical reasons:
 3. **Better baseline**: AdamW outperforms Adam (90.30% vs older 90.31% with improper implementation)
 4. **Industry standard**: AdamW is the de facto standard for transformer and modern architectures
 
+### Model Checkpointing
+
+Following industry best practices, our experiments save model checkpoints at peak accuracy, not just at training completion. This is critical because:
+- **Peak ≠ Final**: Models often achieve best accuracy mid-training (e.g., AdamWPrune: 74.68% at epoch 63, final only 70.56%)
+- **Overfitting protection**: Later epochs may degrade performance
+- **Deployment ready**: Best checkpoints are production-ready models
+
+📚 **[Checkpoint Best Practices Guide](docs/checkpoint-best-practices.md)** - Learn why and how to implement proper checkpointing strategies based on our experimental findings.
+
 ## Detailed Findings
 
 - **[State-Based Pruning Deep Dive](docs/adding_state_pruning.md)**: Comprehensive analysis of AdamWPrune's state pruning approach
