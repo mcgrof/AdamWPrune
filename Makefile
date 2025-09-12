@@ -43,6 +43,7 @@ update-graphs: check-config generate-config
 	python3 scripts/generate_optimizer_graphs.py "$$RESULTS_DIR" "$$RESULTS_DIR/graphs"; \
 	python3 scripts/generate_gpu_memory_comparison.py "$$RESULTS_DIR" --output "$$RESULTS_DIR/graphs"; \
 	python3 scripts/visualize_train_vs_inference_memory.py "$$RESULTS_DIR" --output "$$RESULTS_DIR/graphs"; \
+	python3 scripts/generate_research_visualizations.py "$$RESULTS_DIR"; \
 	\
 	# Detect which model was tested by checking test directory names \
 	if ls "$$RESULTS_DIR" | grep -q "^lenet5_"; then \

@@ -172,7 +172,8 @@ Following industry best practices, our experiments save model checkpoints at pea
 - **[ResNet-18 Results](docs/resnet18.md)**: Production-scale validation on CIFAR-10
 - **[ResNet-50 Results](docs/resnet50.md)**: ImageNet-scale demonstration of superior memory efficiency
 - **[Key Test Results Archive](key_results/)**: Complete test matrix results with all graphs and metrics
-  - [ResNet-50 CIFAR-100 Results](key_results/test_matrix_results_20250908_121537/summary_report.txt): AdamWPrune achieves 72.38% at 70% sparsity with lowest GPU memory
+  - [ResNet-50 CIFAR-100 Extended Results](key_results/test_matrix_results_20250908_190856/summary_report.txt): **AdamWPrune achieves 74.68% at 50% sparsity** - breakthrough performance
+  - [ResNet-50 CIFAR-100 Initial Results](key_results/test_matrix_results_20250908_121537/summary_report.txt): AdamWPrune achieves 72.38% at 70% sparsity with lowest GPU memory
   - [ResNet-18 CIFAR-10 Results](key_results/test_matrix_results_20250903_180836/report.md): AdamWPrune achieves 90.66% accuracy with lowest memory usage
 
 ## Features

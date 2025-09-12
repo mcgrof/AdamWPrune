@@ -1,0 +1,25 @@
+GPU Performance Summary
+========================
+
+GPU: NVIDIA L40S
+Type: nvidia
+Duration: 9075 seconds
+Start: 2025-09-11T08:18:33.552550
+End: 2025-09-11T10:54:55.799666
+
+GPU Utilization:
+  Average: 98.6%
+  Max: 100.0%
+  Min: 0.0%
+
+Memory Usage:
+  Average: 27.8%
+  Max: 27.8%
+  Min: 0.0%
+
+Temperature Sensors:
+
+Power Draw:
+  Average: 305.1W
+  Max: 325.1W
+  Min: 45.4W
