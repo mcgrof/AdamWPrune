@@ -304,10 +304,22 @@ parallel-rerun:
 	scripts/run_parallel_test_matrix.sh $$CMD_ARGS
 
 # Regenerate summary report from existing test results
+# Usage: make summary [TEST_DIR=test_matrix_results_YYYYMMDD_HHMMSS]
 summary:
 	@if [ -f scripts/regenerate_summary_with_gpu.py ]; then \
 		echo "Regenerating summary with real GPU memory data..."; \
-		python3 scripts/regenerate_summary_with_gpu.py; \
+		if [ -n "$(TEST_DIR)" ]; then \
+			DIR="$(TEST_DIR)"; \
+		else \
+			DIR=$$(ls -d test_matrix_results_* 2>/dev/null | sort | tail -1); \
+			if [ -z "$$DIR" ]; then \
+				echo "Error: No test_matrix_results_* directories found."; \
+				echo "Usage: make summary TEST_DIR=<test_results_dir>"; \
+				exit 1; \
+			fi; \
+		fi; \
+		echo "Using results from: $$DIR"; \
+		python3 scripts/regenerate_summary_with_gpu.py "$$DIR"; \
 	else \
 		python3 scripts/regenerate_summary.py; \
 	fi
