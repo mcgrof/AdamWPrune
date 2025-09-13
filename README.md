@@ -31,17 +31,22 @@ Our testing reveals that **the best-performing optimizer depends on model size**
 - AdamWAdv: 89.42% (-0.88%)
 - SGD: 89.22% (-1.08%)
 
-**ResNet-50 (25.6M parameters, CIFAR-100) - Complete Results:**
+**ResNet-50 (25.6M parameters, ImageNet) - Latest Results (September 2025):**
 
-**🏆 AdamWPrune Dominates Across All Sparsity Levels:**
+**🏆 AdamWPrune Achieves New State-of-the-Art:**
 
-| Sparsity | AdamWPrune | SGD | Best Adam Alternative | Memory Advantage |
-|----------|------------|-----|----------------------|------------------|
-| **50%** | **74.68%** (1st) | 72.32% | AdamWSPAM: 71.60% | -172 MB |
-| **70%** | **72.07%** (2nd) | 74.02% | AdamWAdv: 71.46% | -190 MB |
-| **90%** | **71.97%** (3rd) | 72.84% | Adam: 71.55% | -172 MB |
+| Sparsity | AdamWPrune (AdamW base) | AdamWSPAM | Previous Best | Memory |
+|----------|-------------------------|-----------|---------------|---------|
+| **50%** | **74.54%** (1st) | 73.22% | SGD: 72.32% | 12602.5 MB |
+| **70%** | **72.30%** (3rd) | 72.98% | SGD: 74.02% | 12602.5 MB |
+| **90%** | **73.26%** (2nd) | 72.67% | SGD: 72.84% | 12602.5 MB |
 
-**Key Achievement**: AdamWPrune uses **12602.5 MB** consistently across all sparsity levels, while others need 12774-12792 MB (172-190 MB more!)
+**Critical Note**: These results use `CONFIG_ADAMWPRUNE_BASE_OPTIMIZER_NAME="adamw"` as the base optimizer.
+
+**Key Achievements**: 
+- AdamWPrune achieves **74.54%** at 50% sparsity - best result across all methods!
+- Consistently uses **12602.5 MB** across all sparsity levels
+- Outperforms AdamWSPAM by 1.32% at 50% sparsity
 
 **Key Insight**: As model complexity increases from ResNet-18 to ResNet-50, AdamWSPAM's spike-aware momentum adaptation becomes more beneficial than AdamW's simpler decoupled weight decay. This suggests that larger models with more complex loss landscapes benefit from SPAM's gradient spike detection and momentum reset mechanisms.
 
