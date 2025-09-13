@@ -1,0 +1,69 @@
+Test Matrix Summary Report (With Detailed Analysis)
+Generated: 2025-09-13T07:17:44.642323
+From: test_matrix_results_20250912_023452
+================================================================================
+
+Total tests: 9
+Successful: 9
+Failed: 0
+
+Detailed Results Table:
+------------------------------------------------------------------------------------------------------------------------
+Test ID                                  Best Acc   Final Acc  Epoch    Sparsity   GPU (MB)     Status    
+------------------------------------------------------------------------------------------------------------------------
+resnet50_adamwprune_state_50             74.54%     74.08%     @87      50.0%      12602.5      ✓         
+resnet50_adamwspam_magnitude_50          73.22%     72.97%     @85      50.0%      12596.5      ✓         
+resnet50_adamwspam_magnitude_70          72.98%     72.55%     @96      70.0%      12596.5      ✓         
+resnet50_adamwspam_magnitude_90          72.67%     72.26%     @88      90.0%      12596.5      ✓         
+resnet50_adamwspam_movement_70           72.67%     72.12%     @90      70.0%      12792.5      ✓         
+resnet50_adamwprune_state_90             73.26%     72.04%     @48      90.0%      12602.5      ✓         
+resnet50_adamwprune_state_70             72.30%     72.20%     @86      70.0%      12602.5      ✓         
+resnet50_adamwspam_movement_50           72.28%     72.18%     @94      50.0%      12792.4      ✓         
+resnet50_adamwspam_movement_90           66.84%     50.45%     @93      90.0%      12792.4      ✓         
+------------------------------------------------------------------------------------------------------------------------
+
+Accuracy Analysis:
+--------------------------------------------------------------------------------
+Performance by Optimizer:
+
+ADAMWPRUNE:
+  Best accuracy: 74.54% (epoch 87)
+  Final accuracy: 74.08%
+  Best at target sparsity: 74.54% (epoch 87)
+  Stability (std last 10 epochs): 0.22%
+  Degradation from peak: 0.46%
+
+ADAMWSPAM:
+  Best accuracy: 73.22% (epoch 85)
+  Final accuracy: 72.97%
+  Stability (std last 10 epochs): 0.14%
+  Degradation from peak: 0.25%
+
+
+Fair Comparison (at target sparsity):
+--------------------------------------------------------------------------------
+1. adamwprune: 74.54% (best at 50% sparsity) @ epoch 87
+2. adamwspam: 73.22% @ epoch 85
+3. adamwspam: 72.98% @ epoch 96
+4. adamwspam: 72.67% @ epoch 88
+5. adamwspam: 72.67% @ epoch 90
+6. adamwprune: 72.42% (best at 90% sparsity) @ epoch 93
+7. adamwprune: 72.30% (best at 70% sparsity) @ epoch 86
+8. adamwspam: 72.28% @ epoch 94
+9. adamwspam: 66.84% @ epoch 93
+
+GPU Memory Analysis:
+--------------------------------------------------------------------------------
+Memory Usage Ranking:
+1. resnet50_adamwspam_magnitude_70: 12596.5 MB (accuracy: 72.98%)
+2. resnet50_adamwspam_magnitude_90: 12596.5 MB (accuracy: 72.67%)
+3. resnet50_adamwspam_magnitude_50: 12596.5 MB (accuracy: 73.22%)
+4. resnet50_adamwprune_state_90: 12602.5 MB (accuracy: 73.26%)
+5. resnet50_adamwprune_state_50: 12602.5 MB (accuracy: 74.54%)
+
+Memory Efficiency (Accuracy per GB):
+  adamwspam: 5.93%/GB
+  adamwspam: 5.91%/GB
+  adamwspam: 5.95%/GB
+  adamwprune: 5.95%/GB
+  adamwprune: 6.06%/GB
