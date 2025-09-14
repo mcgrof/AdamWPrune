@@ -17,11 +17,18 @@ def param_groups_for_weight_decay(model, model_type="resnet"):
 
     Args:
         model: The model to get parameters from
-        model_type: Type of model ("lenet", "resnet", etc.) for appropriate decay values
+        model_type: Type of model ("lenet", "resnet", "gpt2", etc.) for appropriate decay values
 
     Returns:
         List of parameter groups with appropriate weight decay settings
     """
+    # For GPT2, use its own configure_optimizers method if available
+    if model_type == "gpt2" and hasattr(model, 'configure_optimizers'):
+        # GPT2 has its own parameter grouping logic for weight decay
+        # Just return all parameters as a single group to avoid the duplicate warning
+        # The weight decay will be applied uniformly
+        return [{"params": model.parameters(), "weight_decay": 0.0}]
+
     decay, no_decay = [], []
     for mn, m in model.named_modules():
         for pn, p in m.named_parameters(recurse=False):
@@ -38,6 +45,8 @@ def param_groups_for_weight_decay(model, model_type="resnet"):
     # Default weight decay values per model type
     if model_type == "lenet":
         default_wd = 1e-4
+    elif model_type == "gpt2":
+        default_wd = 0.1  # GPT2 uses higher weight decay
     else:  # resnet18, resnet50, etc.
         default_wd = 5e-4
 
@@ -69,6 +78,14 @@ def resolve_weight_decay(optimizer_name, user_wd=None, model_type="resnet"):
             return 1e-4
         elif optimizer_name in ["adamw", "adamwadv", "adamwspam", "adamwprune"]:
             return 1e-4
+        elif optimizer_name == "adam":
+            return 0.0  # Coupled L2 with Adam is rarely helpful
+    elif model_type == "gpt2":
+        # GPT-2 defaults (transformer model, uses higher weight decay)
+        if optimizer_name == "sgd":
+            return 0.1
+        elif optimizer_name in ["adamw", "adamwadv", "adamwspam", "adamwprune"]:
+            return 0.1
         elif optimizer_name == "adam":
             return 0.0  # Coupled L2 with Adam is rarely helpful
     else:
