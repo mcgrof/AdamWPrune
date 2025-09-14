@@ -1,0 +1,216 @@
+# SPDX-License-Identifier: MIT
+# GPT-2 Transformer Model Configuration
+
+menu "GPT-2 Configuration"
+
+choice
+	prompt "GPT-2 Model Size"
+	default GPT2_MODEL_124M
+	help
+	  Select the GPT-2 model size to use.
+	  Larger models have better performance but require more memory.
+
+config GPT2_MODEL_124M
+	bool "GPT-2 124M (base)"
+	help
+	  Base GPT-2 model with 124M parameters.
+	  12 layers, 12 heads, 768 embedding dimension.
+	  GPU Memory: ~2-3 GB for training.
+
+config GPT2_MODEL_350M
+	bool "GPT-2 350M (medium)"
+	help
+	  Medium GPT-2 model with 350M parameters.
+	  24 layers, 16 heads, 1024 embedding dimension.
+	  GPU Memory: ~6-8 GB for training.
+
+config GPT2_MODEL_774M
+	bool "GPT-2 774M (large)"
+	help
+	  Large GPT-2 model with 774M parameters.
+	  36 layers, 20 heads, 1280 embedding dimension.
+	  GPU Memory: ~12-16 GB for training.
+
+config GPT2_MODEL_1558M
+	bool "GPT-2 1.5B (xl)"
+	help
+	  Extra large GPT-2 model with 1.5B parameters.
+	  48 layers, 25 heads, 1600 embedding dimension.
+	  GPU Memory: ~24-32 GB for training.
+
+endchoice
+
+config GPT2_MODEL_NAME
+	string
+	default "gpt2" if GPT2_MODEL_124M
+	default "gpt2-medium" if GPT2_MODEL_350M
+	default "gpt2-large" if GPT2_MODEL_774M
+	default "gpt2-xl" if GPT2_MODEL_1558M
+
+# Dataset selection
+choice
+	prompt "Training Dataset"
+	default GPT2_DATASET_SHAKESPEARE
+	help
+	  Select the dataset to use for training GPT-2.
+
+config GPT2_DATASET_SHAKESPEARE
+	bool "Shakespeare (tiny)"
+	help
+	  Tiny Shakespeare dataset (~1MB of text).
+	  Good for testing and development.
+	  ~300K training tokens, ~36K validation tokens.
+
+config GPT2_DATASET_FINEWEBEDU
+	bool "FineWebEdu"
+	help
+	  FineWebEdu dataset - educational web content.
+	  High-quality filtered educational text.
+	  Requires downloading and preprocessing.
+
+config GPT2_DATASET_OPENWEBTEXT
+	bool "OpenWebText"
+	help
+	  OpenWebText dataset - replication of GPT-2's WebText.
+	  Large-scale web scrape dataset.
+	  Requires significant storage and preprocessing.
+
+config GPT2_DATASET_CUSTOM
+	bool "Custom dataset"
+	help
+	  Use a custom dataset.
+	  Specify path to preprocessed .bin files.
+
+endchoice
+
+config GPT2_DATASET_NAME
+	string
+	default "shakespeare" if GPT2_DATASET_SHAKESPEARE
+	default "finewebedu" if GPT2_DATASET_FINEWEBEDU
+	default "openwebtext" if GPT2_DATASET_OPENWEBTEXT
+	default "custom" if GPT2_DATASET_CUSTOM
+
+config GPT2_CUSTOM_DATASET_PATH
+	string "Custom dataset path"
+	depends on GPT2_DATASET_CUSTOM
+	default "data/custom"
+	help
+	  Path to directory containing train.bin and val.bin files.
+
+# Training hyperparameters
+config GPT2_BLOCK_SIZE
+	int "Context length (block size)"
+	default 1024
+	range 128 2048
+	help
+	  Maximum sequence length for training.
+	  Must be less than or equal to model's maximum (1024 for GPT-2).
+
+config GPT2_GRADIENT_ACCUMULATION
+	int "Gradient accumulation steps"
+	default 1
+	range 1 128
+	help
+	  Number of gradient accumulation steps.
+	  Effective batch size = batch_size * gradient_accumulation_steps.
+	  Use higher values to simulate larger batch sizes on limited GPU memory.
+
+config GPT2_EVAL_INTERVAL
+	int "Evaluation interval (steps)"
+	default 100
+	range 10 10000
+	help
+	  Evaluate model every N training steps.
+
+config GPT2_EVAL_SAMPLES
+	int "Evaluation samples"
+	default 200
+	range 10 10000
+	help
+	  Number of samples to use for evaluation.
+
+config GPT2_WARMUP_STEPS
+	int "Learning rate warmup steps"
+	default 100
+	range 0 10000
+	help
+	  Number of warmup steps for learning rate schedule.
+	  0 disables warmup.
+
+config GPT2_DECAY_LR
+	bool "Enable learning rate decay"
+	default y
+	help
+	  Use cosine learning rate decay schedule.
+
+config GPT2_MIN_LR
+	string "Minimum learning rate"
+	default "6e-5"
+	depends on GPT2_DECAY_LR
+	help
+	  Minimum learning rate for cosine decay.
+	  Typically 1/10th of max learning rate.
+
+# Generation settings
+config GPT2_GENERATION_TEMPERATURE
+	string "Generation temperature"
+	default "0.8"
+	help
+	  Temperature for text generation sampling.
+	  Lower values (0.5) = more focused/deterministic.
+	  Higher values (1.0) = more diverse/random.
+
+config GPT2_GENERATION_TOP_K
+	int "Top-k sampling"
+	default 200
+	range 0 50000
+	help
+	  Only sample from top k tokens.
+	  0 = no restriction (sample from all tokens).
+
+config GPT2_GENERATION_MAX_TOKENS
+	int "Maximum generation length"
+	default 500
+	range 10 10000
+	help
+	  Maximum number of tokens to generate.
+
+# Advanced options
+config GPT2_FLASH_ATTENTION
+	bool "Use Flash Attention"
+	default y
+	help
+	  Use Flash Attention for faster training (requires PyTorch >= 2.0).
+	  Significantly reduces memory usage and increases speed.
+
+config GPT2_COMPILE
+	bool "Compile model with torch.compile()"
+	default y
+	depends on COMPILE_MODEL
+	help
+	  Use torch.compile() for faster execution.
+	  Requires PyTorch >= 2.0.
+
+config GPT2_WEIGHT_TYING
+	bool "Use weight tying"
+	default y
+	help
+	  Share weights between input embedding and output projection.
+	  Standard practice for GPT models.
+
+config GPT2_DROPOUT
+	string "Dropout rate"
+	default "0.1"
+	help
+	  Dropout rate for regularization.
+	  0.0 = no dropout, 0.1 = 10% dropout.
+
+config GPT2_BIAS
+	bool "Use bias in Linear/LayerNorm"
+	default y
+	help
+	  Whether to use bias terms in Linear and LayerNorm layers.
+	  GPT-2 uses bias, but newer models often don't.
+
+endmenu
+
