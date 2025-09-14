@@ -80,9 +80,17 @@ parser.add_argument(
 parser.add_argument("--data-dir", type=str, default="data", help="Data directory")
 
 # Training
-parser.add_argument("--batch-size", type=int, default=12, help="Batch size")
 parser.add_argument(
-    "--gradient-accumulation", type=int, default=1, help="Gradient accumulation steps"
+    "--batch-size",
+    type=int,
+    default=64,
+    help="Batch size (default optimized for 24GB+ GPUs)",
+)
+parser.add_argument(
+    "--gradient-accumulation",
+    type=int,
+    default=4,
+    help="Gradient accumulation steps (effective batch = batch_size * grad_accum)",
 )
 parser.add_argument("--num-epochs", type=int, default=1, help="Number of epochs")
 parser.add_argument(
@@ -91,7 +99,12 @@ parser.add_argument(
     default=None,
     help="Override for number of epochs (alias for num-epochs)",
 )
-parser.add_argument("--max-iters", type=int, default=5000, help="Maximum iterations")
+parser.add_argument(
+    "--max-iters",
+    type=int,
+    default=10000,
+    help="Maximum iterations (for better convergence)",
+)
 parser.add_argument("--learning-rate", type=float, default=6e-4, help="Learning rate")
 parser.add_argument("--weight-decay", type=float, default=0.1, help="Weight decay")
 parser.add_argument("--warmup-steps", type=int, default=100, help="Warmup steps")
