@@ -375,9 +375,12 @@ config SPAM_THETA
 
 config SPAM_ENABLE_CLIP
 	bool "Enable spike-aware clipping"
-	default n
+	default y
 	help
 	  Enable SPAM spike-aware clipping using Adam's second moment.
+	  This helps prevent training instability from sudden gradient explosions
+	  by detecting and clipping spikes using z-score thresholding.
+	  Recommended for complex models like GPT-2.
 
 config SPAM_SPIKE_THRESHOLD
 	string "Spike detection z-score threshold"
@@ -387,9 +390,12 @@ config SPAM_SPIKE_THRESHOLD
 
 config SPAM_PERIODIC_RESET
 	bool "Enable periodic momentum reset"
-	default n
+	default y
 	help
 	  Enable periodic reset of momentum at fixed intervals.
+	  This improves exploration of the loss landscape and helps
+	  prevent getting stuck in suboptimal solutions.
+	  Particularly beneficial for large language models like GPT-2.
 
 config SPAM_INTERVAL
 	int "Periodic reset interval (steps)"
@@ -401,10 +407,13 @@ config SPAM_INTERVAL
 
 config SPAM_WARMUP
 	bool "Enable cosine warmup after reset"
-	default n
+	default y
 	depends on SPAM_PERIODIC_RESET
 	help
 	  Enable cosine learning rate warmup after momentum reset.
+	  This prevents training instability after resets by smoothly
+	  ramping the learning rate back up using a cosine schedule.
+	  Essential when periodic reset is enabled.
 
 config SPAM_WARMUP_STEPS
 	int "Warmup steps after reset"
