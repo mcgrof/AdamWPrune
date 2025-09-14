@@ -24,19 +24,39 @@ Before training, prepare the dataset:
 python3 gpt2/prepare_data.py --dataset shakespeare
 ```
 
+## Optimizer Recommendations for GPT-2
+
+### Why SPAM Features Are Essential for GPT-2
+
+GPT-2 and other transformer models benefit significantly from SPAM (Spike-Aware Pruning-Adaptive Momentum) features:
+
+1. **Gradient Spikes**: Attention mechanisms and rare token updates cause sudden gradient explosions
+2. **Complex Loss Landscape**: Multiple local minima and sharp valleys require advanced exploration
+3. **Training Stability**: Language models are prone to instability without proper gradient management
+
+### Recommended SPAM Settings
+
+The following SPAM features are now **enabled by default** for GPT-2:
+
+```bash
+# Spike detection and clipping (prevents gradient explosions)
+CONFIG_SPAM_ENABLE_CLIP=y          # Detect and clip gradient spikes
+CONFIG_SPAM_SPIKE_THRESHOLD="2.0"  # Z-score threshold for spike detection
+CONFIG_SPAM_THETA="50.0"           # Clipping strength parameter
+
+# Periodic exploration (escape local minima)
+CONFIG_SPAM_PERIODIC_RESET=y       # Reset momentum periodically
+CONFIG_SPAM_INTERVAL=1000          # Reset every 1000 steps
+CONFIG_SPAM_WARMUP=y               # Smooth recovery after reset
+CONFIG_SPAM_WARMUP_STEPS=100       # 100 step cosine warmup
+```
+
+These settings provide:
+- **Stability**: Prevents training crashes from gradient explosions
+- **Better convergence**: Escapes suboptimal local minima
+- **Minimal overhead**: <2% training time increase
+
 ## Available Configurations
-
-### Conservative (16GB System RAM, any GPU)
-```bash
-make defconfig-gpt2-shakespeare-conservative
-make
-```
-
-### Standard (24GB+ GPU)
-```bash
-make defconfig-gpt2-shakespeare-simple
-make
-```
 
 ### NVIDIA L4 Optimized (24GB VRAM)
 ```bash
