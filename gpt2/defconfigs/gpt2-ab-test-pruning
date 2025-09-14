@@ -1,0 +1,109 @@
+# GPT-2 A/B Test: AdamWSpam vs AdamWPrune with 50% State Pruning
+# This config runs 2 experiments to compare:
+# 1. AdamWSpam with no pruning (baseline)
+# 2. AdamWPrune with 50% state-based pruning
+#
+# Expected results:
+# - AdamWPrune should achieve similar accuracy with 50% fewer parameters
+# - Memory usage should be lower with pruning
+# - Training time may be slightly longer due to pruning overhead
+
+CONFIG_MODEL_MODE_SINGLE=y
+CONFIG_MODEL_SELECT_GPT2=y
+CONFIG_MODEL_GPT2=y
+CONFIG_MODEL="gpt2"
+
+# GPT-2 Configuration - 124M model for safe testing
+CONFIG_GPT2_MODEL_124M=y
+CONFIG_GPT2_MODEL_NAME="gpt2"
+CONFIG_GPT2_DATASET_SHAKESPEARE=y
+CONFIG_GPT2_DATASET_NAME="shakespeare"
+CONFIG_GPT2_BLOCK_SIZE=256
+CONFIG_GPT2_GRADIENT_ACCUMULATION=4
+CONFIG_GPT2_EVAL_INTERVAL=100
+CONFIG_GPT2_EVAL_SAMPLES=200
+CONFIG_GPT2_WARMUP_STEPS=100
+CONFIG_GPT2_DECAY_LR=y
+CONFIG_GPT2_MIN_LR="6e-5"
+CONFIG_GPT2_DROPOUT="0.1"
+CONFIG_GPT2_FLASH_ATTENTION=y
+CONFIG_GPT2_COMPILE=y
+CONFIG_GPT2_WEIGHT_TYING=y
+CONFIG_GPT2_BIAS=y
+
+# Training parameters optimized for A/B testing
+CONFIG_BATCH_SIZE=64
+CONFIG_NUM_EPOCHS=2  # Enough epochs to see pruning effects
+CONFIG_LEARNING_RATE="6e-4"
+CONFIG_WEIGHT_DECAY="0.1"
+CONFIG_NUM_WORKERS=4
+CONFIG_DEVICE="cuda"
+
+# Optimizer configuration for A/B test
+CONFIG_OPTIMIZER_MODE_MULTIPLE=y
+
+# Only enable the two optimizers we're comparing
+CONFIG_OPTIMIZER_ENABLE_ADAMWSPAM=y  # Baseline
+CONFIG_OPTIMIZER_ENABLE_ADAMWPRUNE=y  # With pruning
+
+# SPAM configuration (shared by both)
+CONFIG_SPAM_THETA="50.0"
+CONFIG_SPAM_ENABLE_CLIP=y
+CONFIG_SPAM_SPIKE_THRESHOLD="2.0"
+CONFIG_SPAM_PERIODIC_RESET=y
+CONFIG_SPAM_INTERVAL=1000
+CONFIG_SPAM_WARMUP=y
+CONFIG_SPAM_WARMUP_STEPS=100
+
+# AdamWPrune configuration
+CONFIG_ADAMWPRUNE_BASE_ADAMW=y  # Use AdamW as base
+CONFIG_ADAMWPRUNE_BASE_OPTIMIZER_NAME="adamw"
+CONFIG_ADAMWPRUNE_ENABLE_PRUNING=y
+CONFIG_ADAMWPRUNE_TARGET_SPARSITY="0.5"  # 50% pruning
+CONFIG_ADAMWPRUNE_WARMUP_STEPS=1000
+CONFIG_ADAMWPRUNE_FREQUENCY=50
+CONFIG_ADAMWPRUNE_RAMP_END_EPOCH=1  # Ramp up pruning in first epoch
+CONFIG_ADAMWPRUNE_BETA1="0.9"
+CONFIG_ADAMWPRUNE_BETA2="0.999"
+CONFIG_ADAMWPRUNE_WEIGHT_DECAY="0.1"
+CONFIG_ADAMWPRUNE_AMSGRAD=y
+
+# Pruning configuration
+CONFIG_PRUNING_MODE_MULTIPLE=y
+
+# Pruning methods for A/B test
+CONFIG_PRUNING_ENABLE_NONE=y   # For AdamWSpam (no pruning)
+CONFIG_PRUNING_ENABLE_STATE=y  # For AdamWPrune (state pruning)
+
+# Only test 50% sparsity
+CONFIG_SPARSITY_ENABLE_50=y
+
+# Pruning parameters
+CONFIG_PRUNING_WARMUP=1000
+CONFIG_PRUNING_FREQUENCY=50
+CONFIG_PRUNING_RAMP_END_EPOCH=1
+
+# State pruning configuration
+CONFIG_STATE_PRUNING_STRATEGY="hybrid"
+CONFIG_STATE_PRUNING_MOMENTUM_WEIGHT="0.5"
+
+# Analysis options
+CONFIG_PRUNING_LOG_SPARSITY=y  # Log sparsity progress
+
+# Test matrix configuration
+CONFIG_TEST_MATRIX_MODE=y
+CONFIG_AUTO_GENERATE_GRAPHS=y  # Generate comparison graphs
+CONFIG_PARALLEL_JOBS=1  # Run sequentially for fair comparison
+
+# Advanced options
+CONFIG_COMPILE_MODEL=y
+CONFIG_MIXED_PRECISION=y
+CONFIG_GPU_WARMUP=y
+CONFIG_SAVE_CHECKPOINT=y
+CONFIG_PIN_MEMORY=y
+CONFIG_PERSISTENT_WORKERS=y
+CONFIG_PREFETCH_FACTOR=2
+
+# Debugging
+CONFIG_VERBOSE=y
+CONFIG_LOG_LEVEL="INFO"

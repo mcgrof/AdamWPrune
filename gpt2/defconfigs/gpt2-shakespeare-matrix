@@ -33,23 +33,22 @@ CONFIG_DEVICE="cuda"
 # Optimizer - Multiple for testing
 CONFIG_OPTIMIZER_MODE_MULTIPLE=y
 
-# Enable optimizers to test
-CONFIG_OPTIMIZER_ENABLE_ADAMW=y
+# A/B Testing: AdamWSpam (no pruning) vs AdamWPrune (50% state pruning)
+# Enable only the optimizers we want to compare
 CONFIG_OPTIMIZER_ENABLE_ADAMWSPAM=y
 CONFIG_OPTIMIZER_ENABLE_ADAMWPRUNE=y
 
-# Pruning - Multiple methods for testing
+# Pruning configuration for A/B test
 CONFIG_PRUNING_MODE_MULTIPLE=y
 
-# Enable pruning methods to test
-CONFIG_PRUNING_ENABLE_NONE=y
-CONFIG_PRUNING_ENABLE_MOVEMENT=y
-CONFIG_PRUNING_ENABLE_STATE=y
+# Enable pruning methods for comparison
+CONFIG_PRUNING_ENABLE_NONE=y  # For AdamWSpam baseline
+CONFIG_PRUNING_ENABLE_STATE=y  # For AdamWPrune
 
-# Sparsity levels to test
+# Only test 50% sparsity for focused comparison
 CONFIG_SPARSITY_ENABLE_50=y
-CONFIG_SPARSITY_ENABLE_70=y
-CONFIG_SPARSITY_ENABLE_90=y
+# CONFIG_SPARSITY_ENABLE_70 is not set
+# CONFIG_SPARSITY_ENABLE_90 is not set
 
 # AdamWPrune specific settings
 CONFIG_ADAMWPRUNE_BASE_ADAMW=y
