@@ -27,7 +27,13 @@ from model import GPT, GPTConfig
 
 # Import from parent directory's lib
 try:
-    from lib.optimizers import create_optimizer
+    from lib.optimizers import (
+        create_optimizer,
+        apply_spam_gradient_processing,
+        apply_periodic_spam_reset,
+        apply_adamprune_masking,
+        update_adamprune_masks,
+    )
     from lib.movement_pruning import MovementPruning
     from lib.magnitude_pruning import MagnitudePruning
 except ImportError:
@@ -35,7 +41,13 @@ except ImportError:
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-    from lib.optimizers import create_optimizer
+    from lib.optimizers import (
+        create_optimizer,
+        apply_spam_gradient_processing,
+        apply_periodic_spam_reset,
+        apply_adamprune_masking,
+        update_adamprune_masks,
+    )
     from lib.movement_pruning import MovementPruning
     from lib.magnitude_pruning import MagnitudePruning
 
@@ -73,6 +85,12 @@ parser.add_argument(
     "--gradient-accumulation", type=int, default=1, help="Gradient accumulation steps"
 )
 parser.add_argument("--num-epochs", type=int, default=1, help="Number of epochs")
+parser.add_argument(
+    "--epochs",
+    type=int,
+    default=None,
+    help="Override for number of epochs (alias for num-epochs)",
+)
 parser.add_argument("--max-iters", type=int, default=5000, help="Maximum iterations")
 parser.add_argument("--learning-rate", type=float, default=6e-4, help="Learning rate")
 parser.add_argument("--weight-decay", type=float, default=0.1, help="Weight decay")
@@ -87,7 +105,7 @@ parser.add_argument(
     "--optimizer",
     type=str,
     default="adamw",
-    choices=["adamw", "adamwprune", "adamwspam", "adamwadv", "sgd"],
+    choices=["sgd", "adam", "adamw", "adamwadv", "adamwspam", "adamwprune"],
     help="Optimizer to use",
 )
 
@@ -122,6 +140,21 @@ parser.add_argument(
 parser.add_argument(
     "--adamwprune-weight-decay", type=float, default=0.1, help="AdamWPrune weight decay"
 )
+parser.add_argument(
+    "--adamwprune-amsgrad", type=str, default="false", help="Use AMSGrad for AdamWPrune"
+)
+
+# SPAM configuration
+parser.add_argument("--spam-theta", type=float, default=50.0, help="SPAM theta")
+parser.add_argument(
+    "--spam-interval", type=int, default=1000, help="SPAM reset interval"
+)
+parser.add_argument(
+    "--spam-warmup-steps", type=int, default=100, help="SPAM warmup steps"
+)
+parser.add_argument(
+    "--spam-enable-clip", action="store_true", help="Enable SPAM clipping"
+)
 
 # Evaluation
 parser.add_argument(
@@ -131,6 +164,11 @@ parser.add_argument(
     "--eval-samples", type=int, default=200, help="Number of evaluation samples"
 )
 parser.add_argument("--log-interval", type=int, default=10, help="Logging interval")
+
+# Output
+parser.add_argument(
+    "--json-output", type=str, default=None, help="Path to save training metrics JSON"
+)
 
 # System
 parser.add_argument("--device", type=str, default="cuda", help="Device to use")
@@ -155,6 +193,10 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+# Handle epochs alias
+if args.epochs is not None:
+    args.num_epochs = args.epochs
 
 # -----------------------------------------------------------------------------
 # Setup
@@ -241,10 +283,16 @@ if args.compile and hasattr(torch, "compile"):
 
 print(f"Setting up {args.optimizer} optimizer...")
 
-# Create optimizer using our unified interface
-if args.optimizer in ["adamwprune", "adamwspam", "adamwadv"]:
-    # Use our custom optimizers (they handle parameter grouping internally)
-    optimizer, scheduler, _, _, adamwprune_state = create_optimizer(
+# Enable state pruning for AdamWPrune when requested
+if args.optimizer == "adamwprune" and args.pruning_method == "state":
+    args.adamwprune_enable_pruning = True
+    args.adamwprune_target_sparsity = args.target_sparsity
+    args.adamwprune_warmup_steps = args.pruning_warmup
+    args.adamwprune_ramp_end_epoch = min(8, args.num_epochs - 1)
+
+# Create optimizer using the library function
+optimizer, scheduler, gradient_clip_norm, spam_state, adamwprune_state = (
+    create_optimizer(
         model=model,
         optimizer_type=args.optimizer,
         learning_rate=args.learning_rate,
@@ -252,16 +300,7 @@ if args.optimizer in ["adamwprune", "adamwspam", "adamwadv"]:
         args=args,
         model_type="gpt2",
     )
-else:
-    # Use model's configure_optimizers for standard PyTorch optimizers
-    optimizer = model.configure_optimizers(
-        weight_decay=args.weight_decay,
-        learning_rate=args.learning_rate,
-        betas=(0.9, 0.999),
-        device_type=device,
-    )
-    scheduler = None
-    adamwprune_state = None
+)
 
 # Pruning setup
 pruner = None
@@ -381,17 +420,35 @@ for iter_num in range(args.max_iters):
         scaler.scale(loss).backward()
         running_loss += loss.item()
 
-    # Clip gradients
+    # Gradient processing for special optimizers
     if args.optimizer != "sgd":
         scaler.unscale_(optimizer)
+
+        # Apply AdamWPrune gradient masking
+        apply_adamprune_masking(optimizer, adamwprune_state)
+
+        # Apply SPAM gradient processing
+        apply_spam_gradient_processing(optimizer, model, spam_state, gradient_clip_norm)
+
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+    # Periodic SPAM momentum reset with optional warmup
+    apply_periodic_spam_reset(optimizer, spam_state)
 
     # Optimizer step
     scaler.step(optimizer)
     scaler.update()
     optimizer.zero_grad(set_to_none=True)
 
-    # Update pruning
+    # Update AdamWPrune state-based pruning
+    # Calculate current epoch based on iterations (approximate)
+    iters_per_epoch = (
+        args.max_iters // args.num_epochs if args.num_epochs > 0 else args.max_iters
+    )
+    current_epoch = iter_num // iters_per_epoch
+    update_adamprune_masks(optimizer, adamwprune_state, None, current_epoch)
+
+    # Update pruning for external pruners
     if pruner is not None:
         pruner.update_masks(iter_num)
 
