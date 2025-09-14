@@ -155,16 +155,59 @@ def run_training_with_monitoring(
     # Extract training metadata
     training_metadata = extract_training_metadata(model, training_args)
 
+    # Check if DDP is enabled for GPT-2
+    use_ddp = False
+    num_gpus = 1
+    if model == "gpt2":
+        try:
+            # Check if config.py exists and has DDP enabled
+            config_path = parent_dir / "config.py"
+            if config_path.exists():
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("config", config_path)
+                config_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(config_module)
+
+                if hasattr(config_module, 'config'):
+                    use_ddp = getattr(config_module.config, 'GPT2_USE_DDP', 'n') == 'y'
+                    # Check for number of GPUs from GPT2_DDP_NUM_GPUS or PARALLEL_JOBS
+                    num_gpus = int(getattr(config_module.config, 'GPT2_DDP_NUM_GPUS',
+                                         getattr(config_module.config, 'PARALLEL_JOBS', '1')))
+
+                    # If DDP is enabled, use the configured number of GPUs
+                    if use_ddp and num_gpus > 1:
+                        import torch
+                        available_gpus = torch.cuda.device_count()
+                        if available_gpus > 0:
+                            num_gpus = min(num_gpus, available_gpus)
+                        else:
+                            use_ddp = False  # No GPUs available
+
+        except Exception as e:
+            logger.debug(f"Could not determine DDP settings: {e}")
+
     # Start GPU monitoring
     logger.info(f"Starting training with GPU monitoring: {config_name}")
-    logger.info(f"Command: python {train_script} {' '.join(training_args)}")
 
     try:
         with GPUMonitoringContext(
             config_name, output_dir, training_metadata
         ) as gpu_monitor:
-            # Run the training script
-            cmd = [sys.executable, str(train_script)] + training_args
+
+            if use_ddp and num_gpus > 1:
+                # Use torchrun for DDP
+                logger.info(f"Launching DDP training on {num_gpus} GPUs")
+                cmd = [
+                    "torchrun",
+                    "--standalone",
+                    "--nproc_per_node", str(num_gpus),
+                    str(train_script)
+                ] + training_args
+                logger.info(f"DDP Command: {' '.join(cmd)}")
+            else:
+                # Regular single GPU/CPU training
+                cmd = [sys.executable, str(train_script)] + training_args
+                logger.info(f"Command: {' '.join(cmd)}")
 
             # Change to model directory for training
             result = subprocess.run(
