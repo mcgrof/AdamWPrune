@@ -1,23 +1,20 @@
-# GPT-2 A/B Test for 8x NVIDIA H100 (80GB each, 640GB total): Enterprise-scale configuration
-# This config is optimized for maximum throughput on an 8x H100 system
+# GPT-2 A/B Test for 8x NVIDIA H100 (80GB each, 640GB total): FineWebEdu dataset
+# Using smallest model (124M) with larger dataset for enterprise testing
 CONFIG_MODEL_MODE_SINGLE=y
 CONFIG_MODEL_SELECT_GPT2=y
 CONFIG_MODEL_GPT2=y
 CONFIG_MODEL="gpt2"
 
-# GPT-2 Configuration - Can handle larger models with 640GB total VRAM
-# Using 350M model for better learning (124M is too small for this hardware)
-# CONFIG_GPT2_MODEL_124M is not set
-CONFIG_GPT2_MODEL_350M=y
-# CONFIG_GPT2_MODEL_774M is not set
-# CONFIG_GPT2_MODEL_1558M is not set
-CONFIG_GPT2_MODEL_NAME="gpt2-medium"
-CONFIG_GPT2_DATASET_SHAKESPEARE=y
-CONFIG_GPT2_DATASET_NAME="shakespeare"
-CONFIG_GPT2_BLOCK_SIZE=512  # Larger context for H100
-CONFIG_GPT2_GRADIENT_ACCUMULATION=2  # Less accumulation needed with large batch
-CONFIG_GPT2_EVAL_INTERVAL=50  # More frequent eval with faster training
-CONFIG_GPT2_EVAL_SAMPLES=500  # More eval samples for better metrics
+# GPT-2 Configuration - 124M model (smallest) with FineWebEdu dataset
+CONFIG_GPT2_MODEL_124M=y
+CONFIG_GPT2_MODEL_NAME="gpt2"
+# CONFIG_GPT2_DATASET_SHAKESPEARE is not set
+CONFIG_GPT2_DATASET_FINEWEBEDU=y
+CONFIG_GPT2_DATASET_NAME="finewebedu"
+CONFIG_GPT2_BLOCK_SIZE=512  # Larger context for better training
+CONFIG_GPT2_GRADIENT_ACCUMULATION=2
+CONFIG_GPT2_EVAL_INTERVAL=100
+CONFIG_GPT2_EVAL_SAMPLES=500
 CONFIG_GPT2_WARMUP_STEPS=200
 CONFIG_GPT2_DECAY_LR=y
 CONFIG_GPT2_MIN_LR="6e-5"
@@ -27,10 +24,9 @@ CONFIG_GPT2_COMPILE=y
 CONFIG_GPT2_WEIGHT_TYING=y
 CONFIG_GPT2_BIAS=y
 
-# Training parameters optimized for 8x H100 (640GB total VRAM)
-# Each GPU can handle much larger batches
-CONFIG_BATCH_SIZE=512  # 64 per GPU with 8 GPUs
-CONFIG_NUM_EPOCHS=3  # More epochs for better convergence
+# Training parameters optimized for 8x H100 with larger dataset
+CONFIG_BATCH_SIZE=512  # Large batch for H100 throughput
+CONFIG_NUM_EPOCHS=2
 CONFIG_LEARNING_RATE="6e-4"
 CONFIG_WEIGHT_DECAY="0.1"
 CONFIG_NUM_WORKERS=32  # 4 workers per GPU
@@ -52,7 +48,7 @@ CONFIG_SPAM_THETA="50.0"
 CONFIG_SPAM_ENABLE_CLIP=y
 CONFIG_SPAM_SPIKE_THRESHOLD="2.0"
 CONFIG_SPAM_PERIODIC_RESET=y
-CONFIG_SPAM_INTERVAL=500  # More frequent resets with faster training
+CONFIG_SPAM_INTERVAL=1000
 CONFIG_SPAM_WARMUP=y
 CONFIG_SPAM_WARMUP_STEPS=100
 
@@ -62,7 +58,7 @@ CONFIG_ADAMWPRUNE_BASE_OPTIMIZER_NAME="adamwspam"
 CONFIG_ADAMWPRUNE_ENABLE_PRUNING=y
 CONFIG_ADAMWPRUNE_TARGET_SPARSITY="0.5"
 CONFIG_ADAMWPRUNE_WARMUP_STEPS=1000
-CONFIG_ADAMWPRUNE_FREQUENCY=25  # More frequent pruning updates
+CONFIG_ADAMWPRUNE_FREQUENCY=50
 CONFIG_ADAMWPRUNE_RAMP_END_EPOCH=1
 CONFIG_ADAMWPRUNE_BETA1="0.9"
 CONFIG_ADAMWPRUNE_BETA2="0.999"
@@ -83,14 +79,14 @@ CONFIG_PRUNING_ENABLE_STATE=y
 # CONFIG_PRUNING_ENABLE_MOVEMENT is not set
 # CONFIG_PRUNING_ENABLE_RANDOM is not set
 
-# Test multiple sparsity levels on H100 for research
+# Only test 50% sparsity for focused comparison
 CONFIG_SPARSITY_ENABLE_50=y
-CONFIG_SPARSITY_ENABLE_70=y
-CONFIG_SPARSITY_ENABLE_90=y
+# CONFIG_SPARSITY_ENABLE_70 is not set
+# CONFIG_SPARSITY_ENABLE_90 is not set
 
 # Pruning parameters
 CONFIG_PRUNING_WARMUP=1000
-CONFIG_PRUNING_FREQUENCY=25  # More frequent updates
+CONFIG_PRUNING_FREQUENCY=50
 CONFIG_PRUNING_RAMP_END_EPOCH=1
 
 # Momentum pruning configuration for AdamWSpam
@@ -110,26 +106,13 @@ CONFIG_PARALLEL_JOBS=8  # One job per GPU
 
 # Advanced options optimized for H100
 CONFIG_COMPILE_MODEL=y
-CONFIG_MIXED_PRECISION=y  # H100 has excellent FP16/BF16 performance
+CONFIG_MIXED_PRECISION=y
 CONFIG_GPU_WARMUP=y
 CONFIG_SAVE_CHECKPOINT=y
 CONFIG_PIN_MEMORY=y
 CONFIG_PERSISTENT_WORKERS=y
 CONFIG_PREFETCH_FACTOR=8  # High prefetch for maximum throughput
 
-# H100 specific optimizations
-CONFIG_USE_CHANNELS_LAST=y  # Memory format optimization
-CONFIG_CUDNN_BENCHMARK=y  # Auto-tune for H100
-CONFIG_USE_BFLOAT16=y  # H100 has native BF16 support
-
-# Distributed training settings for multi-GPU
-CONFIG_DISTRIBUTED_TRAINING=y
-CONFIG_DISTRIBUTED_BACKEND="nccl"  # NVIDIA collective communications
-CONFIG_GRADIENT_CHECKPOINTING=y  # Trade compute for memory
-CONFIG_FIND_UNUSED_PARAMETERS=y
-
 # Debugging
 CONFIG_VERBOSE=y
 CONFIG_LOG_LEVEL="INFO"
-CONFIG_PROFILE_MEMORY=y  # Monitor memory usage across GPUs
-CONFIG_LOG_GPU_STATS=y  # Log detailed GPU statistics
