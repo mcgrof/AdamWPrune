@@ -201,19 +201,25 @@ if args.epochs is not None:
 # Create output directory
 os.makedirs(args.output_dir, exist_ok=True)
 
-# Device setup
-device = args.device
+# Device setup - auto-detect if CUDA is available
+if args.device == "cuda" and not torch.cuda.is_available():
+    print("CUDA not available, falling back to CPU")
+    device = "cpu"
+else:
+    device = args.device
+
 dtype = {
     "float32": torch.float32,
     "float16": torch.float16,
     "bfloat16": torch.bfloat16,
 }[args.dtype]
 ptdtype = dtype
-ctx = (
-    nullcontext()
-    if device == "cpu"
-    else torch.amp.autocast(device_type=device, dtype=ptdtype)
-)
+
+# Only use autocast if on CUDA and not using float32
+if device == "cpu" or args.dtype == "float32":
+    ctx = nullcontext()
+else:
+    ctx = torch.amp.autocast(device_type=device, dtype=ptdtype)
 
 # Fix random seeds
 torch.manual_seed(1337)
@@ -366,8 +372,25 @@ metrics = {
     "iterations": [],
 }
 
-# Initialize gradient scaler for mixed precision
-scaler = torch.amp.GradScaler("cuda", enabled=(dtype == torch.float16))
+# Initialize gradient scaler for mixed precision (only for CUDA)
+if device == "cuda":
+    scaler = torch.amp.GradScaler("cuda", enabled=(dtype == torch.float16))
+else:
+    # CPU doesn't support GradScaler, use a dummy that just passes through
+    class DummyScaler:
+        def scale(self, loss):
+            return loss
+
+        def unscale_(self, optimizer):
+            pass
+
+        def step(self, optimizer):
+            optimizer.step()
+
+        def update(self):
+            pass
+
+    scaler = DummyScaler()
 
 print(f"\nStarting training...")
 print(f"Parameters: {model.get_num_params()/1e6:.2f}M")
@@ -419,7 +442,9 @@ for iter_num in range(args.max_iters):
 
     # Gradient processing for special optimizers
     if args.optimizer != "sgd":
-        scaler.unscale_(optimizer)
+        # Only unscale if using actual CUDA scaler
+        if device == "cuda":
+            scaler.unscale_(optimizer)
 
         # Apply AdamWPrune gradient masking
         apply_adamprune_masking(optimizer, adamwprune_state)
