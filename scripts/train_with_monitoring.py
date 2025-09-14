@@ -35,7 +35,7 @@ def parse_arguments():
         "--model",
         type=str,
         required=True,
-        choices=["lenet5", "resnet18", "resnet50"],
+        choices=["lenet5", "resnet18", "resnet50", "gpt2"],
         help="Model to train",
     )
 
