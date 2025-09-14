@@ -11,32 +11,36 @@ choice
 	  Larger models have better performance but require more memory.
 
 config GPT2_MODEL_124M
-	bool "GPT-2 124M (base)"
+	bool "GPT-2 124M (base) - RECOMMENDED"
 	help
 	  Base GPT-2 model with 124M parameters.
 	  12 layers, 12 heads, 768 embedding dimension.
-	  GPU Memory: ~2-3 GB for training.
+	  System RAM: 8-16 GB required for loading
+	  GPU Memory: ~4-8 GB for training (batch size dependent)
 
 config GPT2_MODEL_350M
-	bool "GPT-2 350M (medium)"
+	bool "GPT-2 350M (medium) - REQUIRES 32GB+ SYSTEM RAM"
 	help
 	  Medium GPT-2 model with 350M parameters.
 	  24 layers, 16 heads, 1024 embedding dimension.
-	  GPU Memory: ~6-8 GB for training.
+	  WARNING: Requires 32-64 GB system RAM for loading!
+	  GPU Memory: ~8-16 GB for training
 
 config GPT2_MODEL_774M
-	bool "GPT-2 774M (large)"
+	bool "GPT-2 774M (large) - REQUIRES 64GB+ SYSTEM RAM"
 	help
 	  Large GPT-2 model with 774M parameters.
 	  36 layers, 20 heads, 1280 embedding dimension.
-	  GPU Memory: ~12-16 GB for training.
+	  WARNING: Requires 64-128 GB system RAM for loading!
+	  GPU Memory: ~16-24 GB for training
 
 config GPT2_MODEL_1558M
-	bool "GPT-2 1.5B (xl)"
+	bool "GPT-2 1.5B (xl) - REQUIRES 128GB+ SYSTEM RAM"
 	help
 	  Extra large GPT-2 model with 1.5B parameters.
 	  48 layers, 25 heads, 1600 embedding dimension.
-	  GPU Memory: ~24-32 GB for training.
+	  WARNING: Requires 128+ GB system RAM for loading!
+	  GPU Memory: ~24-40 GB for training
 
 endchoice
 
