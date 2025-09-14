@@ -1,19 +1,20 @@
-# GPT-2 on Shakespeare dataset optimized for AMD W7900 (48GB)
+# GPT-2 on Shakespeare dataset optimized for AMD W7900 (48GB VRAM)
+# WARNING: Keep model at 124M to avoid system RAM exhaustion during loading
 CONFIG_MODEL_MODE_SINGLE=y
 CONFIG_MODEL_SELECT_GPT2=y
 CONFIG_MODEL_GPT2=y
 CONFIG_MODEL="gpt2"
 
-# GPT-2 Configuration - Use larger model for W7900
-CONFIG_GPT2_MODEL_350M=y  # Can handle 350M model with 48GB
-CONFIG_GPT2_MODEL_NAME="gpt2-medium"
+# GPT-2 Configuration - Use standard 124M model (350M causes RAM issues)
+CONFIG_GPT2_MODEL_124M=y  # 124M model to avoid system RAM exhaustion
+CONFIG_GPT2_MODEL_NAME="gpt2"
 CONFIG_GPT2_DATASET_SHAKESPEARE=y
 CONFIG_GPT2_DATASET_NAME="shakespeare"
-CONFIG_GPT2_BLOCK_SIZE=512  # Longer context for better learning
-CONFIG_GPT2_GRADIENT_ACCUMULATION=8  # Higher accumulation for stable training
+CONFIG_GPT2_BLOCK_SIZE=256  # Standard block size
+CONFIG_GPT2_GRADIENT_ACCUMULATION=4  # Moderate accumulation
 CONFIG_GPT2_EVAL_INTERVAL=100
 CONFIG_GPT2_EVAL_SAMPLES=200
-CONFIG_GPT2_WARMUP_STEPS=200  # More warmup for larger batch
+CONFIG_GPT2_WARMUP_STEPS=100
 CONFIG_GPT2_DECAY_LR=y
 CONFIG_GPT2_MIN_LR="6e-5"
 CONFIG_GPT2_DROPOUT="0.1"
@@ -22,12 +23,12 @@ CONFIG_GPT2_COMPILE=y
 CONFIG_GPT2_WEIGHT_TYING=y
 CONFIG_GPT2_BIAS=y
 
-# Training parameters optimized for W7900
-CONFIG_BATCH_SIZE=128  # Large batch for 48GB VRAM
-CONFIG_NUM_EPOCHS=3  # More epochs for better convergence
-CONFIG_LEARNING_RATE="3e-4"  # Slightly lower LR for larger batch
+# Training parameters optimized for W7900 (focus on VRAM, not system RAM)
+CONFIG_BATCH_SIZE=96  # Large batch that fits in 48GB VRAM
+CONFIG_NUM_EPOCHS=2
+CONFIG_LEARNING_RATE="6e-4"
 CONFIG_WEIGHT_DECAY="0.1"
-CONFIG_NUM_WORKERS=8  # More workers for faster data loading
+CONFIG_NUM_WORKERS=4  # Reduced workers to avoid RAM pressure
 CONFIG_DEVICE="cuda"
 
 # Optimizer - AdamW
