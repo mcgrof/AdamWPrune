@@ -278,9 +278,51 @@ def get_batch(split, data_dir, dataset, block_size, batch_size, device):
 
 
 # -----------------------------------------------------------------------------
+# DDP setup (if enabled)
+ddp = False
+ddp_rank = 0
+ddp_local_rank = 0
+ddp_world_size = 1
+
+# Check if DDP is enabled via config
+try:
+    import config as cfg
+    if hasattr(cfg, 'config') and hasattr(cfg.config, 'GPT2_USE_DDP'):
+        use_ddp = cfg.config.GPT2_USE_DDP == 'y'
+        ddp_backend = getattr(cfg.config, 'GPT2_DDP_BACKEND', 'nccl')
+        ddp_find_unused = getattr(cfg.config, 'GPT2_DDP_FIND_UNUSED_PARAMS', 'y') == 'y'
+    else:
+        use_ddp = False
+        ddp_backend = 'nccl'
+        ddp_find_unused = True
+except ImportError:
+    use_ddp = False
+    ddp_backend = 'nccl'
+    ddp_find_unused = True
+
+# Initialize DDP if enabled and environment variables are set
+if use_ddp and 'RANK' in os.environ:
+    ddp = True
+    init_process_group(backend=ddp_backend)
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    ddp_world_size = int(os.environ['WORLD_SIZE'])
+    device = f'cuda:{ddp_local_rank}'
+    torch.cuda.set_device(device)
+    master_process = ddp_rank == 0
+    seed_offset = ddp_rank
+    print(f"DDP initialized: rank {ddp_rank}/{ddp_world_size}, local rank {ddp_local_rank}, device {device}")
+else:
+    master_process = True
+    seed_offset = 0
+    if use_ddp:
+        print("DDP enabled in config but RANK environment variable not set. Running in single GPU mode.")
+
+# -----------------------------------------------------------------------------
 # Model initialization
 
-print(f"Initializing GPT-2 model: {args.model_name}")
+if master_process:
+    print(f"Initializing GPT-2 model: {args.model_name}")
 config = GPTConfig.from_name(args.model_name)
 config.block_size = args.block_size
 config.dropout = args.dropout
@@ -289,8 +331,12 @@ config.bias = args.bias
 model = GPT(config)
 model.to(device)
 
-# Compile model if requested
-if args.compile and hasattr(torch, "compile"):
+# Wrap model in DDP if enabled
+if ddp:
+    model = DDP(model, device_ids=[ddp_local_rank], find_unused_parameters=ddp_find_unused)
+
+# Compile model if requested (only compile the base model, not DDP wrapper)
+if args.compile and hasattr(torch, "compile") and not ddp:
     print("Compiling model with torch.compile()...")
     model = torch.compile(model)
 
@@ -487,8 +533,8 @@ for iter_num in range(args.max_iters):
     if pruner is not None:
         pruner.update_masks(iter_num)
 
-    # Logging
-    if iter_num % args.log_interval == 0:
+    # Logging (only on master process)
+    if iter_num % args.log_interval == 0 and master_process:
         t1 = time.time()
         dt = t1 - t0
         t0 = t1
@@ -597,3 +643,7 @@ with open(metrics_path, "w") as f:
 print(f"Saved detailed metrics to {metrics_path}")
 
 print("\nTraining complete!")
+
+# Cleanup DDP
+if ddp:
+    destroy_process_group()
