@@ -188,9 +188,6 @@ parser.add_argument(
 parser.add_argument(
     "--output-dir", type=str, default="gpt2/outputs", help="Output directory"
 )
-parser.add_argument(
-    "--json-output", type=str, default=None, help="JSON output file for metrics"
-)
 
 args = parser.parse_args()
 
