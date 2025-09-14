@@ -216,5 +216,33 @@ config GPT2_BIAS
 	  Whether to use bias terms in Linear and LayerNorm layers.
 	  GPT-2 uses bias, but newer models often don't.
 
+# Distributed Training
+config GPT2_USE_DDP
+	bool "Enable Distributed Data Parallel (DDP)"
+	default n
+	help
+	  Enable multi-GPU training with PyTorch Distributed Data Parallel.
+	  This allows training across multiple GPUs on one or more nodes.
+	  Recommended for systems with multiple GPUs like H100x8.
+
+config GPT2_DDP_BACKEND
+	string "DDP backend"
+	default "nccl"
+	depends on GPT2_USE_DDP
+	help
+	  Backend for distributed training.
+	  - nccl: NVIDIA GPUs (recommended)
+	  - gloo: CPU or mixed environments
+	  - mpi: MPI-based clusters
+
+config GPT2_DDP_FIND_UNUSED_PARAMS
+	bool "Find unused parameters in DDP"
+	default y
+	depends on GPT2_USE_DDP
+	help
+	  Enable finding unused parameters in the model.
+	  Required for models with conditional execution paths.
+	  May add slight overhead but ensures correctness.
+
 endmenu
 
