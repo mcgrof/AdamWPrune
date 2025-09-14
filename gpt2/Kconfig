@@ -244,5 +244,15 @@ config GPT2_DDP_FIND_UNUSED_PARAMS
 	  Required for models with conditional execution paths.
 	  May add slight overhead but ensures correctness.
 
+config GPT2_DDP_NUM_GPUS
+	int "Number of GPUs for DDP"
+	default 1
+	range 1 16
+	depends on GPT2_USE_DDP
+	help
+	  Number of GPUs to use for distributed training.
+	  This overrides PARALLEL_JOBS when DDP is enabled.
+	  Set to 8 for H100x8 systems.
+
 endmenu
 
