@@ -77,7 +77,7 @@ parser.add_argument(
     choices=["shakespeare", "finewebedu", "openwebtext"],
     help="Dataset to use",
 )
-parser.add_argument("--data-dir", type=str, default="gpt2/data", help="Data directory")
+parser.add_argument("--data-dir", type=str, default="data", help="Data directory")
 
 # Training
 parser.add_argument("--batch-size", type=int, default=12, help="Batch size")
