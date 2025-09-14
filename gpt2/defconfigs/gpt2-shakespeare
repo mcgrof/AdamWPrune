@@ -1,4 +1,4 @@
-# GPT-2 on Shakespeare dataset
+# GPT-2 on Shakespeare dataset (single optimizer)
 CONFIG_MODEL_MODE_SINGLE=y
 CONFIG_MODEL_SELECT_GPT2=y
 CONFIG_MODEL_GPT2=y
