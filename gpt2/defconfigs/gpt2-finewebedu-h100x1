@@ -70,13 +70,13 @@ CONFIG_PRUNING_MODE_MULTIPLE=y
 
 # Enable pruning methods for proper comparison:
 # - NONE for baseline (both optimizers without pruning)
-# - MAGNITUDE for AdamWSpam (best performing in ResNet50 tests)
+# - MOVEMENT for AdamWSpam (gradient-based pruning)
 # - STATE for AdamWPrune (built-in state pruning)
 CONFIG_PRUNING_ENABLE_NONE=y
-CONFIG_PRUNING_ENABLE_MAGNITUDE=y
+# CONFIG_PRUNING_ENABLE_MAGNITUDE is not set
 # CONFIG_PRUNING_ENABLE_MOMENTUM is not set
 CONFIG_PRUNING_ENABLE_STATE=y
-# CONFIG_PRUNING_ENABLE_MOVEMENT is not set
+CONFIG_PRUNING_ENABLE_MOVEMENT=y
 # CONFIG_PRUNING_ENABLE_RANDOM is not set
 
 # Only test 50% sparsity for focused comparison
@@ -89,9 +89,9 @@ CONFIG_PRUNING_WARMUP=1000
 CONFIG_PRUNING_FREQUENCY=50
 CONFIG_PRUNING_RAMP_END_EPOCH=1
 
-# Magnitude pruning configuration for AdamWSpam
-CONFIG_MAGNITUDE_PRUNING_STRUCTURED=n
-CONFIG_MAGNITUDE_PRUNING_NORM="l1"
+# Movement pruning configuration for AdamWSpam
+CONFIG_MOVEMENT_PRUNING_BETA="0.9"
+CONFIG_MOVEMENT_PRUNING_USE_GRADIENT=y
 
 # State pruning configuration for AdamWPrune
 CONFIG_STATE_PRUNING_STRATEGY="hybrid"
