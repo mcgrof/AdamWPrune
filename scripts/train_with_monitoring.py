@@ -210,11 +210,16 @@ def run_training_with_monitoring(
                 logger.info(f"Command: {' '.join(cmd)}")
 
             # Change to model directory for training
+            # Set environment to disable Python buffering
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'
+
             result = subprocess.run(
                 cmd,
                 cwd=model_dir,
                 capture_output=False,  # Allow real-time output
                 text=True,
+                env=env,
             )
 
             if result.returncode != 0:
