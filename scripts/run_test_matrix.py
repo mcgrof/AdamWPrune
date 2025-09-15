@@ -620,6 +620,18 @@ def run_single_test(
     )
     cmd.extend(["--json-output", json_output])
 
+    # Add experiment tracking configuration if specified
+    if "EXPERIMENT_TRACKER" in config and config["EXPERIMENT_TRACKER"] != "none":
+        cmd.extend(["--tracker", config["EXPERIMENT_TRACKER"]])
+        if "TRACKER_PROJECT" in config:
+            cmd.extend(["--tracker-project", config["TRACKER_PROJECT"]])
+        if "TRACKER_RUN_NAME" in config and config["TRACKER_RUN_NAME"]:
+            cmd.extend(["--tracker-run-name", config["TRACKER_RUN_NAME"]])
+        # Set WANDB offline mode if configured
+        if config.get("EXPERIMENT_TRACKER") == "wandb" and config.get("WANDB_OFFLINE") == "y":
+            import os
+            os.environ["WANDB_MODE"] = "offline"
+
     # Override epochs if requested (for quick testing)
     if override_epochs is not None:
         cmd.extend(["--epochs", str(override_epochs)])

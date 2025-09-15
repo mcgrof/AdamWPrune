@@ -152,6 +152,56 @@ config CHECKPOINT_INTERVAL
 
 endmenu
 
+menu "Experiment Tracking"
+
+config EXPERIMENT_TRACKER
+	string "Experiment tracking backend"
+	default "none"
+	help
+	  Choose experiment tracking backend:
+	  - "none": No experiment tracking (default)
+	  - "trackio": Lightweight, local-first tracking
+	  - "wandb": Weights & Biases cloud tracking
+
+	  Install required packages:
+	  - Trackio: pip install trackio
+	  - WandB: pip install wandb
+
+config TRACKER_PROJECT
+	string "Project name for experiment tracking"
+	default "adamwprune-experiments"
+	depends on EXPERIMENT_TRACKER != "none"
+	help
+	  Project name to organize experiments in the tracking system.
+	  Used by both Trackio and WandB.
+
+config TRACKER_RUN_NAME
+	string "Run name for experiment tracking"
+	default ""
+	depends on EXPERIMENT_TRACKER != "none"
+	help
+	  Optional custom name for this training run.
+	  If empty, will be auto-generated with format:
+	  {model}_{optimizer}_{timestamp}
+
+config WANDB_OFFLINE
+	bool "Run WandB in offline mode"
+	default n
+	depends on EXPERIMENT_TRACKER = "wandb"
+	help
+	  Run WandB in offline mode without requiring login.
+	  Runs can be synced later with 'wandb sync'.
+
+config TRACKIO_PORT
+	int "Port for Trackio dashboard"
+	default 7860
+	depends on EXPERIMENT_TRACKER = "trackio"
+	help
+	  Port number for the Trackio web dashboard.
+	  Access dashboard with: trackio show --port PORT
+
+endmenu
+
 menu "Test Matrix"
 
 config TEST_RESULTS_DIR
