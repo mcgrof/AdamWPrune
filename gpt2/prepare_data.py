@@ -10,6 +10,7 @@ import numpy as np
 import requests
 from pathlib import Path
 import tiktoken
+from datasets import load_dataset
 
 def download_shakespeare():
     """Download and prepare Shakespeare dataset."""
@@ -55,6 +56,109 @@ def download_shakespeare():
     print(f"Saved {len(val_data):,} validation tokens to {val_file}")
     print("Dataset preparation complete!")
 
+def download_finewebedu():
+    """Download and prepare FineWebEdu dataset."""
+    data_dir = Path("gpt2/data/finewebedu")
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    train_file = data_dir / "train.bin"
+    val_file = data_dir / "val.bin"
+
+    # Check if already processed
+    if train_file.exists() and val_file.exists():
+        print(f"FineWebEdu dataset already exists at {data_dir}")
+        return
+
+    print("Downloading FineWebEdu dataset (this may take a while)...")
+    # Load a subset of FineWebEdu for reasonable training time
+    # Using 'sample-10BT' subset which is ~10B tokens
+    dataset = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train", streaming=True)
+
+    print("Tokenizing FineWebEdu dataset...")
+    enc = tiktoken.get_encoding("gpt2")
+
+    # Process in chunks to avoid memory issues
+    max_tokens = 100_000_000  # 100M tokens for reasonable size
+    all_tokens = []
+    token_count = 0
+
+    for example in dataset:
+        if token_count >= max_tokens:
+            break
+        text = example['text']
+        tokens = enc.encode(text, allowed_special={"<|endoftext|>"})
+        all_tokens.extend(tokens)
+        token_count += len(tokens)
+
+        if token_count % 1_000_000 == 0:
+            print(f"Processed {token_count:,} tokens...")
+
+    print(f"Total tokens collected: {len(all_tokens):,}")
+
+    # Split into train and val (90/10 split)
+    split_idx = int(len(all_tokens) * 0.9)
+    train_data = np.array(all_tokens[:split_idx], dtype=np.uint16)
+    val_data = np.array(all_tokens[split_idx:], dtype=np.uint16)
+
+    # Save as binary files
+    train_data.tofile(train_file)
+    val_data.tofile(val_file)
+
+    print(f"Saved {len(train_data):,} training tokens to {train_file}")
+    print(f"Saved {len(val_data):,} validation tokens to {val_file}")
+    print("FineWebEdu dataset preparation complete!")
+
+def download_openwebtext():
+    """Download and prepare OpenWebText dataset."""
+    data_dir = Path("gpt2/data/openwebtext")
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    train_file = data_dir / "train.bin"
+    val_file = data_dir / "val.bin"
+
+    # Check if already processed
+    if train_file.exists() and val_file.exists():
+        print(f"OpenWebText dataset already exists at {data_dir}")
+        return
+
+    print("Downloading OpenWebText dataset (this may take a while)...")
+    # Load OpenWebText dataset
+    dataset = load_dataset("openwebtext", split="train", streaming=True)
+
+    print("Tokenizing OpenWebText dataset...")
+    enc = tiktoken.get_encoding("gpt2")
+
+    # Process in chunks to avoid memory issues
+    max_tokens = 100_000_000  # 100M tokens for reasonable size
+    all_tokens = []
+    token_count = 0
+
+    for example in dataset:
+        if token_count >= max_tokens:
+            break
+        text = example['text']
+        tokens = enc.encode(text, allowed_special={"<|endoftext|>"})
+        all_tokens.extend(tokens)
+        token_count += len(tokens)
+
+        if token_count % 1_000_000 == 0:
+            print(f"Processed {token_count:,} tokens...")
+
+    print(f"Total tokens collected: {len(all_tokens):,}")
+
+    # Split into train and val (90/10 split)
+    split_idx = int(len(all_tokens) * 0.9)
+    train_data = np.array(all_tokens[:split_idx], dtype=np.uint16)
+    val_data = np.array(all_tokens[split_idx:], dtype=np.uint16)
+
+    # Save as binary files
+    train_data.tofile(train_file)
+    val_data.tofile(val_file)
+
+    print(f"Saved {len(train_data):,} training tokens to {train_file}")
+    print(f"Saved {len(val_data):,} validation tokens to {val_file}")
+    print("OpenWebText dataset preparation complete!")
+
 def main():
     """Main function."""
     import argparse
@@ -63,7 +167,7 @@ def main():
         "--dataset",
         type=str,
         default="shakespeare",
-        choices=["shakespeare"],
+        choices=["shakespeare", "finewebedu", "openwebtext"],
         help="Dataset to prepare"
     )
 
@@ -71,6 +175,10 @@ def main():
 
     if args.dataset == "shakespeare":
         download_shakespeare()
+    elif args.dataset == "finewebedu":
+        download_finewebedu()
+    elif args.dataset == "openwebtext":
+        download_openwebtext()
     else:
         print(f"Unknown dataset: {args.dataset}")
         sys.exit(1)
