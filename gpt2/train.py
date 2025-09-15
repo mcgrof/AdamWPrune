@@ -202,6 +202,27 @@ parser.add_argument(
     "--output-dir", type=str, default="gpt2/outputs", help="Output directory"
 )
 
+# Experiment tracking
+parser.add_argument(
+    "--tracker",
+    type=str,
+    default="none",
+    choices=["none", "trackio", "wandb"],
+    help="Experiment tracker to use (none, trackio, or wandb)",
+)
+parser.add_argument(
+    "--tracker-project",
+    type=str,
+    default="adamwprune-gpt2",
+    help="Project name for experiment tracker",
+)
+parser.add_argument(
+    "--tracker-run-name",
+    type=str,
+    default=None,
+    help="Run name for experiment tracker (auto-generated if not provided)",
+)
+
 def main():
     """Main training function."""
     args = parser.parse_args()
@@ -215,6 +236,37 @@ def main():
 
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
+
+    # Initialize experiment tracker
+    tracker = None
+    if args.tracker == "trackio":
+        try:
+            import trackio
+            run_name = args.tracker_run_name or f"gpt2_{args.optimizer}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            trackio.init(
+                project=args.tracker_project,
+                config=vars(args),
+                name=run_name,
+            )
+            tracker = "trackio"
+            print(f"Initialized Trackio tracking for project: {args.tracker_project}", flush=True)
+        except ImportError:
+            print("Warning: trackio not installed. Install with: pip install trackio", flush=True)
+            tracker = None
+    elif args.tracker == "wandb":
+        try:
+            import wandb
+            run_name = args.tracker_run_name or f"gpt2_{args.optimizer}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            wandb.init(
+                project=args.tracker_project,
+                config=vars(args),
+                name=run_name,
+            )
+            tracker = "wandb"
+            print(f"Initialized WandB tracking for project: {args.tracker_project}", flush=True)
+        except ImportError:
+            print("Warning: wandb not installed. Install with: pip install wandb", flush=True)
+            tracker = None
 
     # Device setup - auto-detect if CUDA is available
     if args.device == "cuda" and not torch.cuda.is_available():
@@ -565,6 +617,24 @@ def main():
             metrics["iterations"].append(iter_num)
             metrics["timestamps"].append(time.time())
 
+            # Log to experiment tracker
+            if tracker == "trackio":
+                import trackio
+                trackio.log({
+                    "iteration": iter_num,
+                    "train_loss": avg_loss,
+                    "learning_rate": lr,
+                    "sparsity": sparsity,
+                })
+            elif tracker == "wandb":
+                import wandb
+                wandb.log({
+                    "iteration": iter_num,
+                    "train_loss": avg_loss,
+                    "learning_rate": lr,
+                    "sparsity": sparsity,
+                })
+
             running_loss = 0.0
 
         # Evaluation
@@ -581,6 +651,20 @@ def main():
 
             print(f"Validation loss: {val_loss:.4f}", flush=True)
             metrics["val_losses"].append(val_loss)
+
+            # Log validation to experiment tracker
+            if tracker == "trackio":
+                import trackio
+                trackio.log({
+                    "iteration": iter_num,
+                    "val_loss": val_loss,
+                })
+            elif tracker == "wandb":
+                import wandb
+                wandb.log({
+                    "iteration": iter_num,
+                    "val_loss": val_loss,
+                })
 
             # Save best model
             if val_loss < best_val_loss:
@@ -647,6 +731,26 @@ def main():
     print(f"Saved detailed metrics to {metrics_path}", flush=True)
 
     print("\nTraining complete!", flush=True)
+
+    # Finish experiment tracking
+    if tracker == "trackio":
+        import trackio
+        trackio.log({
+            "final_val_loss": final_val_loss,
+            "best_val_loss": best_val_loss,
+            "total_time": metrics["total_time"],
+        })
+        trackio.finish()
+        print("Trackio tracking finished. Run 'trackio show' to view results.", flush=True)
+    elif tracker == "wandb":
+        import wandb
+        wandb.log({
+            "final_val_loss": final_val_loss,
+            "best_val_loss": best_val_loss,
+            "total_time": metrics["total_time"],
+        })
+        wandb.finish()
+        print("WandB tracking finished. Check your WandB dashboard for results.", flush=True)
 
     # Cleanup DDP
     if ddp:
