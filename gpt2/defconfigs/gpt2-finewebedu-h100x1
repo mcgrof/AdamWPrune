@@ -30,10 +30,11 @@ CONFIG_NUM_EPOCHS=2
 CONFIG_LEARNING_RATE="6e-4"
 
 # Experiment tracking - enable Trackio by default for local tracking
-CONFIG_EXPERIMENT_TRACKER="trackio"
-CONFIG_TRACKER_PROJECT="gpt2-finewebedu-h100"
+CONFIG_TRACKER_TRACKIO=y
+# CONFIG_TRACKER_NONE is not set
+# CONFIG_TRACKER_WANDB is not set
+# CONFIG_TRACKER_PROJECT is not set  # Auto-generated as {dir}-{checksum}
 # CONFIG_TRACKER_RUN_NAME is not set
-# CONFIG_WANDB_OFFLINE is not set
 CONFIG_TRACKIO_PORT=7860
 CONFIG_WEIGHT_DECAY="0.1"
 CONFIG_NUM_WORKERS=8

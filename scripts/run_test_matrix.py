@@ -623,8 +623,20 @@ def run_single_test(
     # Add experiment tracking configuration if specified
     if "EXPERIMENT_TRACKER" in config and config["EXPERIMENT_TRACKER"] != "none":
         cmd.extend(["--tracker", config["EXPERIMENT_TRACKER"]])
-        if "TRACKER_PROJECT" in config:
+
+        # Handle project name - auto-generate if empty
+        if "TRACKER_PROJECT" in config and config["TRACKER_PROJECT"]:
             cmd.extend(["--tracker-project", config["TRACKER_PROJECT"]])
+        else:
+            # Auto-generate project name based on directory and checksum
+            import hashlib
+            cwd = os.getcwd()
+            dir_name = os.path.basename(cwd)
+            # Create a short checksum of the full path for uniqueness
+            path_hash = hashlib.md5(cwd.encode()).hexdigest()[:8]
+            auto_project = f"{dir_name}-{path_hash}"
+            cmd.extend(["--tracker-project", auto_project])
+
         if "TRACKER_RUN_NAME" in config and config["TRACKER_RUN_NAME"]:
             cmd.extend(["--tracker-run-name", config["TRACKER_RUN_NAME"]])
         # Set WANDB offline mode if configured

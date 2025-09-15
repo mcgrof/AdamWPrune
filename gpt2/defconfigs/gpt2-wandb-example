@@ -30,9 +30,11 @@ CONFIG_NUM_EPOCHS=1
 CONFIG_LEARNING_RATE="6e-4"
 
 # WandB experiment tracking configuration
-CONFIG_EXPERIMENT_TRACKER="wandb"
-CONFIG_TRACKER_PROJECT="adamwprune-gpt2-tests"
-# CONFIG_TRACKER_RUN_NAME is not set - will be auto-generated
+CONFIG_TRACKER_WANDB=y
+# CONFIG_TRACKER_NONE is not set
+# CONFIG_TRACKER_TRACKIO is not set
+# CONFIG_TRACKER_PROJECT is not set  # Auto-generated as {dir}-{checksum}
+# CONFIG_TRACKER_RUN_NAME is not set  # Will be auto-generated
 CONFIG_WANDB_OFFLINE=n  # Set to y for offline mode
 
 # Optimizer configuration

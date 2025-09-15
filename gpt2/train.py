@@ -239,6 +239,17 @@ def main():
 
     # Initialize experiment tracker
     tracker = None
+    if args.tracker != "none":
+        # Auto-generate project name if not provided
+        if not args.tracker_project:
+            import hashlib
+            cwd = os.getcwd()
+            dir_name = os.path.basename(cwd)
+            # Create a short checksum of the full path for uniqueness
+            path_hash = hashlib.md5(cwd.encode()).hexdigest()[:8]
+            args.tracker_project = f"{dir_name}-{path_hash}"
+            print(f"Auto-generated project name: {args.tracker_project}", flush=True)
+
     if args.tracker == "trackio":
         try:
             import trackio
