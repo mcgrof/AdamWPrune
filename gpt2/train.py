@@ -490,6 +490,8 @@ def main():
         "model_params": model.get_num_params(),
         "train_losses": [],
         "val_losses": [],
+        "train_perplexities": [],
+        "val_perplexities": [],
         "learning_rates": [],
         "sparsities": [],
         "timestamps": [],
@@ -606,6 +608,7 @@ def main():
             t0 = t1
 
             avg_loss = running_loss / args.log_interval
+            avg_perplexity = math.exp(min(avg_loss, 20))  # Cap at 20 to avoid overflow
 
             # Calculate sparsity
             if pruner is not None:
@@ -617,12 +620,13 @@ def main():
                 sparsity = 0.0
 
             print(
-                f"Iter {iter_num:5d} | loss {avg_loss:.4f} | lr {lr:.2e} | "
-                f"sparsity {sparsity:.1%} | {dt*1000/args.log_interval:.1f}ms/iter",
+                f"Iter {iter_num:5d} | loss {avg_loss:.4f} | ppl {avg_perplexity:7.2f} | "
+                f"lr {lr:.2e} | sparsity {sparsity:.1%} | {dt*1000/args.log_interval:.1f}ms/iter",
                 flush=True
             )
 
             metrics["train_losses"].append(avg_loss)
+            metrics["train_perplexities"].append(avg_perplexity)
             metrics["learning_rates"].append(lr)
             metrics["sparsities"].append(sparsity)
             metrics["iterations"].append(iter_num)
@@ -660,8 +664,10 @@ def main():
                 args.eval_samples,
             )
 
-            print(f"Validation loss: {val_loss:.4f}", flush=True)
+            val_perplexity = math.exp(min(val_loss, 20))  # Cap at 20 to avoid overflow
+            print(f"Validation loss: {val_loss:.4f} | ppl: {val_perplexity:.2f}", flush=True)
             metrics["val_losses"].append(val_loss)
+            metrics["val_perplexities"].append(val_perplexity)
 
             # Log validation to experiment tracker
             if tracker == "trackio":
@@ -669,12 +675,14 @@ def main():
                 trackio.log({
                     "iteration": iter_num,
                     "val_loss": val_loss,
+                    "val_perplexity": val_perplexity,
                 })
             elif tracker == "wandb":
                 import wandb
                 wandb.log({
                     "iteration": iter_num,
                     "val_loss": val_loss,
+                    "val_perplexity": val_perplexity,
                 })
 
             # Save best model
@@ -708,8 +716,20 @@ def main():
         args.eval_samples * 2,
     )
 
-    print(f"Final validation loss: {final_val_loss:.4f}", flush=True)
-    print(f"Best validation loss: {best_val_loss:.4f}", flush=True)
+    final_perplexity = math.exp(min(final_val_loss, 20))
+    best_perplexity = math.exp(min(best_val_loss, 20))
+
+    # Calculate ΔPPL (change in perplexity from first to best)
+    if metrics["val_perplexities"]:
+        initial_perplexity = metrics["val_perplexities"][0]
+        delta_ppl = best_perplexity - initial_perplexity
+    else:
+        initial_perplexity = float('inf')
+        delta_ppl = 0.0
+
+    print(f"Final validation loss: {final_val_loss:.4f} | ppl: {final_perplexity:.2f}", flush=True)
+    print(f"Best validation loss: {best_val_loss:.4f} | ppl: {best_perplexity:.2f}", flush=True)
+    print(f"ΔPPL (improvement): {delta_ppl:.2f}", flush=True)
 
     # Save final model
     checkpoint = {
@@ -726,6 +746,10 @@ def main():
     # Save metrics
     metrics["final_val_loss"] = final_val_loss
     metrics["best_val_loss"] = best_val_loss
+    metrics["final_perplexity"] = final_perplexity
+    metrics["best_perplexity"] = best_perplexity
+    metrics["initial_perplexity"] = initial_perplexity
+    metrics["delta_ppl"] = delta_ppl
     metrics["total_time"] = (
         time.time() - metrics["timestamps"][0] if metrics["timestamps"] else 0
     )
