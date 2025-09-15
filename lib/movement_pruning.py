@@ -164,6 +164,18 @@ class MovementPruning:
         # Always apply masks to ensure pruned weights stay zero
         self.apply_masks()
 
+    def get_sparsity(self):
+        """Get overall sparsity of the model."""
+        total_params = 0
+        total_pruned = 0
+
+        for name in self.masks:
+            mask = self.masks[name]
+            total_params += mask.numel()
+            total_pruned += (mask == 0).sum().item()
+
+        return total_pruned / total_params if total_params > 0 else 0.0
+
     def get_sparsity_stats(self):
         """Get current sparsity statistics for monitoring."""
         stats = {}
