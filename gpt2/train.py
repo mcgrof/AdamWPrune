@@ -469,6 +469,50 @@ def main():
         model.train()
         return np.mean(losses)
 
+    @torch.no_grad()
+    def measure_latency(model, seq_length, batch_size=1, num_iterations=100, warmup=10):
+        """Measure inference latency at different sequence lengths."""
+        model.eval()
+        device = next(model.parameters()).device
+
+        # Create dummy input
+        input_ids = torch.randint(0, 50257, (batch_size, seq_length), device=device)
+
+        # Warmup
+        for _ in range(warmup):
+            with ctx:
+                _ = model(input_ids)
+
+        # Measure latency
+        if device.type == 'cuda':
+            torch.cuda.synchronize()
+
+        latencies = []
+        for _ in range(num_iterations):
+            start = time.perf_counter()
+            with ctx:
+                _ = model(input_ids)
+            if device.type == 'cuda':
+                torch.cuda.synchronize()
+            end = time.perf_counter()
+            latencies.append((end - start) * 1000)  # Convert to ms
+
+        latencies.sort()
+        p50 = latencies[len(latencies) // 2]
+        p95 = latencies[int(len(latencies) * 0.95)]
+
+        model.train()
+        return p50, p95
+
+    def measure_memory():
+        """Measure current GPU memory usage."""
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            allocated = torch.cuda.memory_allocated() / (1024**2)  # MB
+            reserved = torch.cuda.memory_reserved() / (1024**2)  # MB
+            return allocated, reserved
+        return 0, 0
+
 
     def get_lr(it, warmup_steps, learning_rate, min_lr, max_iters):
         """Learning rate schedule with warmup and cosine decay."""
@@ -731,6 +775,24 @@ def main():
     print(f"Best validation loss: {best_val_loss:.4f} | ppl: {best_perplexity:.2f}", flush=True)
     print(f"ΔPPL (improvement): {delta_ppl:.2f}", flush=True)
 
+    # Measure inference latency at different sequence lengths
+    print("\nMeasuring inference latency...", flush=True)
+    latency_results = {}
+    for seq_len in [512, 1024]:
+        try:
+            p50, p95 = measure_latency(model, seq_len, batch_size=1, num_iterations=50)
+            latency_results[f"latency_seq{seq_len}_p50"] = p50
+            latency_results[f"latency_seq{seq_len}_p95"] = p95
+            print(f"  Seq {seq_len}: p50={p50:.2f}ms, p95={p95:.2f}ms", flush=True)
+        except Exception as e:
+            print(f"  Seq {seq_len}: measurement failed - {e}", flush=True)
+            latency_results[f"latency_seq{seq_len}_p50"] = -1
+            latency_results[f"latency_seq{seq_len}_p95"] = -1
+
+    # Measure final memory usage
+    allocated_mb, reserved_mb = measure_memory()
+    print(f"\nGPU Memory: {allocated_mb:.1f}MB allocated, {reserved_mb:.1f}MB reserved", flush=True)
+
     # Save final model
     checkpoint = {
         "model": model.state_dict(),
@@ -753,6 +815,11 @@ def main():
     metrics["total_time"] = (
         time.time() - metrics["timestamps"][0] if metrics["timestamps"] else 0
     )
+
+    # Add latency and memory metrics
+    metrics.update(latency_results)
+    metrics["gpu_memory_allocated_mb"] = allocated_mb
+    metrics["gpu_memory_reserved_mb"] = reserved_mb
 
     if args.json_output:
         with open(args.json_output, "w") as f:
