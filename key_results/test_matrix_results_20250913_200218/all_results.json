@@ -1,0 +1,110 @@
+[
+  {
+    "test_id": "resnet50_adamwprune_state_50",
+    "model": "resnet50",
+    "optimizer": "adamwprune",
+    "pruning_method": "state",
+    "target_sparsity": 0.5,
+    "final_accuracy": 74.56,
+    "best_accuracy": 74.56,
+    "best_epoch": 100,
+    "final_sparsity": 0.5,
+    "test_accuracy": 74.56
+  },
+  {
+    "test_id": "resnet50_adamwprune_state_70",
+    "model": "resnet50",
+    "optimizer": "adamwprune",
+    "pruning_method": "state",
+    "target_sparsity": 0.7,
+    "final_accuracy": 73.49,
+    "best_accuracy": 73.89,
+    "best_epoch": 68,
+    "final_sparsity": 0.6999999830936234,
+    "test_accuracy": 73.49
+  },
+  {
+    "test_id": "resnet50_adamwprune_state_90",
+    "model": "resnet50",
+    "optimizer": "adamwprune",
+    "pruning_method": "state",
+    "target_sparsity": 0.9,
+    "final_accuracy": 72.17,
+    "best_accuracy": 72.84,
+    "best_epoch": 60,
+    "final_sparsity": 0.8999999661872469,
+    "test_accuracy": 72.17
+  },
+  {
+    "test_id": "resnet50_adamwspam_magnitude_50",
+    "model": "resnet50",
+    "optimizer": "adamwspam",
+    "pruning_method": "magnitude",
+    "target_sparsity": 0.5,
+    "final_accuracy": 74.01,
+    "best_accuracy": 74.11,
+    "best_epoch": 98,
+    "final_sparsity": 0.5,
+    "test_accuracy": 74.01
+  },
+  {
+    "test_id": "resnet50_adamwspam_magnitude_70",
+    "model": "resnet50",
+    "optimizer": "adamwspam",
+    "pruning_method": "magnitude",
+    "target_sparsity": 0.7,
+    "final_accuracy": 72.92,
+    "best_accuracy": 73.11,
+    "best_epoch": 88,
+    "final_sparsity": 0.6999999830936234,
+    "test_accuracy": 72.92
+  },
+  {
+    "test_id": "resnet50_adamwspam_magnitude_90",
+    "model": "resnet50",
+    "optimizer": "adamwspam",
+    "pruning_method": "magnitude",
+    "target_sparsity": 0.9,
+    "final_accuracy": 72.62,
+    "best_accuracy": 72.63,
+    "best_epoch": 94,
+    "final_sparsity": 0.8999999661872469,
+    "test_accuracy": 72.62
+  },
+  {
+    "test_id": "resnet50_adamwspam_movement_50",
+    "model": "resnet50",
+    "optimizer": "adamwspam",
+    "pruning_method": "movement",
+    "target_sparsity": 0.5,
+    "final_accuracy": 72.26,
+    "best_accuracy": 72.26,
+    "best_epoch": 100,
+    "final_sparsity": 0.5,
+    "test_accuracy": 72.26
+  },
+  {
+    "test_id": "resnet50_adamwspam_movement_70",
+    "model": "resnet50",
+    "optimizer": "adamwspam",
+    "pruning_method": "movement",
+    "target_sparsity": 0.7,
+    "final_accuracy": 72.5,
+    "best_accuracy": 72.5,
+    "best_epoch": 100,
+    "final_sparsity": 0.6999999830936234,
+    "test_accuracy": 72.5
+  },
+  {
+    "test_id": "resnet50_adamwspam_movement_90",
+    "model": "resnet50",
+    "optimizer": "adamwspam",
+    "pruning_method": "movement",
+    "target_sparsity": 0.9,
+    "final_accuracy": 71.13,
+    "best_accuracy": 71.13,
+    "best_epoch": 100,
+    "final_sparsity": 0.8999999661872469,
+    "test_accuracy": 71.13
+  }
+]

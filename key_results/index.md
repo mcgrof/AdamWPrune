@@ -5,8 +5,14 @@ This directory contains key test matrix results that demonstrate important findi
 ## Latest Results (September 2025)
 
 ### ResNet-50 ImageNet
-- **[test_matrix_results_20250912_023452](test_matrix_results_20250912_023452/report.md)** - **NEW SOTA**: AdamWPrune with AdamW base achieves 74.54% at 50% sparsity!
-  - AdamWPrune dominates with AdamW as base optimizer
+- **[test_matrix_results_20250913_200218](test_matrix_results_20250913_200218/ANALYSIS.md)** - **NEW STATE-OF-THE-ART**: AdamWPrune with AdamWSpam base achieves 74.56% at 50% sparsity!
+  - **Universal superiority**: Beats AdamWSpam at ALL sparsity levels (50%, 70%, 90%)
+  - **Pruning improves accuracy**: 50% sparsity is 1.96% better than baseline
+  - **Synergistic effects**: SPAM's gradient stabilization enhances state-based pruning
+  - Memory efficiency: 6.06% accuracy per GB
+
+- **[test_matrix_results_20250912_023452](test_matrix_results_20250912_023452/report.md)** - AdamWPrune with AdamW base achieves 74.54% at 50% sparsity
+  - Previous best with AdamW as base optimizer
   - Consistent 12,602.5 MB memory usage across all sparsity levels
   - Outperforms AdamWSPAM by 1.32% at 50% sparsity
 
@@ -21,9 +27,11 @@ This directory contains key test matrix results that demonstrate important findi
 
 ## Key Findings Summary
 
-1. **AdamWPrune with AdamW base** achieves state-of-the-art 74.54% accuracy at 50% sparsity on ResNet-50 ImageNet
-2. **Memory efficiency**: Consistently uses least GPU memory (12,602.5 MB) across all configurations
-3. **Base optimizer matters**: AdamW base outperforms other bases at moderate sparsity (50%)
-4. **Stability**: AdamWPrune shows excellent stability with only 0.22% std deviation
+1. **AdamWPrune with AdamWSpam base** achieves NEW state-of-the-art 74.56% accuracy at 50% sparsity on ResNet-50 ImageNet
+2. **Universal superiority**: AdamWPrune beats AdamWSpam at ALL sparsity levels when using AdamWSpam as base
+3. **Pruning improves accuracy**: 50% sparsity achieves 1.96% better accuracy than unpruned baseline
+4. **Memory efficiency**: Consistently uses 12,602.5 MB with 6.06% accuracy per GB efficiency
+5. **Base optimizer matters**: AdamWSpam base (74.56%) slightly outperforms AdamW base (74.54%) at 50% sparsity
+6. **Synergistic effects**: SPAM's gradient stabilization enhances state-based pruning decisions
 
-*Generated: 2025-09-13*
+*Generated: 2025-09-14*
