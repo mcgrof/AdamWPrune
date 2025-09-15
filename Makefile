@@ -137,8 +137,31 @@ data-clean:
 	@echo "Datasets removed. They will be re-downloaded on next training run."
 
 
+# Dataset preparation targets
+.PHONY: prepare-datasets prepare-gpt2-datasets
+
+# Prepare datasets based on configuration
+prepare-datasets: generate-config
+	@if [ "$(CONFIG_MODEL_GPT2)" = "y" ]; then \
+		$(MAKE) prepare-gpt2-datasets; \
+	fi
+
+# Prepare GPT2 datasets
+prepare-gpt2-datasets:
+	@echo "Preparing GPT2 datasets..."
+	@if [ "$(CONFIG_GPT2_DATASET_SHAKESPEARE)" = "y" ]; then \
+		echo "Downloading Shakespeare dataset..."; \
+		python3 gpt2/prepare_data.py --dataset shakespeare; \
+	elif [ "$(CONFIG_GPT2_DATASET_FINEWEBEDU)" = "y" ]; then \
+		echo "Downloading FineWebEdu dataset (this may take a while)..."; \
+		python3 gpt2/prepare_data.py --dataset finewebedu; \
+	elif [ "$(CONFIG_GPT2_DATASET_OPENWEBTEXT)" = "y" ]; then \
+		echo "Downloading OpenWebText dataset (this may take a while)..."; \
+		python3 gpt2/prepare_data.py --dataset openwebtext; \
+	fi
+
 # Train with current configuration (using test matrix framework for consistency)
-train: check-config generate-config
+train: check-config generate-config prepare-datasets
 	@echo "Training with configuration from .config..."
 	@echo "Using test matrix framework for consistent logging and monitoring"
 	@if [ -n "$(EPOCHS)" ]; then \
@@ -149,7 +172,7 @@ train: check-config generate-config
 	fi
 
 # Test matrix targets
-test-matrix: check-config
+test-matrix: check-config prepare-datasets
 	@echo "Running test matrix with configuration from .config..."
 	@if [ -n "$(EPOCHS)" ]; then \
 		echo "Overriding epochs to $(EPOCHS) for testing..."; \
