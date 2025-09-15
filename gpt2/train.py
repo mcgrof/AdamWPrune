@@ -218,7 +218,7 @@ def main():
 
     # Device setup - auto-detect if CUDA is available
     if args.device == "cuda" and not torch.cuda.is_available():
-        print("CUDA not available, falling back to CPU")
+        print("CUDA not available, falling back to CPU", flush=True)
         device = "cpu"
     else:
         device = args.device
@@ -313,18 +313,18 @@ def main():
         torch.cuda.set_device(device)
         master_process = ddp_rank == 0
         seed_offset = ddp_rank
-        print(f"DDP initialized: rank {ddp_rank}/{ddp_world_size}, local rank {ddp_local_rank}, device {device}")
+        print(f"DDP initialized: rank {ddp_rank}/{ddp_world_size}, local rank {ddp_local_rank}, device {device}", flush=True)
     else:
         master_process = True
         seed_offset = 0
         if use_ddp:
-            print("DDP enabled in config but RANK environment variable not set. Running in single GPU mode.")
+            print("DDP enabled in config but RANK environment variable not set. Running in single GPU mode.", flush=True)
 
     # -----------------------------------------------------------------------------
     # Model initialization
 
     if master_process:
-        print(f"Initializing GPT-2 model: {args.model_name}")
+        print(f"Initializing GPT-2 model: {args.model_name}", flush=True)
     config = GPTConfig.from_name(args.model_name)
     config.block_size = args.block_size
     config.dropout = args.dropout
@@ -339,13 +339,13 @@ def main():
 
     # Compile model if requested (only compile the base model, not DDP wrapper)
     if args.compile and hasattr(torch, "compile") and not ddp:
-        print("Compiling model with torch.compile()...")
+        print("Compiling model with torch.compile()...", flush=True)
         model = torch.compile(model)
 
     # -----------------------------------------------------------------------------
     # Optimizer setup
 
-    print(f"Setting up {args.optimizer} optimizer...")
+    print(f"Setting up {args.optimizer} optimizer...", flush=True)
 
     # Enable state pruning for AdamWPrune when requested
     if args.optimizer == "adamwprune" and args.pruning_method == "state":
@@ -369,7 +369,7 @@ def main():
     # Pruning setup
     pruner = None
     if args.pruning_method != "none" and args.pruning_method != "state":
-        print(f"Setting up {args.pruning_method} pruning...")
+        print(f"Setting up {args.pruning_method} pruning...", flush=True)
         if args.pruning_method == "magnitude":
             pruner = MagnitudePruning(
                 model=model,
@@ -453,14 +453,15 @@ def main():
 
         scaler = DummyScaler()
 
-    print(f"\nStarting training...")
-    print(f"Parameters: {model.get_num_params()/1e6:.2f}M")
-    print(f"Device: {device}, dtype: {dtype}")
+    print(f"\nStarting training...", flush=True)
+    print(f"Parameters: {model.get_num_params()/1e6:.2f}M", flush=True)
+    print(f"Device: {device}, dtype: {dtype}", flush=True)
     print(
-        f"Batch size: {args.batch_size}, Gradient accumulation: {args.gradient_accumulation}"
+        f"Batch size: {args.batch_size}, Gradient accumulation: {args.gradient_accumulation}",
+        flush=True
     )
-    print(f"Effective batch size: {args.batch_size * args.gradient_accumulation}")
-    print("-" * 50)
+    print(f"Effective batch size: {args.batch_size * args.gradient_accumulation}", flush=True)
+    print("-" * 50, flush=True)
 
     # Training loop
     model.train()
@@ -554,7 +555,8 @@ def main():
 
             print(
                 f"Iter {iter_num:5d} | loss {avg_loss:.4f} | lr {lr:.2e} | "
-                f"sparsity {sparsity:.1%} | {dt*1000/args.log_interval:.1f}ms/iter"
+                f"sparsity {sparsity:.1%} | {dt*1000/args.log_interval:.1f}ms/iter",
+                flush=True
             )
 
             metrics["train_losses"].append(avg_loss)
@@ -577,7 +579,7 @@ def main():
                 args.eval_samples,
             )
 
-            print(f"Validation loss: {val_loss:.4f}")
+            print(f"Validation loss: {val_loss:.4f}", flush=True)
             metrics["val_losses"].append(val_loss)
 
             # Save best model
@@ -592,13 +594,13 @@ def main():
                     "args": args,
                 }
                 torch.save(checkpoint, os.path.join(args.output_dir, "best_model.pt"))
-                print(f"Saved best model (val_loss: {val_loss:.4f})")
+                print(f"Saved best model (val_loss: {val_loss:.4f})", flush=True)
 
     # -----------------------------------------------------------------------------
     # Final evaluation and saving
 
-    print("\n" + "=" * 50)
-    print("Training complete!")
+    print("\n" + "=" * 50, flush=True)
+    print("Training complete!", flush=True)
 
     # Final evaluation
     final_val_loss = evaluate(
@@ -611,8 +613,8 @@ def main():
         args.eval_samples * 2,
     )
 
-    print(f"Final validation loss: {final_val_loss:.4f}")
-    print(f"Best validation loss: {best_val_loss:.4f}")
+    print(f"Final validation loss: {final_val_loss:.4f}", flush=True)
+    print(f"Best validation loss: {best_val_loss:.4f}", flush=True)
 
     # Save final model
     checkpoint = {
@@ -636,15 +638,15 @@ def main():
     if args.json_output:
         with open(args.json_output, "w") as f:
             json.dump(metrics, f, indent=2)
-        print(f"Saved metrics to {args.json_output}")
+        print(f"Saved metrics to {args.json_output}", flush=True)
 
     # Save detailed metrics
     metrics_path = os.path.join(args.output_dir, "training_metrics.json")
     with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=2)
-    print(f"Saved detailed metrics to {metrics_path}")
+    print(f"Saved detailed metrics to {metrics_path}", flush=True)
 
-    print("\nTraining complete!")
+    print("\nTraining complete!", flush=True)
 
     # Cleanup DDP
     if ddp:
