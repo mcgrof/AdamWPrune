@@ -564,6 +564,10 @@ def run_single_test(
     # Add configuration arguments that train.py actually accepts
     cmd.extend(["--optimizer", optimizer])
 
+    # Add GPT2 dataset configuration if applicable
+    if model == "gpt2" and "GPT2_DATASET_NAME" in config:
+        cmd.extend(["--dataset", config["GPT2_DATASET_NAME"]])
+
     # AdamWPrune uses state-based pruning
     if optimizer == "adamwprune" and pruning == "state":
         # For AdamWPrune with state pruning, pass "state" as the method
@@ -1065,7 +1069,7 @@ def main():
         config = parse_kconfig()
         matrix = get_test_matrix(config)
         expected_combinations = generate_combinations(matrix)
-        
+
         # Generate expected test directory names
         expected_tests = set()
         for combo in expected_combinations:
@@ -1073,33 +1077,33 @@ def main():
             optimizer = combo["optimizer"]
             pruning = combo["pruning"]
             sparsity = combo.get("sparsity", "0.0")
-            
+
             if pruning == "none":
                 test_id = f"{model}_{optimizer}_{pruning}"
             else:
                 sparsity_pct = int(float(sparsity) * 100)
                 test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
             expected_tests.add(test_id)
-        
+
         # Check what tests actually exist
         existing_tests = set()
         for test_dir in continue_dir.glob(f"{matrix['models'][0]}_*"):
             if test_dir.is_dir():
                 existing_tests.add(test_dir.name)
-        
+
         # Find missing tests
         missing_tests = expected_tests - existing_tests
-        
+
         # Check if we have failed tests but no incomplete ones (special case)
         incomplete_runs = incomplete_info.get("incomplete_runs", [])
         failed_runs = incomplete_info.get("failed_runs", [])
-        
+
         # Report on missing tests
         if missing_tests:
             print(f"\n⚠️  Found {len(missing_tests)} MISSING test(s) from expected configuration:")
             for missing_test in sorted(missing_tests):
                 print(f"   ❌ {missing_test}")
-            
+
             print(f"\nThese tests are configured but have not been run.")
             print("Would you like to run these missing tests?")
             if not args.yes:
@@ -1107,7 +1111,7 @@ def main():
                 if response != "y":
                     print("Aborted.")
                     sys.exit(0)
-            
+
             # Add missing tests to the list of tests to run
             tests_to_run = []
             for combo in expected_combinations:
@@ -1115,19 +1119,19 @@ def main():
                 optimizer = combo["optimizer"]
                 pruning = combo["pruning"]
                 sparsity = combo.get("sparsity", "0.0")
-                
+
                 if pruning == "none":
                     test_id = f"{model}_{optimizer}_{pruning}"
                 else:
                     sparsity_pct = int(float(sparsity) * 100)
                     test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
-                
+
                 if test_id in missing_tests:
                     tests_to_run.append(combo)
-            
+
             if tests_to_run:
                 print(f"\nRunning {len(tests_to_run)} missing test(s)...")
-                
+
                 # Run the missing tests
                 all_results = []
                 for i, combo in enumerate(tests_to_run, 1):
@@ -1144,7 +1148,7 @@ def main():
                     )
                     if result:
                         all_results.append(result)
-                
+
                 # Update summary
                 if all_results:
                     # Reload existing results
@@ -1155,15 +1159,15 @@ def main():
                             existing_data = json.load(f)
                             if isinstance(existing_data, list):
                                 existing_results = existing_data
-                    
+
                     # Merge results
                     for result in all_results:
                         existing_results.append(result)
-                    
+
                     # Save updated results
                     with open(json_file, "w") as f:
                         json.dump(existing_results, f, indent=2)
-                    
+
                     create_summary_report(existing_results, str(continue_dir))
                 print(f"\n✓ Completed {len(tests_to_run)} missing test(s)")
                 sys.exit(0)
