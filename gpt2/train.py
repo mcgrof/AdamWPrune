@@ -202,448 +202,453 @@ parser.add_argument(
     "--output-dir", type=str, default="gpt2/outputs", help="Output directory"
 )
 
-args = parser.parse_args()
+def main():
+    """Main training function."""
+    args = parser.parse_args()
 
-# Handle epochs alias
-if args.epochs is not None:
-    args.num_epochs = args.epochs
+    # Handle epochs alias
+    if args.epochs is not None:
+        args.num_epochs = args.epochs
 
-# -----------------------------------------------------------------------------
-# Setup
+    # -----------------------------------------------------------------------------
+    # Setup
 
-# Create output directory
-os.makedirs(args.output_dir, exist_ok=True)
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
 
-# Device setup - auto-detect if CUDA is available
-if args.device == "cuda" and not torch.cuda.is_available():
-    print("CUDA not available, falling back to CPU")
-    device = "cpu"
-else:
-    device = args.device
-
-dtype = {
-    "float32": torch.float32,
-    "float16": torch.float16,
-    "bfloat16": torch.bfloat16,
-}[args.dtype]
-ptdtype = dtype
-
-# Only use autocast if on CUDA and not using float32
-if device == "cpu" or args.dtype == "float32":
-    ctx = nullcontext()
-else:
-    ctx = torch.amp.autocast(device_type=device, dtype=ptdtype)
-
-# Fix random seeds
-torch.manual_seed(1337)
-np.random.seed(1337)
-
-# -----------------------------------------------------------------------------
-# Data loading
-
-
-def get_batch(split, data_dir, dataset, block_size, batch_size, device):
-    """Get a batch of data."""
-    # Load data
-    if split == "train":
-        data_path = os.path.join(data_dir, dataset, "train.bin")
+    # Device setup - auto-detect if CUDA is available
+    if args.device == "cuda" and not torch.cuda.is_available():
+        print("CUDA not available, falling back to CPU")
+        device = "cpu"
     else:
-        data_path = os.path.join(data_dir, dataset, "val.bin")
+        device = args.device
 
-    data = np.memmap(data_path, dtype=np.uint16, mode="r")
+    dtype = {
+        "float32": torch.float32,
+        "float16": torch.float16,
+        "bfloat16": torch.bfloat16,
+    }[args.dtype]
+    ptdtype = dtype
 
-    # Generate random positions
-    ix = torch.randint(len(data) - block_size, (batch_size,))
+    # Only use autocast if on CUDA and not using float32
+    if device == "cpu" or args.dtype == "float32":
+        ctx = nullcontext()
+    else:
+        ctx = torch.amp.autocast(device_type=device, dtype=ptdtype)
 
-    # Create batch
-    x = torch.stack(
-        [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
-    )
-    y = torch.stack(
-        [
-            torch.from_numpy((data[i + 1 : i + 1 + block_size]).astype(np.int64))
-            for i in ix
-        ]
-    )
+    # Fix random seeds
+    torch.manual_seed(1337)
+    np.random.seed(1337)
 
-    if device == "cuda":
-        # Pin arrays for async transfer
-        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
-            device, non_blocking=True
+    # -----------------------------------------------------------------------------
+    # Data loading
+
+
+    def get_batch(split, data_dir, dataset, block_size, batch_size, device):
+        """Get a batch of data."""
+        # Load data
+        if split == "train":
+            data_path = os.path.join(data_dir, dataset, "train.bin")
+        else:
+            data_path = os.path.join(data_dir, dataset, "val.bin")
+
+        data = np.memmap(data_path, dtype=np.uint16, mode="r")
+
+        # Generate random positions
+        ix = torch.randint(len(data) - block_size, (batch_size,))
+
+        # Create batch
+        x = torch.stack(
+            [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
         )
-    else:
-        x, y = x.to(device), y.to(device)
+        y = torch.stack(
+            [
+                torch.from_numpy((data[i + 1 : i + 1 + block_size]).astype(np.int64))
+                for i in ix
+            ]
+        )
 
-    return x, y
+        if device == "cuda":
+            # Pin arrays for async transfer
+            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
+                device, non_blocking=True
+            )
+        else:
+            x, y = x.to(device), y.to(device)
+
+        return x, y
 
 
-# -----------------------------------------------------------------------------
-# DDP setup (if enabled)
-ddp = False
-ddp_rank = 0
-ddp_local_rank = 0
-ddp_world_size = 1
+    # -----------------------------------------------------------------------------
+    # DDP setup (if enabled)
+    ddp = False
+    ddp_rank = 0
+    ddp_local_rank = 0
+    ddp_world_size = 1
 
-# Check if DDP is enabled via config
-try:
-    import config as cfg
-    if hasattr(cfg, 'config') and hasattr(cfg.config, 'GPT2_USE_DDP'):
-        use_ddp = cfg.config.GPT2_USE_DDP == 'y'
-        ddp_backend = getattr(cfg.config, 'GPT2_DDP_BACKEND', 'nccl')
-        ddp_find_unused = getattr(cfg.config, 'GPT2_DDP_FIND_UNUSED_PARAMS', 'y') == 'y'
-    else:
+    # Check if DDP is enabled via config
+    try:
+        import config as cfg
+        if hasattr(cfg, 'config') and hasattr(cfg.config, 'GPT2_USE_DDP'):
+            use_ddp = cfg.config.GPT2_USE_DDP == 'y'
+            ddp_backend = getattr(cfg.config, 'GPT2_DDP_BACKEND', 'nccl')
+            ddp_find_unused = getattr(cfg.config, 'GPT2_DDP_FIND_UNUSED_PARAMS', 'y') == 'y'
+        else:
+            use_ddp = False
+            ddp_backend = 'nccl'
+            ddp_find_unused = True
+    except ImportError:
         use_ddp = False
         ddp_backend = 'nccl'
         ddp_find_unused = True
-except ImportError:
-    use_ddp = False
-    ddp_backend = 'nccl'
-    ddp_find_unused = True
 
-# Initialize DDP if enabled and environment variables are set
-if use_ddp and 'RANK' in os.environ:
-    ddp = True
-    init_process_group(backend=ddp_backend)
-    ddp_rank = int(os.environ['RANK'])
-    ddp_local_rank = int(os.environ['LOCAL_RANK'])
-    ddp_world_size = int(os.environ['WORLD_SIZE'])
-    device = f'cuda:{ddp_local_rank}'
-    torch.cuda.set_device(device)
-    master_process = ddp_rank == 0
-    seed_offset = ddp_rank
-    print(f"DDP initialized: rank {ddp_rank}/{ddp_world_size}, local rank {ddp_local_rank}, device {device}")
-else:
-    master_process = True
-    seed_offset = 0
-    if use_ddp:
-        print("DDP enabled in config but RANK environment variable not set. Running in single GPU mode.")
-
-# -----------------------------------------------------------------------------
-# Model initialization
-
-if master_process:
-    print(f"Initializing GPT-2 model: {args.model_name}")
-config = GPTConfig.from_name(args.model_name)
-config.block_size = args.block_size
-config.dropout = args.dropout
-config.bias = args.bias
-
-model = GPT(config)
-model.to(device)
-
-# Wrap model in DDP if enabled
-if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank], find_unused_parameters=ddp_find_unused)
-
-# Compile model if requested (only compile the base model, not DDP wrapper)
-if args.compile and hasattr(torch, "compile") and not ddp:
-    print("Compiling model with torch.compile()...")
-    model = torch.compile(model)
-
-# -----------------------------------------------------------------------------
-# Optimizer setup
-
-print(f"Setting up {args.optimizer} optimizer...")
-
-# Enable state pruning for AdamWPrune when requested
-if args.optimizer == "adamwprune" and args.pruning_method == "state":
-    args.adamwprune_enable_pruning = True
-    args.adamwprune_target_sparsity = args.target_sparsity
-    args.adamwprune_warmup_steps = args.pruning_warmup
-    args.adamwprune_ramp_end_epoch = min(8, args.num_epochs - 1)
-
-# Create optimizer using the library function
-optimizer, scheduler, gradient_clip_norm, spam_state, adamwprune_state = (
-    create_optimizer(
-        model=model,
-        optimizer_type=args.optimizer,
-        learning_rate=args.learning_rate,
-        num_epochs=args.num_epochs,
-        args=args,
-        model_type="gpt2",
-    )
-)
-
-# Pruning setup
-pruner = None
-if args.pruning_method != "none" and args.pruning_method != "state":
-    print(f"Setting up {args.pruning_method} pruning...")
-    if args.pruning_method == "magnitude":
-        pruner = MagnitudePruning(
-            model=model,
-            target_sparsity=args.target_sparsity,
-            warmup_steps=args.pruning_warmup,
-            ramp_end_step=args.max_iters,
-        )
-    elif args.pruning_method == "movement":
-        pruner = MovementPruning(
-            model=model,
-            target_sparsity=args.target_sparsity,
-            warmup_steps=args.pruning_warmup,
-            ramp_end_step=args.max_iters,
-        )
-
-# -----------------------------------------------------------------------------
-# Training loop
-
-
-@torch.no_grad()
-def evaluate(
-    model, data_dir, dataset, block_size, batch_size, device, eval_samples=200
-):
-    """Evaluate the model."""
-    model.eval()
-    losses = []
-
-    for _ in range(eval_samples):
-        x, y = get_batch("val", data_dir, dataset, block_size, batch_size, device)
-        with ctx:
-            logits, loss = model(x, y)
-        losses.append(loss.item())
-
-    model.train()
-    return np.mean(losses)
-
-
-def get_lr(it, warmup_steps, learning_rate, min_lr, max_iters):
-    """Learning rate schedule with warmup and cosine decay."""
-    # Warmup
-    if it < warmup_steps:
-        return learning_rate * it / warmup_steps
-    # Cosine decay
-    if it > max_iters:
-        return min_lr
-    # Cosine decay
-    decay_ratio = (it - warmup_steps) / (max_iters - warmup_steps)
-    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
-    return min_lr + coeff * (learning_rate - min_lr)
-
-
-# Training metrics
-metrics = {
-    "config": vars(args),
-    "model_params": model.get_num_params(),
-    "train_losses": [],
-    "val_losses": [],
-    "learning_rates": [],
-    "sparsities": [],
-    "timestamps": [],
-    "iterations": [],
-}
-
-# Initialize gradient scaler for mixed precision (only for CUDA)
-if device == "cuda":
-    scaler = torch.amp.GradScaler("cuda", enabled=(dtype == torch.float16))
-else:
-    # CPU doesn't support GradScaler, use a dummy that just passes through
-    class DummyScaler:
-        def scale(self, loss):
-            return loss
-
-        def unscale_(self, optimizer):
-            pass
-
-        def step(self, optimizer):
-            optimizer.step()
-
-        def update(self):
-            pass
-
-    scaler = DummyScaler()
-
-print(f"\nStarting training...")
-print(f"Parameters: {model.get_num_params()/1e6:.2f}M")
-print(f"Device: {device}, dtype: {dtype}")
-print(
-    f"Batch size: {args.batch_size}, Gradient accumulation: {args.gradient_accumulation}"
-)
-print(f"Effective batch size: {args.batch_size * args.gradient_accumulation}")
-print("-" * 50)
-
-# Training loop
-model.train()
-optimizer.zero_grad(set_to_none=True)
-
-t0 = time.time()
-running_loss = 0.0
-best_val_loss = float("inf")
-
-for iter_num in range(args.max_iters):
-
-    # Determine learning rate
-    if args.decay_lr:
-        lr = get_lr(
-            iter_num, args.warmup_steps, args.learning_rate, args.min_lr, args.max_iters
-        )
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = lr
+    # Initialize DDP if enabled and environment variables are set
+    if use_ddp and 'RANK' in os.environ:
+        ddp = True
+        init_process_group(backend=ddp_backend)
+        ddp_rank = int(os.environ['RANK'])
+        ddp_local_rank = int(os.environ['LOCAL_RANK'])
+        ddp_world_size = int(os.environ['WORLD_SIZE'])
+        device = f'cuda:{ddp_local_rank}'
+        torch.cuda.set_device(device)
+        master_process = ddp_rank == 0
+        seed_offset = ddp_rank
+        print(f"DDP initialized: rank {ddp_rank}/{ddp_world_size}, local rank {ddp_local_rank}, device {device}")
     else:
-        lr = args.learning_rate
+        master_process = True
+        seed_offset = 0
+        if use_ddp:
+            print("DDP enabled in config but RANK environment variable not set. Running in single GPU mode.")
 
-    # Accumulate gradients
-    for micro_step in range(args.gradient_accumulation):
-        x, y = get_batch(
-            "train",
-            args.data_dir,
-            args.dataset,
-            args.block_size,
-            args.batch_size,
-            device,
+    # -----------------------------------------------------------------------------
+    # Model initialization
+
+    if master_process:
+        print(f"Initializing GPT-2 model: {args.model_name}")
+    config = GPTConfig.from_name(args.model_name)
+    config.block_size = args.block_size
+    config.dropout = args.dropout
+    config.bias = args.bias
+
+    model = GPT(config)
+    model.to(device)
+
+    # Wrap model in DDP if enabled
+    if ddp:
+        model = DDP(model, device_ids=[ddp_local_rank], find_unused_parameters=ddp_find_unused)
+
+    # Compile model if requested (only compile the base model, not DDP wrapper)
+    if args.compile and hasattr(torch, "compile") and not ddp:
+        print("Compiling model with torch.compile()...")
+        model = torch.compile(model)
+
+    # -----------------------------------------------------------------------------
+    # Optimizer setup
+
+    print(f"Setting up {args.optimizer} optimizer...")
+
+    # Enable state pruning for AdamWPrune when requested
+    if args.optimizer == "adamwprune" and args.pruning_method == "state":
+        args.adamwprune_enable_pruning = True
+        args.adamwprune_target_sparsity = args.target_sparsity
+        args.adamwprune_warmup_steps = args.pruning_warmup
+        args.adamwprune_ramp_end_epoch = min(8, args.num_epochs - 1)
+
+    # Create optimizer using the library function
+    optimizer, scheduler, gradient_clip_norm, spam_state, adamwprune_state = (
+        create_optimizer(
+            model=model,
+            optimizer_type=args.optimizer,
+            learning_rate=args.learning_rate,
+            num_epochs=args.num_epochs,
+            args=args,
+            model_type="gpt2",
         )
+    )
 
-        with ctx:
-            logits, loss = model(x, y)
-            loss = loss / args.gradient_accumulation
+    # Pruning setup
+    pruner = None
+    if args.pruning_method != "none" and args.pruning_method != "state":
+        print(f"Setting up {args.pruning_method} pruning...")
+        if args.pruning_method == "magnitude":
+            pruner = MagnitudePruning(
+                model=model,
+                target_sparsity=args.target_sparsity,
+                warmup_steps=args.pruning_warmup,
+                ramp_end_step=args.max_iters,
+            )
+        elif args.pruning_method == "movement":
+            pruner = MovementPruning(
+                model=model,
+                target_sparsity=args.target_sparsity,
+                warmup_steps=args.pruning_warmup,
+                ramp_end_step=args.max_iters,
+            )
 
-        # Backward pass
-        scaler.scale(loss).backward()
-        running_loss += loss.item()
+    # -----------------------------------------------------------------------------
+    # Training loop
 
-    # Gradient processing for special optimizers
-    if args.optimizer != "sgd":
-        # Only unscale if using actual CUDA scaler
-        if device == "cuda":
-            scaler.unscale_(optimizer)
 
-        # Apply AdamWPrune gradient masking
-        apply_adamprune_masking(optimizer, adamwprune_state)
+    @torch.no_grad()
+    def evaluate(
+        model, data_dir, dataset, block_size, batch_size, device, eval_samples=200
+    ):
+        """Evaluate the model."""
+        model.eval()
+        losses = []
 
-        # Apply SPAM gradient processing
-        apply_spam_gradient_processing(optimizer, model, spam_state, gradient_clip_norm)
+        for _ in range(eval_samples):
+            x, y = get_batch("val", data_dir, dataset, block_size, batch_size, device)
+            with ctx:
+                logits, loss = model(x, y)
+            losses.append(loss.item())
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        model.train()
+        return np.mean(losses)
 
-    # Periodic SPAM momentum reset with optional warmup
-    apply_periodic_spam_reset(optimizer, spam_state)
 
-    # Optimizer step
-    scaler.step(optimizer)
-    scaler.update()
+    def get_lr(it, warmup_steps, learning_rate, min_lr, max_iters):
+        """Learning rate schedule with warmup and cosine decay."""
+        # Warmup
+        if it < warmup_steps:
+            return learning_rate * it / warmup_steps
+        # Cosine decay
+        if it > max_iters:
+            return min_lr
+        # Cosine decay
+        decay_ratio = (it - warmup_steps) / (max_iters - warmup_steps)
+        coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+        return min_lr + coeff * (learning_rate - min_lr)
+
+
+    # Training metrics
+    metrics = {
+        "config": vars(args),
+        "model_params": model.get_num_params(),
+        "train_losses": [],
+        "val_losses": [],
+        "learning_rates": [],
+        "sparsities": [],
+        "timestamps": [],
+        "iterations": [],
+    }
+
+    # Initialize gradient scaler for mixed precision (only for CUDA)
+    if device == "cuda":
+        scaler = torch.amp.GradScaler("cuda", enabled=(dtype == torch.float16))
+    else:
+        # CPU doesn't support GradScaler, use a dummy that just passes through
+        class DummyScaler:
+            def scale(self, loss):
+                return loss
+
+            def unscale_(self, optimizer):
+                pass
+
+            def step(self, optimizer):
+                optimizer.step()
+
+            def update(self):
+                pass
+
+        scaler = DummyScaler()
+
+    print(f"\nStarting training...")
+    print(f"Parameters: {model.get_num_params()/1e6:.2f}M")
+    print(f"Device: {device}, dtype: {dtype}")
+    print(
+        f"Batch size: {args.batch_size}, Gradient accumulation: {args.gradient_accumulation}"
+    )
+    print(f"Effective batch size: {args.batch_size * args.gradient_accumulation}")
+    print("-" * 50)
+
+    # Training loop
+    model.train()
     optimizer.zero_grad(set_to_none=True)
 
-    # Update AdamWPrune state-based pruning
-    # Calculate current epoch based on iterations (approximate)
-    iters_per_epoch = (
-        args.max_iters // args.num_epochs if args.num_epochs > 0 else args.max_iters
-    )
-    current_epoch = iter_num // iters_per_epoch
-    update_adamprune_masks(optimizer, adamwprune_state, None, current_epoch)
+    t0 = time.time()
+    running_loss = 0.0
+    best_val_loss = float("inf")
 
-    # Update pruning for external pruners
-    if pruner is not None:
-        pruner.update_masks(iter_num)
+    for iter_num in range(args.max_iters):
 
-    # Logging (only on master process)
-    if iter_num % args.log_interval == 0 and master_process:
-        t1 = time.time()
-        dt = t1 - t0
-        t0 = t1
-
-        avg_loss = running_loss / args.log_interval
-
-        # Calculate sparsity
-        if pruner is not None:
-            sparsity = pruner.get_sparsity()
-        elif args.optimizer == "adamwprune" and args.pruning_method == "state":
-            # Get sparsity from AdamWPrune
-            sparsity = 0.0  # TODO: implement sparsity calculation
+        # Determine learning rate
+        if args.decay_lr:
+            lr = get_lr(
+                iter_num, args.warmup_steps, args.learning_rate, args.min_lr, args.max_iters
+            )
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = lr
         else:
-            sparsity = 0.0
+            lr = args.learning_rate
 
-        print(
-            f"Iter {iter_num:5d} | loss {avg_loss:.4f} | lr {lr:.2e} | "
-            f"sparsity {sparsity:.1%} | {dt*1000/args.log_interval:.1f}ms/iter"
+        # Accumulate gradients
+        for micro_step in range(args.gradient_accumulation):
+            x, y = get_batch(
+                "train",
+                args.data_dir,
+                args.dataset,
+                args.block_size,
+                args.batch_size,
+                device,
+            )
+
+            with ctx:
+                logits, loss = model(x, y)
+                loss = loss / args.gradient_accumulation
+
+            # Backward pass
+            scaler.scale(loss).backward()
+            running_loss += loss.item()
+
+        # Gradient processing for special optimizers
+        if args.optimizer != "sgd":
+            # Only unscale if using actual CUDA scaler
+            if device == "cuda":
+                scaler.unscale_(optimizer)
+
+            # Apply AdamWPrune gradient masking
+            apply_adamprune_masking(optimizer, adamwprune_state)
+
+            # Apply SPAM gradient processing
+            apply_spam_gradient_processing(optimizer, model, spam_state, gradient_clip_norm)
+
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+        # Periodic SPAM momentum reset with optional warmup
+        apply_periodic_spam_reset(optimizer, spam_state)
+
+        # Optimizer step
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad(set_to_none=True)
+
+        # Update AdamWPrune state-based pruning
+        # Calculate current epoch based on iterations (approximate)
+        iters_per_epoch = (
+            args.max_iters // args.num_epochs if args.num_epochs > 0 else args.max_iters
         )
+        current_epoch = iter_num // iters_per_epoch
+        update_adamprune_masks(optimizer, adamwprune_state, None, current_epoch)
 
-        metrics["train_losses"].append(avg_loss)
-        metrics["learning_rates"].append(lr)
-        metrics["sparsities"].append(sparsity)
-        metrics["iterations"].append(iter_num)
-        metrics["timestamps"].append(time.time())
+        # Update pruning for external pruners
+        if pruner is not None:
+            pruner.update_masks(iter_num)
 
-        running_loss = 0.0
+        # Logging (only on master process)
+        if iter_num % args.log_interval == 0 and master_process:
+            t1 = time.time()
+            dt = t1 - t0
+            t0 = t1
 
-    # Evaluation
-    if iter_num % args.eval_interval == 0:
-        val_loss = evaluate(
-            model,
-            args.data_dir,
-            args.dataset,
-            args.block_size,
-            args.batch_size,
-            device,
-            args.eval_samples,
-        )
+            avg_loss = running_loss / args.log_interval
 
-        print(f"Validation loss: {val_loss:.4f}")
-        metrics["val_losses"].append(val_loss)
+            # Calculate sparsity
+            if pruner is not None:
+                sparsity = pruner.get_sparsity()
+            elif args.optimizer == "adamwprune" and args.pruning_method == "state":
+                # Get sparsity from AdamWPrune
+                sparsity = 0.0  # TODO: implement sparsity calculation
+            else:
+                sparsity = 0.0
 
-        # Save best model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            checkpoint = {
-                "model": model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "iter_num": iter_num,
-                "best_val_loss": best_val_loss,
-                "config": config,
-                "args": args,
-            }
-            torch.save(checkpoint, os.path.join(args.output_dir, "best_model.pt"))
-            print(f"Saved best model (val_loss: {val_loss:.4f})")
+            print(
+                f"Iter {iter_num:5d} | loss {avg_loss:.4f} | lr {lr:.2e} | "
+                f"sparsity {sparsity:.1%} | {dt*1000/args.log_interval:.1f}ms/iter"
+            )
 
-# -----------------------------------------------------------------------------
-# Final evaluation and saving
+            metrics["train_losses"].append(avg_loss)
+            metrics["learning_rates"].append(lr)
+            metrics["sparsities"].append(sparsity)
+            metrics["iterations"].append(iter_num)
+            metrics["timestamps"].append(time.time())
 
-print("\n" + "=" * 50)
-print("Training complete!")
+            running_loss = 0.0
 
-# Final evaluation
-final_val_loss = evaluate(
-    model,
-    args.data_dir,
-    args.dataset,
-    args.block_size,
-    args.batch_size,
-    device,
-    args.eval_samples * 2,
-)
+        # Evaluation
+        if iter_num % args.eval_interval == 0:
+            val_loss = evaluate(
+                model,
+                args.data_dir,
+                args.dataset,
+                args.block_size,
+                args.batch_size,
+                device,
+                args.eval_samples,
+            )
 
-print(f"Final validation loss: {final_val_loss:.4f}")
-print(f"Best validation loss: {best_val_loss:.4f}")
+            print(f"Validation loss: {val_loss:.4f}")
+            metrics["val_losses"].append(val_loss)
 
-# Save final model
-checkpoint = {
-    "model": model.state_dict(),
-    "optimizer": optimizer.state_dict(),
-    "iter_num": args.max_iters,
-    "val_loss": final_val_loss,
-    "best_val_loss": best_val_loss,
-    "config": config,
-    "args": args,
-}
-torch.save(checkpoint, os.path.join(args.output_dir, "final_model.pt"))
+            # Save best model
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                checkpoint = {
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "iter_num": iter_num,
+                    "best_val_loss": best_val_loss,
+                    "config": config,
+                    "args": args,
+                }
+                torch.save(checkpoint, os.path.join(args.output_dir, "best_model.pt"))
+                print(f"Saved best model (val_loss: {val_loss:.4f})")
 
-# Save metrics
-metrics["final_val_loss"] = final_val_loss
-metrics["best_val_loss"] = best_val_loss
-metrics["total_time"] = (
-    time.time() - metrics["timestamps"][0] if metrics["timestamps"] else 0
-)
+    # -----------------------------------------------------------------------------
+    # Final evaluation and saving
 
-if args.json_output:
-    with open(args.json_output, "w") as f:
+    print("\n" + "=" * 50)
+    print("Training complete!")
+
+    # Final evaluation
+    final_val_loss = evaluate(
+        model,
+        args.data_dir,
+        args.dataset,
+        args.block_size,
+        args.batch_size,
+        device,
+        args.eval_samples * 2,
+    )
+
+    print(f"Final validation loss: {final_val_loss:.4f}")
+    print(f"Best validation loss: {best_val_loss:.4f}")
+
+    # Save final model
+    checkpoint = {
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "iter_num": args.max_iters,
+        "val_loss": final_val_loss,
+        "best_val_loss": best_val_loss,
+        "config": config,
+        "args": args,
+    }
+    torch.save(checkpoint, os.path.join(args.output_dir, "final_model.pt"))
+
+    # Save metrics
+    metrics["final_val_loss"] = final_val_loss
+    metrics["best_val_loss"] = best_val_loss
+    metrics["total_time"] = (
+        time.time() - metrics["timestamps"][0] if metrics["timestamps"] else 0
+    )
+
+    if args.json_output:
+        with open(args.json_output, "w") as f:
+            json.dump(metrics, f, indent=2)
+        print(f"Saved metrics to {args.json_output}")
+
+    # Save detailed metrics
+    metrics_path = os.path.join(args.output_dir, "training_metrics.json")
+    with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=2)
-    print(f"Saved metrics to {args.json_output}")
+    print(f"Saved detailed metrics to {metrics_path}")
 
-# Save detailed metrics
-metrics_path = os.path.join(args.output_dir, "training_metrics.json")
-with open(metrics_path, "w") as f:
-    json.dump(metrics, f, indent=2)
-print(f"Saved detailed metrics to {metrics_path}")
+    print("\nTraining complete!")
 
-print("\nTraining complete!")
+    # Cleanup DDP
+    if ddp:
+        destroy_process_group()
 
-# Cleanup DDP
-if ddp:
-    destroy_process_group()
+if __name__ == "__main__":
+    main()

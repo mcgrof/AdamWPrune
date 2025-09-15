@@ -113,8 +113,12 @@ class MovementPruning:
 
         return current_sparsity
 
-    def update_masks(self):
-        """Update binary masks based on movement scores and target sparsity."""
+    def update_masks(self, iter_num=None):
+        """Update binary masks based on movement scores and target sparsity.
+
+        Args:
+            iter_num: Current iteration number (for compatibility with other pruners)
+        """
         current_sparsity = self.get_current_sparsity()
 
         if current_sparsity == 0.0:
