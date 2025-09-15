@@ -154,26 +154,49 @@ endmenu
 
 menu "Experiment Tracking"
 
-config EXPERIMENT_TRACKER
-	string "Experiment tracking backend"
-	default "none"
+choice
+	prompt "Experiment tracking backend"
+	default TRACKER_NONE
 	help
-	  Choose experiment tracking backend:
-	  - "none": No experiment tracking (default)
-	  - "trackio": Lightweight, local-first tracking
-	  - "wandb": Weights & Biases cloud tracking
+	  Choose experiment tracking backend for logging metrics and experiments.
 
-	  Install required packages:
-	  - Trackio: pip install trackio
-	  - WandB: pip install wandb
+config TRACKER_NONE
+	bool "No tracking"
+	help
+	  Disable experiment tracking.
+
+config TRACKER_TRACKIO
+	bool "Trackio (local tracking)"
+	help
+	  Use Trackio for lightweight, local-first experiment tracking.
+	  Stores data in local SQLite database.
+	  Install with: pip install trackio
+
+config TRACKER_WANDB
+	bool "Weights & Biases (cloud tracking)"
+	help
+	  Use Weights & Biases for cloud-based experiment tracking.
+	  Provides advanced features like sweeps and team collaboration.
+	  Install with: pip install wandb
+
+endchoice
+
+config EXPERIMENT_TRACKER
+	string
+	default "none" if TRACKER_NONE
+	default "trackio" if TRACKER_TRACKIO
+	default "wandb" if TRACKER_WANDB
 
 config TRACKER_PROJECT
 	string "Project name for experiment tracking"
-	default "adamwprune-experiments"
-	depends on EXPERIMENT_TRACKER != "none"
+	default ""
+	depends on !TRACKER_NONE
 	help
 	  Project name to organize experiments in the tracking system.
-	  Used by both Trackio and WandB.
+	  If left empty, will be auto-generated as:
+	  {dir_name}-{checksum}
+	  where dir_name is the current directory name and checksum
+	  is a hash of the current directory path for uniqueness.
 
 config TRACKER_RUN_NAME
 	string "Run name for experiment tracking"

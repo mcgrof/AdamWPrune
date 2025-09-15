@@ -16,10 +16,27 @@ pip install wandb
 
 ## Usage
 
+### Kconfig Configuration
+
+Use `make menuconfig` to configure tracking through the menu system:
+1. Navigate to "Experiment Tracking"
+2. Select your preferred backend (None/Trackio/WandB)
+3. Optionally set a custom project name (auto-generated if empty)
+
+### Auto-Generated Project Names
+
+If no project name is specified, it's automatically generated as:
+```
+{directory_name}-{checksum}
+```
+For example: `AdamWPrune-a1d53c54`
+
+This ensures unique project names even when working in different clones of the same repository.
+
 ### Command-Line Arguments
 
 - `--tracker`: Choose tracking backend (`none`, `trackio`, or `wandb`)
-- `--tracker-project`: Project name for organizing experiments (default: `adamwprune-gpt2`)
+- `--tracker-project`: Project name (auto-generated as `{dir}-{checksum}` if not provided)
 - `--tracker-run-name`: Optional custom run name (auto-generated if not provided)
 
 ### Examples
