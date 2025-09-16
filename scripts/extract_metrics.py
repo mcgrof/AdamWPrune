@@ -25,7 +25,9 @@ def extract_metrics(test_dir):
     }
 
     # Determine if this is a language model (GPT-2) or CNN
-    is_gpt2 = "gpt2" in test_dir.lower() or data.get("config", {}).get("model") == "gpt2"
+    is_gpt2 = (
+        "gpt2" in test_dir.lower() or data.get("config", {}).get("model") == "gpt2"
+    )
 
     if is_gpt2:
         # GPT-2 metrics: use perplexity
@@ -34,7 +36,9 @@ def extract_metrics(test_dir):
         # Get perplexity values
         if "best_perplexity" in data:
             result["best_metric"] = data["best_perplexity"]
-            result["final_metric"] = data.get("final_perplexity", data["best_perplexity"])
+            result["final_metric"] = data.get(
+                "final_perplexity", data["best_perplexity"]
+            )
         elif "best_val_loss" in data:
             # Calculate perplexity from loss
             best_loss = data["best_val_loss"]
@@ -42,8 +46,8 @@ def extract_metrics(test_dir):
             result["best_metric"] = math.exp(min(best_loss, 20))
             result["final_metric"] = math.exp(min(final_loss, 20))
         else:
-            result["best_metric"] = float('inf')
-            result["final_metric"] = float('inf')
+            result["best_metric"] = float("inf")
+            result["final_metric"] = float("inf")
 
         # Get delta PPL
         result["delta_ppl"] = data.get("delta_ppl", 0.0)
@@ -73,7 +77,9 @@ def extract_metrics(test_dir):
             # Try to extract from epochs data
             epochs = data.get("epochs", [])
             if epochs and isinstance(epochs[0], dict):
-                accs = [e.get("test_accuracy", 0) for e in epochs if "test_accuracy" in e]
+                accs = [
+                    e.get("test_accuracy", 0) for e in epochs if "test_accuracy" in e
+                ]
                 if accs:
                     result["best_metric"] = max(accs) * 100
                     result["final_metric"] = accs[-1] * 100
@@ -101,7 +107,7 @@ def format_metric(value, metric_type):
     if metric_type == "accuracy":
         return f"{value:.2f}%"
     elif metric_type == "perplexity":
-        if value == float('inf'):
+        if value == float("inf"):
             return "∞"
         return f"{value:.2f}"
     else:
