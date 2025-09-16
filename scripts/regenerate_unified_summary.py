@@ -43,9 +43,11 @@ def regenerate_summary(results_dir):
     """Regenerate summary report with unified metrics handling."""
 
     # Scan for all test directories
-    test_dirs = [d for d in os.listdir(results_dir)
-                 if os.path.isdir(os.path.join(results_dir, d))
-                 and not d.startswith('.')]
+    test_dirs = [
+        d
+        for d in os.listdir(results_dir)
+        if os.path.isdir(os.path.join(results_dir, d)) and not d.startswith(".")
+    ]
 
     results = []
     for test_id in sorted(test_dirs):
@@ -107,13 +109,17 @@ def regenerate_summary(results_dir):
         if gpt2_results:
             f.write("GPT-2 Language Model Results:\n")
             f.write("-" * 120 + "\n")
-            f.write(f"{'Test ID':<40} {'PPL (↓)':<12} {'ΔPPL':<10} {'Sparsity':<10} "
-                   f"{'Latency@512':<15} {'GPU (MB)':<12} {'Status':<10}\n")
+            f.write(
+                f"{'Test ID':<40} {'PPL (↓)':<12} {'ΔPPL':<10} {'Sparsity':<10} "
+                f"{'Latency@512':<15} {'GPU (MB)':<12} {'Status':<10}\n"
+            )
             f.write("-" * 120 + "\n")
 
-            for r in sorted(gpt2_results, key=lambda x: x.get("best_metric", float('inf'))):
+            for r in sorted(
+                gpt2_results, key=lambda x: x.get("best_metric", float("inf"))
+            ):
                 test_id = r["test_id"]
-                ppl = r.get("best_metric", float('inf'))
+                ppl = r.get("best_metric", float("inf"))
                 delta_ppl = r.get("delta_ppl", 0.0)
                 sparsity = r.get("final_sparsity", 0.0) * 100
 
@@ -125,7 +131,9 @@ def regenerate_summary(results_dir):
                     latency_str = "N/A"
 
                 # GPU memory
-                gpu_mem = r.get("gpu_memory_max", 0) or r.get("gpu_memory_reserved_mb", 0)
+                gpu_mem = r.get("gpu_memory_max", 0) or r.get(
+                    "gpu_memory_reserved_mb", 0
+                )
                 if gpu_mem > 0:
                     gpu_str = f"{gpu_mem:.1f}"
                 else:
@@ -133,25 +141,33 @@ def regenerate_summary(results_dir):
 
                 status = "✓" if r.get("success") else "✗"
 
-                f.write(f"{test_id:<40} {format_metric(ppl, 'perplexity'):<12} "
-                       f"{delta_ppl:+10.2f} {sparsity:9.1f}% "
-                       f"{latency_str:<15} {gpu_str:<12} {status:<10}\n")
+                f.write(
+                    f"{test_id:<40} {format_metric(ppl, 'perplexity'):<12} "
+                    f"{delta_ppl:+10.2f} {sparsity:9.1f}% "
+                    f"{latency_str:<15} {gpu_str:<12} {status:<10}\n"
+                )
 
             # Best performers
             f.write("\nBest GPT-2 Models (by perplexity, lower is better):\n")
-            best_gpt2 = sorted([r for r in gpt2_results if r.get("success")],
-                              key=lambda x: x.get("best_metric", float('inf')))[:5]
+            best_gpt2 = sorted(
+                [r for r in gpt2_results if r.get("success")],
+                key=lambda x: x.get("best_metric", float("inf")),
+            )[:5]
             for i, r in enumerate(best_gpt2, 1):
-                f.write(f"{i}. {r['test_id']}: PPL={format_metric(r['best_metric'], 'perplexity')}, "
-                       f"ΔPPL={r.get('delta_ppl', 0):+.2f}\n")
+                f.write(
+                    f"{i}. {r['test_id']}: PPL={format_metric(r['best_metric'], 'perplexity')}, "
+                    f"ΔPPL={r.get('delta_ppl', 0):+.2f}\n"
+                )
             f.write("\n")
 
         # CNN Results Table
         if cnn_results:
             f.write("CNN Model Results:\n")
             f.write("-" * 100 + "\n")
-            f.write(f"{'Test ID':<40} {'Accuracy (↑)':<12} {'Sparsity':<10} "
-                   f"{'GPU (MB)':<12} {'Time (s)':<10} {'Status':<10}\n")
+            f.write(
+                f"{'Test ID':<40} {'Accuracy (↑)':<12} {'Sparsity':<10} "
+                f"{'GPU (MB)':<12} {'Time (s)':<10} {'Status':<10}\n"
+            )
             f.write("-" * 100 + "\n")
 
             for r in sorted(cnn_results, key=lambda x: -x.get("best_metric", 0)):
@@ -175,15 +191,21 @@ def regenerate_summary(results_dir):
 
                 status = "✓" if r.get("success") else "✗"
 
-                f.write(f"{test_id:<40} {format_metric(acc, 'accuracy'):<12} "
-                       f"{sparsity:9.1f}% {gpu_str:<12} {time_str:<10} {status:<10}\n")
+                f.write(
+                    f"{test_id:<40} {format_metric(acc, 'accuracy'):<12} "
+                    f"{sparsity:9.1f}% {gpu_str:<12} {time_str:<10} {status:<10}\n"
+                )
 
             # Best performers
             f.write("\nBest CNN Models (by accuracy, higher is better):\n")
-            best_cnn = sorted([r for r in cnn_results if r.get("success")],
-                             key=lambda x: -x.get("best_metric", 0))[:5]
+            best_cnn = sorted(
+                [r for r in cnn_results if r.get("success")],
+                key=lambda x: -x.get("best_metric", 0),
+            )[:5]
             for i, r in enumerate(best_cnn, 1):
-                f.write(f"{i}. {r['test_id']}: {format_metric(r['best_metric'], 'accuracy')}\n")
+                f.write(
+                    f"{i}. {r['test_id']}: {format_metric(r['best_metric'], 'accuracy')}\n"
+                )
 
         # Overall analysis
         f.write("\n" + "=" * 120 + "\n")
@@ -208,14 +230,18 @@ def regenerate_summary(results_dir):
             opt_cnn = [r for r in opt_results if r.get("model") != "gpt2"]
 
             if opt_gpt2:
-                best = min(opt_gpt2, key=lambda x: x.get("best_metric", float('inf')))
-                f.write(f"  Best GPT-2: {best['test_id']} "
-                       f"(PPL={format_metric(best['best_metric'], 'perplexity')})\n")
+                best = min(opt_gpt2, key=lambda x: x.get("best_metric", float("inf")))
+                f.write(
+                    f"  Best GPT-2: {best['test_id']} "
+                    f"(PPL={format_metric(best['best_metric'], 'perplexity')})\n"
+                )
 
             if opt_cnn:
                 best = max(opt_cnn, key=lambda x: x.get("best_metric", 0))
-                f.write(f"  Best CNN: {best['test_id']} "
-                       f"({format_metric(best['best_metric'], 'accuracy')})\n")
+                f.write(
+                    f"  Best CNN: {best['test_id']} "
+                    f"({format_metric(best['best_metric'], 'accuracy')})\n"
+                )
 
     print(f"Summary report saved to: {report_file}")
     return True
