@@ -85,7 +85,13 @@ def main():
     print("=" * 60)
 
     # Get configuration
-    project = getattr(config, "WANDB_PROJECT", "adamwprune-test")
+    project = getattr(config, "WANDB_PROJECT", None)
+    if not project:
+        # Try to get auto-generated name
+        project = getattr(config, "AUTO_PROJECT_NAME", None)
+    if not project:
+        # Fallback to default
+        project = "adamwprune-test"
     entity = getattr(config, "WANDB_ENTITY", None)
 
     # Initialize WandB
