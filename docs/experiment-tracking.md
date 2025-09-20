@@ -42,9 +42,12 @@ This ensures:
 pip install trackio
 ```
 
+**No login required!** Trackio stores everything locally in SQLite.
+
 ### WandB (Full-Featured, Cloud-Based)
 ```bash
 pip install wandb
+wandb login  # One-time authentication
 ```
 
 ## Configuration Options

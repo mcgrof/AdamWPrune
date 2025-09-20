@@ -118,13 +118,14 @@ def main():
 
     try:
         # Initialize Trackio with project and config
+        # Note: Trackio doesn't support tags parameter
         trackio.init(
             project=project,
             config=run_config,
             name=f"test-run-{int(time.time())}",
-            tags=["test", "fake-data", "kconfig-integration"],
         )
         print("✓ Trackio initialized successfully")
+        print("\nNote: Trackio is local-only, no login required!")
     except Exception as e:
         print(f"✗ Failed to initialize Trackio: {e}")
         sys.exit(1)
