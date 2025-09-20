@@ -498,6 +498,9 @@ help:
 	@echo "  update-graphs     - Update visualization graphs with latest results"
 	@echo "  analyze-gpu       - Analyze GPU memory usage from battle results"
 	@echo ""
+	@echo "Setup targets:"
+	@echo "  deps              - Install Python dependencies from requirements.txt"
+	@echo ""
 	@echo "Cleaning targets:"
 	@echo "  clean             - Clean build artifacts only (keeps config & datasets)"
 	@echo "  mrproper          - Clean everything except datasets (removes config)"
@@ -558,5 +561,15 @@ help:
 
 .PHONY: all memory-comparison update-graphs analyze-gpu clean mrproper data-clean help \
         train test-matrix test-matrix-yaml test-matrix-dry-run test-rerun summary \
-        test-all-optimizers test-all-pruning test-everything \
+        test-all-optimizers test-all-pruning test-everything deps \
         parallel parallel-4 parallel-8 parallel-16 parallel-rerun continue estimate
+
+# Dependencies installation target
+deps:
+	@echo "Installing Python dependencies from requirements.txt..."
+	pip install -r requirements.txt
+	@echo "Dependencies installed successfully!"
+	@echo ""
+	@echo "Note: You may also need to log in to tracking services:"
+	@echo "  wandb login"
+	@echo "  trackio login  # if required"
