@@ -595,8 +595,10 @@ def run_single_test(
             cmd.extend(["--eval-interval", config["GPT2_EVAL_INTERVAL"]])
         if "GPT2_EVAL_SAMPLES" in config:
             cmd.extend(["--eval-samples", config["GPT2_EVAL_SAMPLES"]])
-        if "GPT2_MAX_ITERS" in config:
-            cmd.extend(["--max-iters", config["GPT2_MAX_ITERS"]])
+        # Support MAX_ITERS from environment or config
+        max_iters = os.environ.get("GPT2_MAX_ITERS") or config.get("GPT2_MAX_ITERS")
+        if max_iters:
+            cmd.extend(["--max-iters", str(max_iters)])
         if config.get("GPT2_DECAY_LR") == "y":
             cmd.append("--decay-lr")
         if "GPT2_MIN_LR" in config:
