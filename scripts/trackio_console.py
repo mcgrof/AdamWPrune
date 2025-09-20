@@ -341,6 +341,7 @@ class TrackIOConsole:
     def _read_from_db(self) -> Optional[Dict[str, Any]]:
         """Read metrics from SQLite database."""
         try:
+            import json
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
@@ -350,12 +351,29 @@ class TrackIOConsole:
 
             metrics = {}
             if 'metrics' in tables:
-                cursor.execute("SELECT * FROM metrics ORDER BY timestamp DESC LIMIT 100")
+                # Get recent metrics with proper JSON parsing
+                cursor.execute("SELECT timestamp, run_name, step, metrics FROM metrics ORDER BY timestamp DESC LIMIT 100")
                 rows = cursor.fetchall()
                 if rows:
-                    # Get column names
-                    columns = [d[0] for d in cursor.description]
-                    metrics['data'] = [dict(zip(columns, row)) for row in rows]
+                    parsed_data = []
+                    for timestamp, run_name, step, metrics_json in rows:
+                        try:
+                            # Parse the JSON metrics data
+                            metrics_data = json.loads(metrics_json) if metrics_json else {}
+
+                            # Create a flattened entry for display
+                            entry = {
+                                'timestamp': timestamp,
+                                'run_name': run_name,
+                                'step': step,
+                                **metrics_data  # Unpack the JSON metrics
+                            }
+                            parsed_data.append(entry)
+                        except json.JSONDecodeError:
+                            # Skip malformed JSON entries
+                            continue
+
+                    metrics['data'] = parsed_data
 
             conn.close()
             return metrics
