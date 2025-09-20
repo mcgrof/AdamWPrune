@@ -196,6 +196,32 @@ Industry best practices recommend saving model checkpoints at peak accuracy, not
 
 ## Quick Start
 
+### Configure with Experiment Tracking
+
+```bash
+# Basic configuration (no tracking)
+make defconfig DEFCONFIG=gpt2-finewebedu-a10gx4
+
+# Enable local tracking with Trackio
+make defconfig DEFCONFIG=gpt2-finewebedu-a10gx4 TRACKER=trackio
+
+# Enable cloud tracking with WandB (requires wandb login)
+make defconfig DEFCONFIG=gpt2-finewebedu-a10gx4 TRACKER=wandb
+
+# Enable both for comparison
+make defconfig DEFCONFIG=gpt2-finewebedu-a10gx4 TRACKER=wandb,trackio
+
+# Run training
+make
+```
+
+**Auto-generated project names**: `{model}-{5char-checksum}` (e.g., `gpt2-a3f2c`, `resnet50-7b9d1`)
+- Consistent across runs from same directory
+- No collisions between machines/directories
+- No manual configuration needed
+
+See [docs/experiment-tracking.md](docs/experiment-tracking.md) for detailed tracking configuration.
+
 ### Test ResNet-18 with AdamWPrune
 
 ```bash
@@ -226,8 +252,31 @@ make
 
 ## Installation
 
+### Core Dependencies
 ```bash
 pip install torch torchvision numpy matplotlib
+```
+
+### Optional: Experiment Tracking
+```bash
+# Local tracking (no authentication needed)
+pip install trackio
+
+# Cloud tracking (requires account)
+pip install wandb
+wandb login  # One-time setup
+
+# Or install both
+pip install trackio wandb
+```
+
+### Testing Tracker Integration
+```bash
+# Test WandB with fake metrics
+make wandb-test
+
+# Test Trackio with fake metrics
+make trackio-test
 ```
 
 ## Model-Specific Configurations
