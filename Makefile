@@ -174,11 +174,14 @@ train: check-config generate-config prepare-datasets
 # Test matrix targets
 test-matrix: check-config prepare-datasets
 	@echo "Running test matrix with configuration from .config..."
+	@if [ -n "$(MAX_ITERS)" ]; then \
+		echo "Setting MAX_ITERS to $(MAX_ITERS) for GPT-2 testing..."; \
+	fi
 	@if [ -n "$(EPOCHS)" ]; then \
 		echo "Overriding epochs to $(EPOCHS) for testing..."; \
-		YES=$(YES) python3 scripts/run_test_matrix.py --config .config --override-epochs $(EPOCHS); \
+		GPT2_MAX_ITERS=$(MAX_ITERS) YES=$(YES) python3 scripts/run_test_matrix.py --config .config --override-epochs $(EPOCHS); \
 	else \
-		YES=$(YES) python3 scripts/run_test_matrix.py --config .config; \
+		GPT2_MAX_ITERS=$(MAX_ITERS) YES=$(YES) python3 scripts/run_test_matrix.py --config .config; \
 	fi
 	@$(MAKE) summary
 
