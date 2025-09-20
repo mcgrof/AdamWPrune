@@ -285,22 +285,52 @@ def analyze_test_directory(matrix_dir):
                     is_running = True
                     # Estimate progress based on output.log
                     current_epoch = 0
-                    total_epochs = 100  # default
+                    total_epochs = 10  # default (more reasonable than 100)
+                    current_iter = 0
+                    total_iters = 0
 
                     if output_log.exists():
                         try:
                             with open(output_log, "r") as f:
                                 content = f.read()
-                                # Find epoch numbers
-                                epoch_matches = re.findall(r"Epoch[:\s]+(\d+)", content)
-                                if epoch_matches:
-                                    current_epoch = int(epoch_matches[-1])
-                                # Try to find total epochs
-                                total_matches = re.findall(
-                                    r"Epoch[:\s]+\d+/(\d+)", content
-                                )
-                                if total_matches:
-                                    total_epochs = int(total_matches[0])
+
+                                # Check if this is GPT-2 (iteration-based)
+                                iter_matches = re.findall(r"Iter\s+(\d+)\s+\|", content)
+                                if iter_matches:
+                                    # GPT-2 uses iterations, not epochs
+                                    current_iter = int(iter_matches[-1])
+
+                                    # Look for max_iters in command
+                                    max_iter_matches = re.findall(r"--max-iters\s+(\d+)", content)
+                                    if max_iter_matches:
+                                        total_iters = int(max_iter_matches[0])
+
+                                    # Look for epochs in command (GPT-2 specific)
+                                    epoch_arg_matches = re.findall(r"--epochs\s+(\d+)", content)
+                                    if epoch_arg_matches:
+                                        total_epochs = int(epoch_arg_matches[0])
+                                        # Estimate progress based on iterations
+                                        # Rough estimate: assume linear progress through epochs
+                                        if total_iters > 0:
+                                            current_epoch = (current_iter / total_iters) * total_epochs
+                                        else:
+                                            # If no max_iters, estimate from training patterns
+                                            # GPT-2 typically does ~50k iters for full training
+                                            estimated_iters_per_epoch = 5000
+                                            current_epoch = current_iter / estimated_iters_per_epoch
+                                            if current_epoch > total_epochs:
+                                                current_epoch = total_epochs * 0.9
+                                else:
+                                    # CNN models use epochs
+                                    epoch_matches = re.findall(r"Epoch[:\s]+(\d+)", content)
+                                    if epoch_matches:
+                                        current_epoch = int(epoch_matches[-1])
+                                    # Try to find total epochs
+                                    total_matches = re.findall(
+                                        r"Epoch[:\s]+\d+/(\d+)", content
+                                    )
+                                    if total_matches:
+                                        total_epochs = int(total_matches[0])
                         except Exception:
                             pass
 
@@ -310,6 +340,8 @@ def analyze_test_directory(matrix_dir):
                             "pid": proc["pid"],
                             "current_epoch": current_epoch,
                             "total_epochs": total_epochs,
+                            "current_iter": current_iter,
+                            "total_iters": total_iters,
                             "start_time": proc["start_time"],
                         }
                     )
@@ -380,6 +412,8 @@ def estimate_completion_time(analysis):
                 "progress_percent": progress * 100,
                 "current_epoch": test["current_epoch"],
                 "total_epochs": test["total_epochs"],
+                "current_iter": test.get("current_iter", 0),
+                "total_iters": test.get("total_iters", 0),
                 "using_average": progress < 0.05,  # Flag if using historical average
             }
 
@@ -495,9 +529,15 @@ def main():
             print("\nIn-Progress Tests:")
             for test_name, est in estimates["in_progress_estimates"].items():
                 print(f"  {test_name}:")
-                print(
-                    f"    Progress: {est['progress_percent']:.1f}% (Epoch {est['current_epoch']}/{est['total_epochs']})"
-                )
+                # Show iterations for GPT-2, epochs for CNN models
+                if est.get('current_iter', 0) > 0:
+                    print(
+                        f"    Progress: {est['progress_percent']:.1f}% (Iter {est.get('current_iter', 0)}, Epoch {est['current_epoch']:.1f}/{est['total_epochs']})"
+                    )
+                else:
+                    print(
+                        f"    Progress: {est['progress_percent']:.1f}% (Epoch {est['current_epoch']}/{est['total_epochs']})"
+                    )
                 time_str = format_time(est["remaining_time"])
                 if est.get("using_average", False):
                     time_str += " (based on average)"
