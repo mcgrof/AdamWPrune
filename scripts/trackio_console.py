@@ -330,11 +330,12 @@ class TrackIOConsole:
         self.multi_graph = None
         self.use_advanced_ui = True  # Use advanced terminal UI by default
 
-        # Find TrackIO data location
+        # Find TrackIO data location - check both directory and .db file formats
         self.trackio_dirs = [
             Path.home() / ".trackio" / project,
             Path.home() / ".cache" / "trackio" / project,
             Path.home() / ".cache" / "huggingface" / "trackio" / project,
+            Path.home() / ".cache" / "huggingface" / "trackio" / f"{project}.db",  # Added: project.db format
             Path.cwd() / ".trackio" / project,
             Path.cwd() / f"trackio_{project}.db",
         ]
@@ -373,13 +374,14 @@ class TrackIOConsole:
             metrics = {}
             if "metrics" in tables:
                 # Get recent metrics with proper JSON parsing
+                # Include id column since it's the first column in the schema
                 cursor.execute(
-                    "SELECT timestamp, run_name, step, metrics FROM metrics ORDER BY timestamp DESC LIMIT 100"
+                    "SELECT id, timestamp, run_name, step, metrics FROM metrics ORDER BY timestamp DESC LIMIT 100"
                 )
                 rows = cursor.fetchall()
                 if rows:
                     parsed_data = []
-                    for timestamp, run_name, step, metrics_json in rows:
+                    for id, timestamp, run_name, step, metrics_json in rows:
                         try:
                             # Parse the JSON metrics data
                             metrics_data = (
@@ -710,9 +712,61 @@ class TrackIOConsole:
             )
             return
 
+        # If we have data from database
+        if "data" in metrics and metrics["data"]:
+            # Convert database format to display format
+            display_metrics = self._convert_db_to_display_format(metrics["data"])
+            self._display_training_metrics(display_metrics)
         # If we have parsed training metrics
-        if "iterations" in metrics and metrics["iterations"]:
+        elif "iterations" in metrics and metrics["iterations"]:
             self._display_training_metrics(metrics)
+
+    def _convert_db_to_display_format(self, data: list) -> Dict[str, Any]:
+        """Convert database format to display format."""
+        # Data comes in reverse chronological order, so reverse it for proper display
+        data_reversed = list(reversed(data))
+
+        # Extract iterations, losses, and other metrics
+        iterations = []
+        losses = []
+        learning_rates = []
+        sparsities = []
+
+        for entry in data_reversed:
+            if "iteration" in entry:
+                iterations.append(entry["iteration"])
+                # Only append to other lists if we have the corresponding data
+                if "train_loss" in entry:
+                    losses.append(entry["train_loss"])
+                if "learning_rate" in entry:
+                    learning_rates.append(entry["learning_rate"])
+                if "sparsity" in entry:
+                    sparsities.append(entry["sparsity"])
+
+        # Ensure we have data to display
+        if not iterations or not losses:
+            return {}
+
+        # Return in expected format
+        result = {
+            "iterations": iterations,
+            "losses": losses,
+        }
+
+        if learning_rates:
+            result["learning_rates"] = learning_rates
+        if sparsities:
+            result["sparsities"] = sparsities
+
+        # Add latest values for display (from original data[0] which is most recent)
+        if data:
+            latest = data[0]  # Most recent entry
+            result["current_iter"] = latest.get("iteration", 0)
+            result["current_loss"] = latest.get("train_loss", 0)
+            result["current_lr"] = latest.get("learning_rate", 0)
+            result["current_sparsity"] = latest.get("sparsity", 0)
+
+        return result
 
     def _draw_box(self, x: int, y: int, w: int, h: int, title: str = ""):
         """Draw a box with optional title."""
