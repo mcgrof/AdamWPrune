@@ -2,7 +2,7 @@
 
 ## Overview
 
-AdamWPrune provides comprehensive monitoring and analysis capabilities for multi-GPU training setups, specifically optimized for AWS g5.12xlarge instances with 4x NVIDIA A10G GPUs. The system automatically detects multi-GPU configurations and provides both aggregate and per-GPU analysis.
+AdamWPrune provides comprehensive monitoring and analysis capabilities for multi-GPU training setups. The system automatically detects multi-GPU configurations (2+ GPUs) and dynamically adapts to any number of GPUs, providing both aggregate and per-GPU analysis. Tested and optimized for AWS g5.12xlarge instances with 4x NVIDIA A10G GPUs, but supports any multi-GPU configuration.
 
 ## Architecture
 
@@ -100,7 +100,7 @@ ADAMWPRUNE Training - Per-GPU Breakdown:
 
 ### 1. Per-GPU Memory Breakdown
 - **File**: `per_gpu_memory_breakdown.png`
-- **Content**: 2x2 grid showing memory usage for each GPU
+- **Content**: Dynamic grid layout based on GPU count (1x2 for 2 GPUs, 2x2 for 4 GPUs, 2x3 for 6 GPUs, etc.)
 - **Purpose**: Identify individual GPU performance patterns
 
 ### 2. GPU Load Balance Analysis
@@ -151,22 +151,36 @@ python scripts/generate_consolidated_gpu_summary.py
 # - Load balance assessment
 ```
 
-## Configuration for 4x A10G
+## Configuration for Multi-GPU
+
+### Dynamic GPU Detection
+
+The system automatically detects the number of available GPUs and adapts accordingly. No manual configuration of GPU count is required.
 
 ### GPT-2 Training Configuration
 
 ```bash
-# Use the optimized defconfig for 4x A10G
+# Use the optimized defconfig (works with any number of GPUs)
 make defconfig DEFCONFIG=gpt2/defconfigs/gpt2-finewebedu-a10gx4
 ```
 
 Key multi-GPU settings in defconfig:
 ```
 CONFIG_GPT2_USE_DDP=y
-CONFIG_GPT2_NUM_GPUS=4
+CONFIG_GPT2_NUM_GPUS=4  # This is a hint, actual count auto-detected
 CONFIG_GPT2_DDP_BACKEND="nccl"
 CONFIG_GPU_MONITOR=y  # Enable monitoring
 ```
+
+### Supported GPU Configurations
+
+| GPU Count | Layout | Example Use Cases |
+|-----------|--------|------------------|
+| 2 GPUs    | 1x2 grid | Development, small models |
+| 4 GPUs    | 2x2 grid | AWS g5.12xlarge, production training |
+| 6 GPUs    | 2x3 grid | High-memory models |
+| 8 GPUs    | 2x4 grid | Large-scale training |
+| 8+ GPUs   | Dynamic grid | Research clusters |
 
 ### Test Matrix with Multi-GPU
 
