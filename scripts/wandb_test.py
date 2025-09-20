@@ -74,7 +74,7 @@ def generate_fake_metrics(epoch, step):
         "learning_rate": lr,
         "perplexity": perplexity,
         "epoch": epoch,
-        "step": step,
+        "global_step": epoch * 100 + step,  # More descriptive than just "step"
     }
 
 
