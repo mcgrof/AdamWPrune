@@ -117,8 +117,12 @@ class MovementPruning:
         """Update binary masks based on movement scores and target sparsity.
 
         Args:
-            iter_num: Current iteration number (for compatibility with other pruners)
+            iter_num: Current iteration number (used to track progress)
         """
+        # Use provided iter_num if available, otherwise use internal counter
+        if iter_num is not None:
+            self.step = iter_num
+
         current_sparsity = self.get_current_sparsity()
 
         if current_sparsity == 0.0:
