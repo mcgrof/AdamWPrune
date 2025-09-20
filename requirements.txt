@@ -1,0 +1,33 @@
+# Core ML/Training Dependencies
+torch>=2.0.0
+torchvision
+numpy
+transformers
+datasets
+accelerate
+
+# Experiment Tracking
+wandb>=0.15.0
+trackio>=0.1.0
+
+# Data Processing
+tokenizers
+safetensors
+
+# Visualization & Monitoring
+matplotlib
+seaborn
+plotly
+rich
+psutil
+
+# Development & Quality
+black
+isort
+flake8
+pytest
+
+# Utilities
+tqdm
+pyyaml
+requests
