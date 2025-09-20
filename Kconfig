@@ -154,11 +154,25 @@ endmenu
 
 menu "Experiment Tracking"
 
+# CLI override detection
+config TRACKER_SET_BY_CLI
+	bool
+	output yaml
+	default $(shell, scripts/check-cli-set-var.sh TRACKER)
+
+config TRACKER_CLI_VALUE
+	string
+	default $(shell, scripts/append-makefile-vars.sh $(TRACKER))
+
 choice
 	prompt "Experiment tracking backend"
+	default TRACKER_NONE if !TRACKER_SET_BY_CLI
+	default TRACKER_TRACKIO if TRACKER_SET_BY_CLI && TRACKER_CLI_VALUE = "trackio"
+	default TRACKER_WANDB if TRACKER_SET_BY_CLI && TRACKER_CLI_VALUE = "wandb"
 	default TRACKER_NONE
 	help
 	  Choose experiment tracking backend for logging metrics and experiments.
+	  Can be set via CLI: make defconfig TRACKER=wandb
 
 config TRACKER_NONE
 	bool "No tracking"
@@ -187,16 +201,22 @@ config EXPERIMENT_TRACKER
 	default "trackio" if TRACKER_TRACKIO
 	default "wandb" if TRACKER_WANDB
 
+# Auto-generate project name based on model and environment
+config AUTO_PROJECT_NAME
+	string
+	default $(shell, scripts/generate-project-name.sh $(MODEL) $(EXPERIMENT_TRACKER))
+
 config TRACKER_PROJECT
 	string "Project name for experiment tracking"
+	default AUTO_PROJECT_NAME if TRACKER_PROJECT = ""
 	default ""
 	depends on !TRACKER_NONE
 	help
 	  Project name to organize experiments in the tracking system.
 	  If left empty, will be auto-generated as:
-	  {dir_name}-{checksum}
-	  where dir_name is the current directory name and checksum
-	  is a hash of the current directory path for uniqueness.
+	  {model}-{checksum}
+	  where model is the selected model and checksum is derived from
+	  hostname, IP, and current directory for uniqueness.
 
 config TRACKER_RUN_NAME
 	string "Run name for experiment tracking"
@@ -209,11 +229,13 @@ config TRACKER_RUN_NAME
 
 config WANDB_PROJECT
 	string "WandB project name"
+	default AUTO_PROJECT_NAME if WANDB_PROJECT = ""
 	default "adamwprune-test"
 	depends on EXPERIMENT_TRACKER = "wandb"
 	help
 	  WandB project name for experiment tracking.
 	  Will be used for wandb.init(project=...).
+	  Auto-generates smart name if left empty.
 
 config WANDB_ENTITY
 	string "WandB entity (team/username)"

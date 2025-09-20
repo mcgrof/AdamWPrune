@@ -89,7 +89,13 @@ def main():
     print("=" * 60)
 
     # Get configuration
-    project = getattr(config, "TRACKER_PROJECT", "adamwprune-test")
+    project = getattr(config, "TRACKER_PROJECT", None)
+    if not project:
+        # Try to get auto-generated name
+        project = getattr(config, "AUTO_PROJECT_NAME", None)
+    if not project:
+        # Fallback to default
+        project = "adamwprune-test"
     port = getattr(config, "TRACKIO_PORT", 7860)
 
     # Initialize Trackio
