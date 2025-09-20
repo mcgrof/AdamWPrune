@@ -571,6 +571,43 @@ def run_single_test(
     if model == "gpt2" and "GPT2_DATASET_NAME" in config:
         cmd.extend(["--dataset", config["GPT2_DATASET_NAME"]])
 
+    # Add batch size for GPT-2 (CNN models get it from config.py)
+    if model == "gpt2" and "BATCH_SIZE" in config:
+        cmd.extend(["--batch-size", config["BATCH_SIZE"]])
+
+    # Add block size for GPT-2
+    if model == "gpt2" and "GPT2_BLOCK_SIZE" in config:
+        cmd.extend(["--block-size", config["GPT2_BLOCK_SIZE"]])
+
+    # Add gradient accumulation for GPT-2
+    if model == "gpt2" and "GPT2_GRADIENT_ACCUMULATION" in config:
+        cmd.extend(["--gradient-accumulation", config["GPT2_GRADIENT_ACCUMULATION"]])
+
+    # Add other GPT-2 specific settings
+    if model == "gpt2":
+        if config.get("GPT2_COMPILE") == "y" or config.get("COMPILE_MODEL") == "y":
+            cmd.append("--compile")
+        if config.get("GPT2_FLASH_ATTENTION") == "y":
+            cmd.append("--flash-attention")
+        if "GPT2_WARMUP_STEPS" in config:
+            cmd.extend(["--warmup-steps", config["GPT2_WARMUP_STEPS"]])
+        if "GPT2_EVAL_INTERVAL" in config:
+            cmd.extend(["--eval-interval", config["GPT2_EVAL_INTERVAL"]])
+        if "GPT2_EVAL_SAMPLES" in config:
+            cmd.extend(["--eval-samples", config["GPT2_EVAL_SAMPLES"]])
+        if "GPT2_MAX_ITERS" in config:
+            cmd.extend(["--max-iters", config["GPT2_MAX_ITERS"]])
+        if config.get("GPT2_DECAY_LR") == "y":
+            cmd.append("--decay-lr")
+        if "GPT2_MIN_LR" in config:
+            cmd.extend(["--min-lr", config["GPT2_MIN_LR"]])
+        if "LEARNING_RATE" in config:
+            cmd.extend(["--learning-rate", config["LEARNING_RATE"]])
+        if "GPT2_WEIGHT_DECAY" in config:
+            cmd.extend(["--weight-decay", config["GPT2_WEIGHT_DECAY"]])
+        elif "ADAMWPRUNE_WEIGHT_DECAY" in config:
+            cmd.extend(["--weight-decay", config["ADAMWPRUNE_WEIGHT_DECAY"]])
+
     # AdamWPrune uses state-based pruning
     if optimizer == "adamwprune" and pruning == "state":
         # For AdamWPrune with state pruning, pass "state" as the method
