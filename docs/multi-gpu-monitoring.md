@@ -160,8 +160,8 @@ The system automatically detects the number of available GPUs and adapts accordi
 ### GPT-2 Training Configuration
 
 ```bash
-# Use the optimized defconfig (works with any number of GPUs)
-make defconfig DEFCONFIG=gpt2/defconfigs/gpt2-finewebedu-a10gx4
+# Use the optimized defconfig with experiment tracking
+make defconfig-gpt2-finewebedu-a10gx4 TRACKER=wandb,trackio
 ```
 
 Key multi-GPU settings in defconfig:
@@ -305,3 +305,99 @@ Local tracking includes multi-GPU dashboards:
 - **Good Balance (CV 5-10%)**: Monitor trends, minor optimization possible
 - **Fair Balance (CV 10-20%)**: Review batch size and data loading
 - **Poor Balance (CV > 20%)**: Investigate DDP configuration and data distribution
+
+## Experiment Tracking
+
+### Dual Tracking with WandB and TrackIO
+
+The system supports simultaneous tracking with both WandB (cloud) and TrackIO (local):
+
+```bash
+# Configure both trackers
+make defconfig-gpt2-finewebedu-a10gx4 TRACKER=wandb,trackio
+
+# Run tests with both tracking systems active
+make test-matrix MAX_ITERS=500 TRACKER=wandb,trackio
+```
+
+Both trackers will log metrics in parallel:
+- **WandB**: Cloud-based, collaborative, web dashboard
+- **TrackIO**: Local, console-based, privacy-focused
+
+### Console Monitoring with TrackIO
+
+#### View Interactive Console Dashboard
+```bash
+# Launch terminal UI with live metrics
+make trackio-view
+
+# Or specify a project
+make trackio-view PROJECT=tracking-11f50
+```
+
+This launches an interactive terminal UI with:
+- Real-time metrics updates
+- ASCII graphs
+- Training progress bars
+- Loss/accuracy trends
+
+#### Get Web URL Without Opening Browser
+```bash
+# Just show the URL
+make trackio-web
+
+# Output:
+# TrackIO Web Dashboard URL:
+# http://localhost:7860/?project=tracking-11f50
+```
+
+### Quick Test Configuration
+
+For rapid iteration and testing:
+
+```bash
+# Run quick test with 500 iterations (~15 minutes per test)
+make test-matrix MAX_ITERS=500 TRACKER=wandb,trackio
+
+# This overrides the default full epoch training
+# Useful for:
+# - Validating pipeline functionality
+# - Testing new configurations
+# - Quick performance comparisons
+```
+
+### Live Console Monitoring
+
+Monitor training progress from the console:
+
+```bash
+# Watch latest metrics
+watch -n 2 'tail -5 test_matrix_results_*/gpt2_*/output.log | grep Iter'
+
+# GPU memory timeline
+while true; do
+  nvidia-smi --query-gpu=timestamp,memory.used --format=csv,noheader
+  sleep 5
+done | tee gpu_timeline.csv
+
+# Compare multiple runs
+for dir in test_matrix_results_*/gpt2_*; do
+  echo "$dir:"
+  grep "Final" $dir/output.log 2>/dev/null
+done
+```
+
+### Progress Estimation
+
+Check estimated completion time:
+
+```bash
+# Estimate time remaining for current test matrix
+make estimate
+
+# Output includes:
+# - Current iteration/epoch progress
+# - Time remaining per test
+# - Total completion estimate
+# - Per-GPU memory usage
+```
