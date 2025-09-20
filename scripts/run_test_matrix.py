@@ -507,6 +507,7 @@ def run_single_test(
     time_estimates=None,
 ):
     """Run a single test combination."""
+    import os  # Explicit import to fix UnboundLocalError
     model = combination["model"]
     optimizer = combination["optimizer"]
     pruning = combination["pruning"]
