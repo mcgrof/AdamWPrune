@@ -206,11 +206,15 @@ def main():
     trackio.finish()
 
     print("\n✓ Trackio test completed successfully!")
-    print(f"\nTo view the results, run:")
-    print(f"  trackio show --port {port}")
-    print(f"\nThen open: http://localhost:{port}")
-    print("\nNote: The dashboard will show all tracked runs in the project.")
-    print("      Look for the run named 'test-run-<timestamp>' with tag 'test'.")
+    print(f"\nTo view the results, try one of these methods:")
+    print(f"\n1. Python method (recommended):")
+    print(f"   python -c \"import trackio; trackio.show(project='{project}', port={port})\"")
+    print(f"\n2. If trackio is in PATH:")
+    print(f"   trackio show --project '{project}' --port {port}")
+    print(f"\n3. Find trackio command:")
+    print(f"   python -m trackio show --project '{project}' --port {port}")
+    print(f"\nThe dashboard will open at: http://localhost:{port}")
+    print(f"Data is stored in: ~/.cache/huggingface/trackio/")
 
 
 if __name__ == "__main__":
