@@ -423,10 +423,36 @@ trackio-test: check-config generate-config
 	@echo "Running Trackio integration test with fake data..."
 	@python3 scripts/trackio_test.py
 
-# View Trackio dashboard
+# View Trackio dashboard in console (interactive terminal UI)
 trackio-view:
-	@echo "Opening Trackio dashboard..."
-	@python3 scripts/view-trackio.py
+	@echo "Launching TrackIO console dashboard..."
+	@if [ -z "$(PROJECT)" ]; then \
+		PROJECT=$$(grep CONFIG_TRACKER_PROJECT .config 2>/dev/null | cut -d'"' -f2); \
+		if [ -z "$$PROJECT" ]; then \
+			echo "No project found. Specify with: make trackio-view PROJECT=<project-name>"; \
+			exit 1; \
+		fi; \
+	else \
+		PROJECT=$(PROJECT); \
+	fi; \
+	python3 -c "import trackio; trackio.show(project='$$PROJECT')"
+
+# Show Trackio web URL (without opening browser)
+trackio-web:
+	@echo "TrackIO Web Dashboard URL:"
+	@if [ -z "$(PROJECT)" ]; then \
+		PROJECT=$$(grep CONFIG_TRACKER_PROJECT .config 2>/dev/null | cut -d'"' -f2); \
+		if [ -z "$$PROJECT" ]; then \
+			echo "No project found. Specify with: make trackio-web PROJECT=<project-name>"; \
+			exit 1; \
+		fi; \
+	else \
+		PROJECT=$(PROJECT); \
+	fi; \
+	@echo "http://localhost:7860/?project=$$PROJECT"
+	@echo ""
+	@echo "To start the web server (if not already running):"
+	@echo "  python3 -m trackio.server --project $$PROJECT --port 7860"
 
 # Help menu
 help:
@@ -467,7 +493,8 @@ help:
 	@echo "  test-everything   - Test all combinations (optimizers × pruning)"
 	@echo "  wandb-test        - Test WandB integration with fake training data"
 	@echo "  trackio-test      - Test Trackio integration with fake training data"
-	@echo "  trackio-view      - Open Trackio dashboard to view results"
+	@echo "  trackio-view      - Launch TrackIO console dashboard (interactive terminal UI)"
+	@echo "  trackio-web       - Show TrackIO web URL (doesn't open browser)"
 	@echo ""
 	@echo "Parallel execution targets (for high-memory GPUs):"
 	@echo "  parallel          - Run test matrix with parallel jobs (default: 8 jobs)"
