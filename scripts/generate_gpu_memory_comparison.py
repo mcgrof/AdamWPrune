@@ -457,8 +457,43 @@ def create_memory_timeline_comparison(results_dir, output_dir):
 def create_per_gpu_breakdown_charts(gpu_data, output_dir):
     """Create per-GPU memory breakdown charts for multi-GPU setups."""
 
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    fig.suptitle("Per-GPU Memory Analysis (4x A10G GPUs)", fontsize=16, fontweight="bold")
+    # Determine maximum number of GPUs from data
+    max_gpus = 0
+    for optimizer, configs in gpu_data.items():
+        for config, stats in configs.items():
+            if isinstance(stats, dict) and stats.get("multi_gpu", False):
+                per_gpu_stats = stats.get("per_gpu_stats", {})
+                max_gpus = max(max_gpus, len(per_gpu_stats))
+
+    if max_gpus == 0:
+        return
+
+    # Dynamic subplot configuration based on GPU count
+    if max_gpus <= 2:
+        rows, cols = 1, 2
+        figsize = (12, 6)
+    elif max_gpus <= 4:
+        rows, cols = 2, 2
+        figsize = (16, 12)
+    elif max_gpus <= 6:
+        rows, cols = 2, 3
+        figsize = (18, 12)
+    elif max_gpus <= 8:
+        rows, cols = 2, 4
+        figsize = (20, 12)
+    else:
+        rows, cols = 3, (max_gpus + 2) // 3
+        figsize = (6 * cols, 6 * rows)
+
+    fig, axes = plt.subplots(rows, cols, figsize=figsize)
+    if max_gpus == 1:
+        axes = [axes]
+    elif max_gpus == 2:
+        axes = axes.flatten()
+    else:
+        axes = axes.flatten()
+
+    fig.suptitle(f"Per-GPU Memory Analysis ({max_gpus} GPUs)", fontsize=16, fontweight="bold")
 
     # Collect all per-GPU data
     all_per_gpu_data = {}
@@ -481,8 +516,9 @@ def create_per_gpu_breakdown_charts(gpu_data, output_dir):
     colors = plt.cm.Set3(np.linspace(0, 1, len(all_per_gpu_data)))
 
     for i, (gpu_idx, gpu_data) in enumerate(sorted(all_per_gpu_data.items())):
-        row, col = i // 2, i % 2
-        ax = axes[row, col]
+        if i >= len(axes):
+            break
+        ax = axes[i]
 
         if gpu_data:
             configs = list(gpu_data.keys())
@@ -504,6 +540,10 @@ def create_per_gpu_breakdown_charts(gpu_data, output_dir):
 
         ax.grid(True, alpha=0.3)
 
+    # Hide unused subplots
+    for i in range(len(all_per_gpu_data), len(axes)):
+        axes[i].set_visible(False)
+
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "per_gpu_memory_breakdown.png"),
                 dpi=150, bbox_inches="tight")
@@ -513,8 +553,19 @@ def create_per_gpu_breakdown_charts(gpu_data, output_dir):
 def create_gpu_load_balance_analysis(gpu_data, output_dir):
     """Create GPU load balance analysis showing memory distribution across GPUs."""
 
+    # Determine maximum number of GPUs from data
+    max_gpus = 0
+    for optimizer, configs in gpu_data.items():
+        for config, stats in configs.items():
+            if isinstance(stats, dict) and stats.get("multi_gpu", False):
+                per_gpu_stats = stats.get("per_gpu_stats", {})
+                max_gpus = max(max_gpus, len(per_gpu_stats))
+
+    if max_gpus == 0:
+        return
+
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
-    fig.suptitle("GPU Load Balance Analysis (4x A10G)", fontsize=16, fontweight="bold")
+    fig.suptitle(f"GPU Load Balance Analysis ({max_gpus} GPUs)", fontsize=16, fontweight="bold")
 
     # Collect load balance data
     balance_data = {}
@@ -523,9 +574,13 @@ def create_gpu_load_balance_analysis(gpu_data, output_dir):
         for config, stats in configs.items():
             if isinstance(stats, dict) and stats.get("multi_gpu", False):
                 per_gpu_stats = stats.get("per_gpu_stats", {})
-                if len(per_gpu_stats) >= 4:  # Ensure we have 4 GPUs
+                if len(per_gpu_stats) >= 2:  # Ensure we have at least 2 GPUs for balance analysis
                     key = f"{optimizer}_{config}"
-                    gpu_memories = [per_gpu_stats[i]["mean"] for i in range(4)]
+                    # Get memory values for all available GPUs
+                    gpu_memories = []
+                    for i in range(len(per_gpu_stats)):
+                        if str(i) in per_gpu_stats:
+                            gpu_memories.append(per_gpu_stats[str(i)]["mean"])
 
                     # Calculate load balance metrics
                     avg_memory = np.mean(gpu_memories)
@@ -545,10 +600,10 @@ def create_gpu_load_balance_analysis(gpu_data, output_dir):
 
     # Left plot: Memory distribution across GPUs
     configs = list(balance_data.keys())
-    gpu_indices = [0, 1, 2, 3]
+    gpu_indices = list(range(max_gpus))
     colors = plt.cm.viridis(np.linspace(0, 1, len(configs)))
 
-    width = 0.15
+    width = 0.8 / len(configs) if configs else 0.8
     x = np.arange(len(gpu_indices))
 
     for i, (config, data) in enumerate(balance_data.items()):
@@ -563,7 +618,7 @@ def create_gpu_load_balance_analysis(gpu_data, output_dir):
 
     ax1.set_xlabel("GPU Index")
     ax1.set_ylabel("Memory Usage (MiB)")
-    ax1.set_title("Memory Distribution Across GPUs")
+    ax1.set_title(f"Memory Distribution Across {max_gpus} GPUs")
     ax1.set_xticks(x)
     ax1.set_xticklabels([f"GPU {i}" for i in gpu_indices])
     ax1.legend(loc="upper right", fontsize=8)
