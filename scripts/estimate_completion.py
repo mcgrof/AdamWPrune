@@ -473,18 +473,23 @@ def main():
         running_procs = find_running_train_processes()
 
         # Filter to directories with running processes
+        # Check both cwd and command line args for the directory path
         active_dirs = []
         for matrix_dir in matrix_dirs:
             for proc in running_procs:
-                if str(matrix_dir) in proc["cwd"]:
+                cmdline_str = " ".join(proc["cmdline"])
+                # Check if this process is working on this specific test matrix
+                if str(matrix_dir) in proc["cwd"] or str(matrix_dir) in cmdline_str:
                     active_dirs.append(matrix_dir)
                     break
 
         if active_dirs:
             matrix_dirs = active_dirs
         elif matrix_dirs:
-            # Use latest if no running processes
-            matrix_dirs = [matrix_dirs[-1]]
+            # Sort directories by timestamp in name and use the most recent
+            # Format is test_matrix_results_YYYYMMDD_HHMMSS
+            sorted_dirs = sorted(matrix_dirs, key=lambda x: x.name, reverse=True)
+            matrix_dirs = [sorted_dirs[0]]
         else:
             print("No test matrix directories found")
             sys.exit(1)
