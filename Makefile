@@ -423,13 +423,31 @@ trackio-test: check-config generate-config
 	@echo "Running Trackio integration test with fake data..."
 	@python3 scripts/trackio_test.py
 
-# Launch TrackIO web dashboard server
+# Launch TrackIO console dashboard (our new terminal UI)
 trackio-view:
+	@echo "Launching TrackIO Console Dashboard..."
+	@if [ -z "$(PROJECT)" ]; then \
+		PROJECT=$$(grep CONFIG_TRACKER_PROJECT .config 2>/dev/null | cut -d'"' -f2); \
+		if [ -z "$$PROJECT" ]; then \
+			echo "Auto-detecting project from training logs..."; \
+			python3 scripts/trackio_console.py; \
+		else \
+			python3 scripts/trackio_console.py --project "$$PROJECT"; \
+		fi; \
+	else \
+		python3 scripts/trackio_console.py --project "$(PROJECT)"; \
+	fi
+
+# Alternative name for console dashboard
+trackio-console: trackio-view
+
+# Launch TrackIO web dashboard server (original web UI)
+trackio-web-server:
 	@echo "Launching TrackIO web dashboard server..."
 	@if [ -z "$(PROJECT)" ]; then \
 		PROJECT=$$(grep CONFIG_TRACKER_PROJECT .config 2>/dev/null | cut -d'"' -f2); \
 		if [ -z "$$PROJECT" ]; then \
-			echo "No project found. Specify with: make trackio-view PROJECT=<project-name>"; \
+			echo "No project found. Specify with: make trackio-web-server PROJECT=<project-name>"; \
 			exit 1; \
 		fi; \
 	else \
