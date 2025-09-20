@@ -1634,9 +1634,12 @@ class GPUTop:
         print("".join(output), end="", flush=True)
 
     def log_stats_to_json(self, stats):
-        """Log stats to JSON file"""
+        """Log stats to JSON file for currently selected GPU and all GPUs if multi-GPU"""
+        timestamp = datetime.now().isoformat()
+
+        # Log currently selected GPU (backwards compatibility)
         entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": timestamp,
             "gpu_index": self.selected_gpu,
             "gpu_name": stats["name"],
             "gpu_type": self.gpu_monitor.gpu_type,
@@ -1656,10 +1659,79 @@ class GPUTop:
 
         self.json_data.append(entry)
 
+        # For multi-GPU setups, also log all GPUs in a separate structure
+        if self.gpu_monitor.gpu_count > 1:
+            all_gpu_entry = {
+                "timestamp": timestamp,
+                "multi_gpu_data": []
+            }
+
+            # Collect data for all GPUs and calculate aggregates
+            total_memory_used = 0
+            total_memory_total = 0
+            total_power = 0
+            total_power_limit = 0
+            avg_utilization = 0
+            max_temp = 0
+
+            for gpu_idx in range(self.gpu_monitor.gpu_count):
+                gpu_stats = self.gpu_monitor.get_stats(gpu_idx)
+                all_gpu_entry["multi_gpu_data"].append({
+                    "gpu_index": gpu_idx,
+                    "gpu_name": gpu_stats["name"],
+                    "utilization": gpu_stats["utilization"],
+                    "memory_used": gpu_stats["memory_used"],
+                    "memory_total": gpu_stats["memory_total"],
+                    "memory_percent": gpu_stats["memory_percent"],
+                    "temperatures": gpu_stats.get("temperatures", {}),
+                    "power": gpu_stats["power"],
+                    "power_limit": gpu_stats["power_limit"],
+                    "clocks": gpu_stats.get("clocks", {}),
+                })
+
+                # Accumulate for aggregates
+                total_memory_used += gpu_stats["memory_used"]
+                total_memory_total += gpu_stats["memory_total"]
+                total_power += gpu_stats["power"]
+                total_power_limit += gpu_stats["power_limit"]
+                avg_utilization += gpu_stats["utilization"]
+
+                # Find max temperature across all sensors
+                temps = gpu_stats.get("temperatures", {})
+                if temps:
+                    current_max = max(temps.values()) if temps.values() else 0
+                    max_temp = max(max_temp, current_max)
+
+            # Add aggregate summary
+            avg_utilization = avg_utilization / self.gpu_monitor.gpu_count
+            total_memory_percent = (total_memory_used / total_memory_total * 100) if total_memory_total > 0 else 0
+
+            all_gpu_entry["aggregate_stats"] = {
+                "total_memory_used": total_memory_used,
+                "total_memory_total": total_memory_total,
+                "total_memory_percent": total_memory_percent,
+                "average_utilization": avg_utilization,
+                "total_power": total_power,
+                "total_power_limit": total_power_limit,
+                "max_temperature": max_temp,
+                "gpu_count": self.gpu_monitor.gpu_count
+            }
+
+            # Store multi-GPU data separately
+            if not hasattr(self, 'multi_gpu_data'):
+                self.multi_gpu_data = []
+            self.multi_gpu_data.append(all_gpu_entry)
+
         # Write to file
         try:
             with open(self.stats_file, "w") as f:
                 json.dump(self.json_data, f, indent=2)
+
+            # Write multi-GPU data to separate file if available
+            if hasattr(self, 'multi_gpu_data') and self.multi_gpu_data:
+                multi_gpu_file = self.stats_file.replace('.json', '_multi_gpu.json')
+                with open(multi_gpu_file, "w") as f:
+                    json.dump(self.multi_gpu_data, f, indent=2)
         except Exception as e:
             pass  # Silently ignore write errors
 
