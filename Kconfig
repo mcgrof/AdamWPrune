@@ -155,24 +155,41 @@ endmenu
 menu "Experiment Tracking"
 
 comment "Enable any combination of trackers (they can run simultaneously)"
+comment "CLI: make defconfig TRACKER=wandb,trackio (or both, none, wandb, trackio)"
+
+# CLI override detection
+config TRACKER_SET_BY_CLI
+	bool
+	output yaml
+	default $(shell, scripts/check-cli-set-var.sh TRACKER)
+
+config TRACKER_CLI_VALUE
+	string
+	default $(shell, scripts/append-makefile-vars.sh $(TRACKER))
 
 config ENABLE_TRACKIO
 	bool "Enable Trackio (local tracking)"
+	default y if TRACKER_SET_BY_CLI && $(shell, scripts/check-tracker-enabled.sh trackio $(TRACKER)) = "y"
 	default n
 	help
 	  Use Trackio for lightweight, local-first experiment tracking.
 	  Stores data in local SQLite database with web dashboard.
 	  Install with: pip install trackio
 	  Can be used together with WandB for comparison.
+	  CLI: make defconfig TRACKER=trackio
+	       make defconfig TRACKER=wandb,trackio
 
 config ENABLE_WANDB
 	bool "Enable Weights & Biases (cloud tracking)"
+	default y if TRACKER_SET_BY_CLI && $(shell, scripts/check-tracker-enabled.sh wandb $(TRACKER)) = "y"
 	default n
 	help
 	  Use Weights & Biases for cloud-based experiment tracking.
 	  Provides advanced features like sweeps and team collaboration.
 	  Install with: pip install wandb
 	  Can be used together with Trackio for comparison.
+	  CLI: make defconfig TRACKER=wandb
+	       make defconfig TRACKER=wandb,trackio
 
 config TRACKER_PROJECT
 	string "Project name for experiment tracking"
