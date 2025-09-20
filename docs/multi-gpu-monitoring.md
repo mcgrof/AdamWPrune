@@ -324,31 +324,32 @@ Both trackers will log metrics in parallel:
 - **WandB**: Cloud-based, collaborative, web dashboard
 - **TrackIO**: Local, console-based, privacy-focused
 
-### Console Monitoring with TrackIO
+### TrackIO Local Dashboard
 
-#### View Interactive Console Dashboard
+#### Launch TrackIO Web Server
 ```bash
-# Launch terminal UI with live metrics
+# Start the TrackIO dashboard server
 make trackio-view
 
 # Or specify a project
 make trackio-view PROJECT=tracking-11f50
 ```
 
-This launches an interactive terminal UI with:
+This starts a local web server (typically on port 7861) with:
 - Real-time metrics updates
-- ASCII graphs
-- Training progress bars
+- Interactive graphs
+- Training progress visualization
 - Loss/accuracy trends
 
-#### Get Web URL Without Opening Browser
+Note: TrackIO generates a unique write token for security. The server will display the full URL with token.
+
+#### Get Dashboard URL Info
 ```bash
-# Just show the URL
+# Show URL without starting server
 make trackio-web
 
 # Output:
-# TrackIO Web Dashboard URL:
-# http://localhost:7860/?project=tracking-11f50
+# URL: http://localhost:7860/?project=tracking-11f50
 ```
 
 ### Quick Test Configuration
