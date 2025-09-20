@@ -415,6 +415,11 @@ wandb-test: check-config generate-config
 	@echo "Running WandB integration test with fake data..."
 	@python3 scripts/wandb_test.py
 
+# Trackio integration test
+trackio-test: check-config generate-config
+	@echo "Running Trackio integration test with fake data..."
+	@python3 scripts/trackio_test.py
+
 # Help menu
 help:
 	@echo "AdamWPrune Experiments Makefile"
@@ -453,6 +458,7 @@ help:
 	@echo "  test-all-pruning  - Test all pruning methods"
 	@echo "  test-everything   - Test all combinations (optimizers × pruning)"
 	@echo "  wandb-test        - Test WandB integration with fake training data"
+	@echo "  trackio-test      - Test Trackio integration with fake training data"
 	@echo ""
 	@echo "Parallel execution targets (for high-memory GPUs):"
 	@echo "  parallel          - Run test matrix with parallel jobs (default: 8 jobs)"
