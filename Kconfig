@@ -165,7 +165,8 @@ config TRACKER_SET_BY_CLI
 
 config TRACKER_CLI_VALUE
 	string
-	default $(shell, scripts/append-makefile-vars.sh $(TRACKER))
+	default "$(TRACKER)" if TRACKER_SET_BY_CLI
+	default ""
 
 config ENABLE_TRACKIO
 	bool "Enable Trackio (local tracking)"
