@@ -320,6 +320,8 @@ def get_test_matrix(config):
             models = ["resnet18"]
         elif config.get("MODEL_SELECT_RESNET50") == "y":
             models = ["resnet50"]
+        elif config.get("MODEL_SELECT_GPT2") == "y":
+            models = ["gpt2"]
 
     # Fall back to legacy TEST_MODELS if new system not configured
     if not models and "TEST_MODELS" in config and config["TEST_MODELS"]:
