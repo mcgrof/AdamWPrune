@@ -423,9 +423,9 @@ trackio-test: check-config generate-config
 	@echo "Running Trackio integration test with fake data..."
 	@python3 scripts/trackio_test.py
 
-# View Trackio dashboard in console (interactive terminal UI)
+# Launch TrackIO web dashboard server
 trackio-view:
-	@echo "Launching TrackIO console dashboard..."
+	@echo "Launching TrackIO web dashboard server..."
 	@if [ -z "$(PROJECT)" ]; then \
 		PROJECT=$$(grep CONFIG_TRACKER_PROJECT .config 2>/dev/null | cut -d'"' -f2); \
 		if [ -z "$$PROJECT" ]; then \
@@ -435,11 +435,15 @@ trackio-view:
 	else \
 		PROJECT=$(PROJECT); \
 	fi; \
+	@echo "Starting TrackIO server..."; \
+	@echo "Dashboard will be available at the URL shown below."; \
+	@echo "Press Ctrl+C to stop the server."; \
+	@echo ""; \
 	python3 -c "import trackio; trackio.show(project='$$PROJECT')"
 
-# Show Trackio web URL (without opening browser)
+# Show Trackio web URL (without launching server)
 trackio-web:
-	@echo "TrackIO Web Dashboard URL:"
+	@echo "TrackIO Web Dashboard Info:"
 	@if [ -z "$(PROJECT)" ]; then \
 		PROJECT=$$(grep CONFIG_TRACKER_PROJECT .config 2>/dev/null | cut -d'"' -f2); \
 		if [ -z "$$PROJECT" ]; then \
@@ -449,10 +453,10 @@ trackio-web:
 	else \
 		PROJECT=$(PROJECT); \
 	fi; \
-	@echo "http://localhost:7860/?project=$$PROJECT"
-	@echo ""
-	@echo "To start the web server (if not already running):"
-	@echo "  python3 -m trackio.server --project $$PROJECT --port 7860"
+	echo "URL: http://localhost:7860/?project=$$PROJECT"; \
+	echo ""; \
+	echo "To start the web server, run:"; \
+	echo "  make trackio-view PROJECT=$$PROJECT"
 
 # Help menu
 help:
@@ -493,8 +497,8 @@ help:
 	@echo "  test-everything   - Test all combinations (optimizers × pruning)"
 	@echo "  wandb-test        - Test WandB integration with fake training data"
 	@echo "  trackio-test      - Test Trackio integration with fake training data"
-	@echo "  trackio-view      - Launch TrackIO console dashboard (interactive terminal UI)"
-	@echo "  trackio-web       - Show TrackIO web URL (doesn't open browser)"
+	@echo "  trackio-view      - Launch TrackIO web dashboard server"
+	@echo "  trackio-web       - Show TrackIO web URL info (doesn't launch server)"
 	@echo ""
 	@echo "Parallel execution targets (for high-memory GPUs):"
 	@echo "  parallel          - Run test matrix with parallel jobs (default: 8 jobs)"
