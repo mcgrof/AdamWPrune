@@ -78,7 +78,7 @@ def generate_fake_metrics(epoch, step):
         "perplexity": perplexity,
         "memory_mb": memory_mb,
         "epoch": epoch,
-        "step": step,
+        "global_step": epoch * 100 + step,  # Trackio reserves "step" as a key
     }
 
 
@@ -172,7 +172,7 @@ def main():
                 "epoch_loss": epoch_loss,
                 "epoch_accuracy": epoch_acc,
                 "epoch_memory_mb": epoch_memory,
-                "epoch": epoch + 1,
+                "epoch_num": epoch + 1,  # Avoid potential reserved keys
             }
         )
 
