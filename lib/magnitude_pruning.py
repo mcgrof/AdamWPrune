@@ -83,8 +83,12 @@ class MagnitudePruning:
 
         return current_sparsity
 
-    def update_masks(self):
-        """Update binary masks based on weight magnitudes and target sparsity."""
+    def update_masks(self, iter_num=None):
+        """Update binary masks based on weight magnitudes and target sparsity.
+
+        Args:
+            iter_num: Current iteration number (unused, for compatibility)
+        """
         current_sparsity = self.get_current_sparsity()
 
         if current_sparsity == 0.0:
