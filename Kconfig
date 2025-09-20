@@ -207,6 +207,22 @@ config TRACKER_RUN_NAME
 	  If empty, will be auto-generated with format:
 	  {model}_{optimizer}_{timestamp}
 
+config WANDB_PROJECT
+	string "WandB project name"
+	default "adamwprune-test"
+	depends on EXPERIMENT_TRACKER = "wandb"
+	help
+	  WandB project name for experiment tracking.
+	  Will be used for wandb.init(project=...).
+
+config WANDB_ENTITY
+	string "WandB entity (team/username)"
+	default ""
+	depends on EXPERIMENT_TRACKER = "wandb"
+	help
+	  WandB entity (team or username) for experiment tracking.
+	  Leave empty to use default entity.
+
 config WANDB_OFFLINE
 	bool "Run WandB in offline mode"
 	default n
