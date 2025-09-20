@@ -207,8 +207,7 @@ parser.add_argument(
     "--tracker",
     type=str,
     default="none",
-    choices=["none", "trackio", "wandb"],
-    help="Experiment tracker to use (none, trackio, or wandb)",
+    help="Experiment tracker(s) to use (none, trackio, wandb, or comma-separated combination)",
 )
 parser.add_argument(
     "--tracker-project",
@@ -237,9 +236,12 @@ def main():
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Initialize experiment tracker
-    tracker = None
+    # Initialize experiment tracker(s) - support multiple trackers
+    trackers = set()  # Use set to track active trackers
     if args.tracker != "none":
+        # Parse comma-separated trackers
+        tracker_names = [t.strip() for t in args.tracker.split(",")]
+
         # Auto-generate project name if not provided
         if not args.tracker_project:
             import hashlib
@@ -249,8 +251,10 @@ def main():
             path_hash = hashlib.md5(cwd.encode()).hexdigest()[:8]
             args.tracker_project = f"{dir_name}-{path_hash}"
             print(f"Auto-generated project name: {args.tracker_project}", flush=True)
+    else:
+        tracker_names = []
 
-    if args.tracker == "trackio":
+    if "trackio" in tracker_names:
         try:
             import trackio
             run_name = args.tracker_run_name or f"gpt2_{args.optimizer}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -259,12 +263,12 @@ def main():
                 config=vars(args),
                 name=run_name,
             )
-            tracker = "trackio"
+            trackers.add("trackio")
             print(f"Initialized Trackio tracking for project: {args.tracker_project}", flush=True)
         except ImportError:
             print("Warning: trackio not installed. Install with: pip install trackio", flush=True)
-            tracker = None
-    elif args.tracker == "wandb":
+
+    if "wandb" in tracker_names:
         try:
             import wandb
             run_name = args.tracker_run_name or f"gpt2_{args.optimizer}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -273,11 +277,10 @@ def main():
                 config=vars(args),
                 name=run_name,
             )
-            tracker = "wandb"
+            trackers.add("wandb")
             print(f"Initialized WandB tracking for project: {args.tracker_project}", flush=True)
         except ImportError:
             print("Warning: wandb not installed. Install with: pip install wandb", flush=True)
-            tracker = None
 
     # Device setup - auto-detect if CUDA is available
     if args.device == "cuda" and not torch.cuda.is_available():
@@ -676,8 +679,8 @@ def main():
             metrics["iterations"].append(iter_num)
             metrics["timestamps"].append(time.time())
 
-            # Log to experiment tracker
-            if tracker == "trackio":
+            # Log to experiment tracker(s)
+            if "trackio" in trackers:
                 import trackio
                 trackio.log({
                     "iteration": iter_num,
@@ -685,7 +688,7 @@ def main():
                     "learning_rate": lr,
                     "sparsity": sparsity,
                 })
-            elif tracker == "wandb":
+            if "wandb" in trackers:
                 import wandb
                 wandb.log({
                     "iteration": iter_num,
@@ -713,15 +716,15 @@ def main():
             metrics["val_losses"].append(val_loss)
             metrics["val_perplexities"].append(val_perplexity)
 
-            # Log validation to experiment tracker
-            if tracker == "trackio":
+            # Log validation to experiment tracker(s)
+            if "trackio" in trackers:
                 import trackio
                 trackio.log({
                     "iteration": iter_num,
                     "val_loss": val_loss,
                     "val_perplexity": val_perplexity,
                 })
-            elif tracker == "wandb":
+            if "wandb" in trackers:
                 import wandb
                 wandb.log({
                     "iteration": iter_num,
@@ -835,7 +838,7 @@ def main():
     print("\nTraining complete!", flush=True)
 
     # Finish experiment tracking
-    if tracker == "trackio":
+    if "trackio" in trackers:
         import trackio
         trackio.log({
             "final_val_loss": final_val_loss,
@@ -844,7 +847,7 @@ def main():
         })
         trackio.finish()
         print("Trackio tracking finished. Run 'trackio show' to view results.", flush=True)
-    elif tracker == "wandb":
+    if "wandb" in trackers:
         import wandb
         wandb.log({
             "final_val_loss": final_val_loss,
