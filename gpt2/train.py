@@ -222,6 +222,7 @@ parser.add_argument(
     help="Run name for experiment tracker (auto-generated if not provided)",
 )
 
+
 def main():
     """Main training function."""
     args = parser.parse_args()
@@ -245,6 +246,7 @@ def main():
         # Auto-generate project name if not provided
         if not args.tracker_project:
             import hashlib
+
             cwd = os.getcwd()
             dir_name = os.path.basename(cwd)
             # Create a short checksum of the full path for uniqueness
@@ -257,30 +259,50 @@ def main():
     if "trackio" in tracker_names:
         try:
             import trackio
-            run_name = args.tracker_run_name or f"gpt2_{args.optimizer}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+            run_name = (
+                args.tracker_run_name
+                or f"gpt2_{args.optimizer}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            )
             trackio.init(
                 project=args.tracker_project,
                 config=vars(args),
                 name=run_name,
             )
             trackers.add("trackio")
-            print(f"Initialized Trackio tracking for project: {args.tracker_project}", flush=True)
+            print(
+                f"Initialized Trackio tracking for project: {args.tracker_project}",
+                flush=True,
+            )
         except ImportError:
-            print("Warning: trackio not installed. Install with: pip install trackio", flush=True)
+            print(
+                "Warning: trackio not installed. Install with: pip install trackio",
+                flush=True,
+            )
 
     if "wandb" in tracker_names:
         try:
             import wandb
-            run_name = args.tracker_run_name or f"gpt2_{args.optimizer}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+            run_name = (
+                args.tracker_run_name
+                or f"gpt2_{args.optimizer}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            )
             wandb.init(
                 project=args.tracker_project,
                 config=vars(args),
                 name=run_name,
             )
             trackers.add("wandb")
-            print(f"Initialized WandB tracking for project: {args.tracker_project}", flush=True)
+            print(
+                f"Initialized WandB tracking for project: {args.tracker_project}",
+                flush=True,
+            )
         except ImportError:
-            print("Warning: wandb not installed. Install with: pip install wandb", flush=True)
+            print(
+                "Warning: wandb not installed. Install with: pip install wandb",
+                flush=True,
+            )
 
     # Device setup - auto-detect if CUDA is available
     if args.device == "cuda" and not torch.cuda.is_available():
@@ -308,7 +330,6 @@ def main():
 
     # -----------------------------------------------------------------------------
     # Data loading
-
 
     def get_batch(split, data_dir, dataset, block_size, batch_size, device):
         """Get a batch of data."""
@@ -344,7 +365,6 @@ def main():
 
         return x, y
 
-
     # -----------------------------------------------------------------------------
     # DDP setup (if enabled)
     ddp = False
@@ -355,36 +375,45 @@ def main():
     # Check if DDP is enabled via config
     try:
         import config as cfg
-        if hasattr(cfg, 'config') and hasattr(cfg.config, 'GPT2_USE_DDP'):
-            use_ddp = cfg.config.GPT2_USE_DDP == 'y'
-            ddp_backend = getattr(cfg.config, 'GPT2_DDP_BACKEND', 'nccl')
-            ddp_find_unused = getattr(cfg.config, 'GPT2_DDP_FIND_UNUSED_PARAMS', 'y') == 'y'
+
+        if hasattr(cfg, "config") and hasattr(cfg.config, "GPT2_USE_DDP"):
+            use_ddp = cfg.config.GPT2_USE_DDP == "y"
+            ddp_backend = getattr(cfg.config, "GPT2_DDP_BACKEND", "nccl")
+            ddp_find_unused = (
+                getattr(cfg.config, "GPT2_DDP_FIND_UNUSED_PARAMS", "y") == "y"
+            )
         else:
             use_ddp = False
-            ddp_backend = 'nccl'
+            ddp_backend = "nccl"
             ddp_find_unused = True
     except ImportError:
         use_ddp = False
-        ddp_backend = 'nccl'
+        ddp_backend = "nccl"
         ddp_find_unused = True
 
     # Initialize DDP if enabled and environment variables are set
-    if use_ddp and 'RANK' in os.environ:
+    if use_ddp and "RANK" in os.environ:
         ddp = True
         init_process_group(backend=ddp_backend)
-        ddp_rank = int(os.environ['RANK'])
-        ddp_local_rank = int(os.environ['LOCAL_RANK'])
-        ddp_world_size = int(os.environ['WORLD_SIZE'])
-        device = f'cuda:{ddp_local_rank}'
+        ddp_rank = int(os.environ["RANK"])
+        ddp_local_rank = int(os.environ["LOCAL_RANK"])
+        ddp_world_size = int(os.environ["WORLD_SIZE"])
+        device = f"cuda:{ddp_local_rank}"
         torch.cuda.set_device(device)
         master_process = ddp_rank == 0
         seed_offset = ddp_rank
-        print(f"DDP initialized: rank {ddp_rank}/{ddp_world_size}, local rank {ddp_local_rank}, device {device}", flush=True)
+        print(
+            f"DDP initialized: rank {ddp_rank}/{ddp_world_size}, local rank {ddp_local_rank}, device {device}",
+            flush=True,
+        )
     else:
         master_process = True
         seed_offset = 0
         if use_ddp:
-            print("DDP enabled in config but RANK environment variable not set. Running in single GPU mode.", flush=True)
+            print(
+                "DDP enabled in config but RANK environment variable not set. Running in single GPU mode.",
+                flush=True,
+            )
 
     # -----------------------------------------------------------------------------
     # Model initialization
@@ -401,7 +430,9 @@ def main():
 
     # Wrap model in DDP if enabled
     if ddp:
-        model = DDP(model, device_ids=[ddp_local_rank], find_unused_parameters=ddp_find_unused)
+        model = DDP(
+            model, device_ids=[ddp_local_rank], find_unused_parameters=ddp_find_unused
+        )
 
     # Compile model if requested (only compile the base model, not DDP wrapper)
     if args.compile and hasattr(torch, "compile") and not ddp:
@@ -454,7 +485,6 @@ def main():
     # -----------------------------------------------------------------------------
     # Training loop
 
-
     @torch.no_grad()
     def evaluate(
         model, data_dir, dataset, block_size, batch_size, device, eval_samples=200
@@ -487,7 +517,7 @@ def main():
                 _ = model(input_ids)
 
         # Measure latency
-        if device.type == 'cuda':
+        if device.type == "cuda":
             torch.cuda.synchronize()
 
         latencies = []
@@ -495,7 +525,7 @@ def main():
             start = time.perf_counter()
             with ctx:
                 _ = model(input_ids)
-            if device.type == 'cuda':
+            if device.type == "cuda":
                 torch.cuda.synchronize()
             end = time.perf_counter()
             latencies.append((end - start) * 1000)  # Convert to ms
@@ -516,7 +546,6 @@ def main():
             return allocated, reserved
         return 0, 0
 
-
     def get_lr(it, warmup_steps, learning_rate, min_lr, max_iters):
         """Learning rate schedule with warmup and cosine decay."""
         # Warmup
@@ -529,7 +558,6 @@ def main():
         decay_ratio = (it - warmup_steps) / (max_iters - warmup_steps)
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
         return min_lr + coeff * (learning_rate - min_lr)
-
 
     # Training metrics
     metrics = {
@@ -570,9 +598,12 @@ def main():
     print(f"Device: {device}, dtype: {dtype}", flush=True)
     print(
         f"Batch size: {args.batch_size}, Gradient accumulation: {args.gradient_accumulation}",
-        flush=True
+        flush=True,
     )
-    print(f"Effective batch size: {args.batch_size * args.gradient_accumulation}", flush=True)
+    print(
+        f"Effective batch size: {args.batch_size * args.gradient_accumulation}",
+        flush=True,
+    )
     print("-" * 50, flush=True)
 
     # Training loop
@@ -588,7 +619,11 @@ def main():
         # Determine learning rate
         if args.decay_lr:
             lr = get_lr(
-                iter_num, args.warmup_steps, args.learning_rate, args.min_lr, args.max_iters
+                iter_num,
+                args.warmup_steps,
+                args.learning_rate,
+                args.min_lr,
+                args.max_iters,
             )
             for param_group in optimizer.param_groups:
                 param_group["lr"] = lr
@@ -624,7 +659,9 @@ def main():
             apply_adamprune_masking(optimizer, adamwprune_state)
 
             # Apply SPAM gradient processing
-            apply_spam_gradient_processing(optimizer, model, spam_state, gradient_clip_norm)
+            apply_spam_gradient_processing(
+                optimizer, model, spam_state, gradient_clip_norm
+            )
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
@@ -635,6 +672,10 @@ def main():
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad(set_to_none=True)
+
+        # Apply masks again after optimizer step to ensure pruned weights stay zero
+        if pruner is not None:
+            pruner.apply_masks()
 
         # Update AdamWPrune state-based pruning
         # Calculate current epoch based on iterations (approximate)
@@ -647,6 +688,7 @@ def main():
         # Update pruning for external pruners
         if pruner is not None:
             pruner.update_masks(iter_num)
+            pruner.apply_masks()  # Apply masks to zero out pruned weights
 
         # Logging (only on master process)
         if iter_num % args.log_interval == 0 and master_process:
@@ -669,7 +711,7 @@ def main():
             print(
                 f"Iter {iter_num:5d} | loss {avg_loss:.4f} | ppl {avg_perplexity:7.2f} | "
                 f"lr {lr:.2e} | sparsity {sparsity:.1%} | {dt*1000/args.log_interval:.1f}ms/iter",
-                flush=True
+                flush=True,
             )
 
             metrics["train_losses"].append(avg_loss)
@@ -682,20 +724,26 @@ def main():
             # Log to experiment tracker(s)
             if "trackio" in trackers:
                 import trackio
-                trackio.log({
-                    "iteration": iter_num,
-                    "train_loss": avg_loss,
-                    "learning_rate": lr,
-                    "sparsity": sparsity,
-                })
+
+                trackio.log(
+                    {
+                        "iteration": iter_num,
+                        "train_loss": avg_loss,
+                        "learning_rate": lr,
+                        "sparsity": sparsity,
+                    }
+                )
             if "wandb" in trackers:
                 import wandb
-                wandb.log({
-                    "iteration": iter_num,
-                    "train_loss": avg_loss,
-                    "learning_rate": lr,
-                    "sparsity": sparsity,
-                })
+
+                wandb.log(
+                    {
+                        "iteration": iter_num,
+                        "train_loss": avg_loss,
+                        "learning_rate": lr,
+                        "sparsity": sparsity,
+                    }
+                )
 
             running_loss = 0.0
 
@@ -712,25 +760,34 @@ def main():
             )
 
             val_perplexity = math.exp(min(val_loss, 20))  # Cap at 20 to avoid overflow
-            print(f"Validation loss: {val_loss:.4f} | ppl: {val_perplexity:.2f}", flush=True)
+            print(
+                f"Validation loss: {val_loss:.4f} | ppl: {val_perplexity:.2f}",
+                flush=True,
+            )
             metrics["val_losses"].append(val_loss)
             metrics["val_perplexities"].append(val_perplexity)
 
             # Log validation to experiment tracker(s)
             if "trackio" in trackers:
                 import trackio
-                trackio.log({
-                    "iteration": iter_num,
-                    "val_loss": val_loss,
-                    "val_perplexity": val_perplexity,
-                })
+
+                trackio.log(
+                    {
+                        "iteration": iter_num,
+                        "val_loss": val_loss,
+                        "val_perplexity": val_perplexity,
+                    }
+                )
             if "wandb" in trackers:
                 import wandb
-                wandb.log({
-                    "iteration": iter_num,
-                    "val_loss": val_loss,
-                    "val_perplexity": val_perplexity,
-                })
+
+                wandb.log(
+                    {
+                        "iteration": iter_num,
+                        "val_loss": val_loss,
+                        "val_perplexity": val_perplexity,
+                    }
+                )
 
             # Save best model
             if val_loss < best_val_loss:
@@ -771,11 +828,17 @@ def main():
         initial_perplexity = metrics["val_perplexities"][0]
         delta_ppl = best_perplexity - initial_perplexity
     else:
-        initial_perplexity = float('inf')
+        initial_perplexity = float("inf")
         delta_ppl = 0.0
 
-    print(f"Final validation loss: {final_val_loss:.4f} | ppl: {final_perplexity:.2f}", flush=True)
-    print(f"Best validation loss: {best_val_loss:.4f} | ppl: {best_perplexity:.2f}", flush=True)
+    print(
+        f"Final validation loss: {final_val_loss:.4f} | ppl: {final_perplexity:.2f}",
+        flush=True,
+    )
+    print(
+        f"Best validation loss: {best_val_loss:.4f} | ppl: {best_perplexity:.2f}",
+        flush=True,
+    )
     print(f"ΔPPL (improvement): {delta_ppl:.2f}", flush=True)
 
     # Measure inference latency at different sequence lengths
@@ -794,7 +857,10 @@ def main():
 
     # Measure final memory usage
     allocated_mb, reserved_mb = measure_memory()
-    print(f"\nGPU Memory: {allocated_mb:.1f}MB allocated, {reserved_mb:.1f}MB reserved", flush=True)
+    print(
+        f"\nGPU Memory: {allocated_mb:.1f}MB allocated, {reserved_mb:.1f}MB reserved",
+        flush=True,
+    )
 
     # Save final model
     checkpoint = {
@@ -840,26 +906,38 @@ def main():
     # Finish experiment tracking
     if "trackio" in trackers:
         import trackio
-        trackio.log({
-            "final_val_loss": final_val_loss,
-            "best_val_loss": best_val_loss,
-            "total_time": metrics["total_time"],
-        })
+
+        trackio.log(
+            {
+                "final_val_loss": final_val_loss,
+                "best_val_loss": best_val_loss,
+                "total_time": metrics["total_time"],
+            }
+        )
         trackio.finish()
-        print("Trackio tracking finished. Run 'trackio show' to view results.", flush=True)
+        print(
+            "Trackio tracking finished. Run 'trackio show' to view results.", flush=True
+        )
     if "wandb" in trackers:
         import wandb
-        wandb.log({
-            "final_val_loss": final_val_loss,
-            "best_val_loss": best_val_loss,
-            "total_time": metrics["total_time"],
-        })
+
+        wandb.log(
+            {
+                "final_val_loss": final_val_loss,
+                "best_val_loss": best_val_loss,
+                "total_time": metrics["total_time"],
+            }
+        )
         wandb.finish()
-        print("WandB tracking finished. Check your WandB dashboard for results.", flush=True)
+        print(
+            "WandB tracking finished. Check your WandB dashboard for results.",
+            flush=True,
+        )
 
     # Cleanup DDP
     if ddp:
         destroy_process_group()
+
 
 if __name__ == "__main__":
     main()
