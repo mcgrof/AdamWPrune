@@ -154,93 +154,59 @@ endmenu
 
 menu "Experiment Tracking"
 
-# CLI override detection
-config TRACKER_SET_BY_CLI
-	bool
-	output yaml
-	default $(shell, scripts/check-cli-set-var.sh TRACKER)
+comment "Enable any combination of trackers (they can run simultaneously)"
 
-config TRACKER_CLI_VALUE
-	string
-	default $(shell, scripts/append-makefile-vars.sh $(TRACKER))
-
-choice
-	prompt "Experiment tracking backend"
-	default TRACKER_NONE if !TRACKER_SET_BY_CLI
-	default TRACKER_TRACKIO if TRACKER_SET_BY_CLI && TRACKER_CLI_VALUE = "trackio"
-	default TRACKER_WANDB if TRACKER_SET_BY_CLI && TRACKER_CLI_VALUE = "wandb"
-	default TRACKER_NONE
-	help
-	  Choose experiment tracking backend for logging metrics and experiments.
-	  Can be set via CLI: make defconfig TRACKER=wandb
-
-config TRACKER_NONE
-	bool "No tracking"
-	help
-	  Disable experiment tracking.
-
-config TRACKER_TRACKIO
-	bool "Trackio (local tracking)"
+config ENABLE_TRACKIO
+	bool "Enable Trackio (local tracking)"
+	default n
 	help
 	  Use Trackio for lightweight, local-first experiment tracking.
-	  Stores data in local SQLite database.
+	  Stores data in local SQLite database with web dashboard.
 	  Install with: pip install trackio
+	  Can be used together with WandB for comparison.
 
-config TRACKER_WANDB
-	bool "Weights & Biases (cloud tracking)"
+config ENABLE_WANDB
+	bool "Enable Weights & Biases (cloud tracking)"
+	default n
 	help
 	  Use Weights & Biases for cloud-based experiment tracking.
 	  Provides advanced features like sweeps and team collaboration.
 	  Install with: pip install wandb
-
-endchoice
-
-config EXPERIMENT_TRACKER
-	string
-	default "none" if TRACKER_NONE
-	default "trackio" if TRACKER_TRACKIO
-	default "wandb" if TRACKER_WANDB
-
-# Auto-generate project name based on model and environment
-config AUTO_PROJECT_NAME
-	string
-	default $(shell, scripts/generate-project-name.sh $(MODEL) $(EXPERIMENT_TRACKER))
+	  Can be used together with Trackio for comparison.
 
 config TRACKER_PROJECT
 	string "Project name for experiment tracking"
-	default AUTO_PROJECT_NAME if TRACKER_PROJECT = ""
-	default ""
-	depends on !TRACKER_NONE
+	default $(shell, scripts/generate-project-name.sh $(MODEL) tracking)
+	depends on ENABLE_TRACKIO || ENABLE_WANDB
 	help
 	  Project name to organize experiments in the tracking system.
-	  If left empty, will be auto-generated as:
-	  {model}-{checksum}
+	  Auto-generated as: {model}-{checksum}
 	  where model is the selected model and checksum is derived from
 	  hostname, IP, and current directory for uniqueness.
+	  Used by both Trackio and WandB when enabled.
 
 config TRACKER_RUN_NAME
 	string "Run name for experiment tracking"
 	default ""
-	depends on EXPERIMENT_TRACKER != "none"
+	depends on ENABLE_TRACKIO || ENABLE_WANDB
 	help
 	  Optional custom name for this training run.
 	  If empty, will be auto-generated with format:
 	  {model}_{optimizer}_{timestamp}
 
 config WANDB_PROJECT
-	string "WandB project name"
-	default AUTO_PROJECT_NAME if WANDB_PROJECT = ""
-	default "adamwprune-test"
-	depends on EXPERIMENT_TRACKER = "wandb"
+	string "WandB-specific project name (overrides TRACKER_PROJECT)"
+	default ""
+	depends on ENABLE_WANDB
 	help
-	  WandB project name for experiment tracking.
+	  Optional WandB-specific project name.
+	  If empty, uses TRACKER_PROJECT.
 	  Will be used for wandb.init(project=...).
-	  Auto-generates smart name if left empty.
 
 config WANDB_ENTITY
 	string "WandB entity (team/username)"
 	default ""
-	depends on EXPERIMENT_TRACKER = "wandb"
+	depends on ENABLE_WANDB
 	help
 	  WandB entity (team or username) for experiment tracking.
 	  Leave empty to use default entity.
@@ -248,7 +214,7 @@ config WANDB_ENTITY
 config WANDB_OFFLINE
 	bool "Run WandB in offline mode"
 	default n
-	depends on EXPERIMENT_TRACKER = "wandb"
+	depends on ENABLE_WANDB
 	help
 	  Run WandB in offline mode without requiring login.
 	  Runs can be synced later with 'wandb sync'.
@@ -256,7 +222,7 @@ config WANDB_OFFLINE
 config TRACKIO_PORT
 	int "Port for Trackio dashboard"
 	default 7860
-	depends on EXPERIMENT_TRACKER = "trackio"
+	depends on ENABLE_TRACKIO
 	help
 	  Port number for the Trackio web dashboard.
 	  Access dashboard with: trackio show --port PORT
