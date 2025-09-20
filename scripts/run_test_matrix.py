@@ -236,7 +236,9 @@ def parse_yaml_config(yaml_path="test-matrix.yaml"):
     # Common configuration
     if "common_config" in yaml_config:
         cc = yaml_config["common_config"]
-        config["BATCH_SIZE"] = str(cc.get("batch_size", 512))
+        # Only override BATCH_SIZE if not already set in .config
+        if "BATCH_SIZE" not in config:
+            config["BATCH_SIZE"] = str(cc.get("batch_size", 512))
         config["NUM_EPOCHS"] = str(cc.get("num_epochs", 10))
         config["LEARNING_RATE"] = str(cc.get("learning_rate", 0.001))
         config["NUM_WORKERS"] = str(cc.get("num_workers", 16))
