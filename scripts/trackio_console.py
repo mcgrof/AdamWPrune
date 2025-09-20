@@ -28,10 +28,17 @@ try:
     from rich.panel import Panel
     from rich.layout import Layout
     from rich.live import Live
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
+    from rich.progress import (
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        BarColumn,
+        TimeRemainingColumn,
+    )
     from rich.text import Text
     from rich import box
     from rich.columns import Columns
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
@@ -39,6 +46,7 @@ except ImportError:
 
 class Term:
     """Terminal control codes and variables"""
+
     width: int = 80
     height: int = 24
     resized: bool = True
@@ -110,27 +118,27 @@ class Theme:
 
     # Loss gradient (blue -> green -> yellow -> red)
     loss_gradient = [
-        (0, 100, 200),   # Blue (low loss)
-        (0, 200, 100),   # Green
-        (200, 200, 0),   # Yellow
-        (255, 100, 0),   # Orange
-        (255, 0, 0),     # Red (high loss)
+        (0, 100, 200),  # Blue (low loss)
+        (0, 200, 100),  # Green
+        (200, 200, 0),  # Yellow
+        (255, 100, 0),  # Orange
+        (255, 0, 0),  # Red (high loss)
     ]
 
     # Learning rate gradient
     lr_gradient = [
-        (100, 100, 255), # Light blue
-        (200, 100, 255), # Purple
-        (255, 100, 200), # Pink
+        (100, 100, 255),  # Light blue
+        (200, 100, 255),  # Purple
+        (255, 100, 200),  # Pink
     ]
 
     # Sparsity gradient (red -> yellow -> green)
     sparsity_gradient = [
-        (255, 0, 0),     # Red (0% sparse)
-        (255, 200, 0),   # Orange
-        (255, 255, 0),   # Yellow
-        (100, 255, 0),   # Light green
-        (0, 255, 0),     # Green (100% sparse)
+        (255, 0, 0),  # Red (0% sparse)
+        (255, 200, 0),  # Orange
+        (255, 255, 0),  # Yellow
+        (100, 255, 0),  # Light green
+        (0, 255, 0),  # Green (100% sparse)
     ]
 
     main_fg = Color.fg(200, 200, 200)
@@ -145,7 +153,9 @@ class Theme:
 class Graph:
     """Enhanced graph with gradient colors and smooth rendering"""
 
-    def __init__(self, width: int, height: int, min_value: float = 0, max_value: float = 100):
+    def __init__(
+        self, width: int, height: int, min_value: float = 0, max_value: float = 100
+    ):
         self.width = width
         self.height = height
         self.min_value = min_value
@@ -161,7 +171,9 @@ class Graph:
         """Add a marker at a specific position"""
         self.markers.append((position, label))
 
-    def draw(self, gradient: List[Tuple[int, int, int]], show_values: bool = True) -> List[str]:
+    def draw(
+        self, gradient: List[Tuple[int, int, int]], show_values: bool = True
+    ) -> List[str]:
         """Draw the graph with gradient colors"""
         lines = []
 
@@ -209,7 +221,9 @@ class Graph:
                                 matrix[r][col] = "│"
 
                 # Use dots for actual data points
-                matrix[row][col] = "●" if norm_value > 0.8 else "○" if norm_value > 0.5 else "·"
+                matrix[row][col] = (
+                    "●" if norm_value > 0.8 else "○" if norm_value > 0.5 else "·"
+                )
 
         # Render with colors
         for row in range(self.height):
@@ -243,7 +257,13 @@ class MultiLineGraph:
         self.metrics = {}  # Dict of metric_name: Graph
         self.colors = {}
 
-    def add_metric(self, name: str, color: Tuple[int, int, int], min_val: float = 0, max_val: float = 100):
+    def add_metric(
+        self,
+        name: str,
+        color: Tuple[int, int, int],
+        min_val: float = 0,
+        max_val: float = 100,
+    ):
         """Add a metric to track"""
         self.metrics[name] = Graph(self.width, self.height, min_val, max_val)
         self.colors[name] = color
@@ -312,11 +332,11 @@ class TrackIOConsole:
 
         # Find TrackIO data location
         self.trackio_dirs = [
-            Path.home() / '.trackio' / project,
-            Path.home() / '.cache' / 'trackio' / project,
-            Path.home() / '.cache' / 'huggingface' / 'trackio' / project,
-            Path.cwd() / '.trackio' / project,
-            Path.cwd() / f'trackio_{project}.db',
+            Path.home() / ".trackio" / project,
+            Path.home() / ".cache" / "trackio" / project,
+            Path.home() / ".cache" / "huggingface" / "trackio" / project,
+            Path.cwd() / ".trackio" / project,
+            Path.cwd() / f"trackio_{project}.db",
         ]
 
         self.data_dir = None
@@ -324,7 +344,7 @@ class TrackIOConsole:
 
         for path in self.trackio_dirs:
             if path.exists():
-                if path.suffix == '.db':
+                if path.suffix == ".db":
                     self.db_path = path
                 else:
                     self.data_dir = path
@@ -342,6 +362,7 @@ class TrackIOConsole:
         """Read metrics from SQLite database."""
         try:
             import json
+
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
@@ -350,30 +371,34 @@ class TrackIOConsole:
             tables = [t[0] for t in cursor.fetchall()]
 
             metrics = {}
-            if 'metrics' in tables:
+            if "metrics" in tables:
                 # Get recent metrics with proper JSON parsing
-                cursor.execute("SELECT timestamp, run_name, step, metrics FROM metrics ORDER BY timestamp DESC LIMIT 100")
+                cursor.execute(
+                    "SELECT timestamp, run_name, step, metrics FROM metrics ORDER BY timestamp DESC LIMIT 100"
+                )
                 rows = cursor.fetchall()
                 if rows:
                     parsed_data = []
                     for timestamp, run_name, step, metrics_json in rows:
                         try:
                             # Parse the JSON metrics data
-                            metrics_data = json.loads(metrics_json) if metrics_json else {}
+                            metrics_data = (
+                                json.loads(metrics_json) if metrics_json else {}
+                            )
 
                             # Create a flattened entry for display
                             entry = {
-                                'timestamp': timestamp,
-                                'run_name': run_name,
-                                'step': step,
-                                **metrics_data  # Unpack the JSON metrics
+                                "timestamp": timestamp,
+                                "run_name": run_name,
+                                "step": step,
+                                **metrics_data,  # Unpack the JSON metrics
                             }
                             parsed_data.append(entry)
                         except json.JSONDecodeError:
                             # Skip malformed JSON entries
                             continue
 
-                    metrics['data'] = parsed_data
+                    metrics["data"] = parsed_data
 
             conn.close()
             return metrics
@@ -393,25 +418,25 @@ class TrackIOConsole:
 
         # Get latest run
         latest_run = run_dirs[-1]
-        metrics_file = latest_run / 'metrics.json'
+        metrics_file = latest_run / "metrics.json"
 
         if metrics_file.exists():
             with open(metrics_file) as f:
                 data = json.load(f)
-                metrics['run_name'] = latest_run.name
-                metrics['data'] = data
+                metrics["run_name"] = latest_run.name
+                metrics["data"] = data
 
         return metrics
 
     def parse_training_log(self, log_path: Path) -> Dict[str, Any]:
         """Parse a training output.log file for metrics."""
         metrics = {
-            'iterations': [],
-            'losses': [],
-            'perplexities': [],
-            'learning_rates': [],
-            'sparsities': [],
-            'times': []
+            "iterations": [],
+            "losses": [],
+            "perplexities": [],
+            "learning_rates": [],
+            "sparsities": [],
+            "times": [],
         }
 
         if not log_path.exists():
@@ -419,35 +444,36 @@ class TrackIOConsole:
 
         with open(log_path) as f:
             for line in f:
-                if 'Iter' in line and 'loss' in line and '|' in line:
-                    parts = line.split('|')
+                if "Iter" in line and "loss" in line and "|" in line:
+                    parts = line.split("|")
                     if len(parts) >= 5:
                         try:
-                            metrics['iterations'].append(int(parts[0].split()[-1]))
-                            metrics['losses'].append(float(parts[1].split()[-1]))
-                            metrics['perplexities'].append(float(parts[2].split()[-1]))
+                            metrics["iterations"].append(int(parts[0].split()[-1]))
+                            metrics["losses"].append(float(parts[1].split()[-1]))
+                            metrics["perplexities"].append(float(parts[2].split()[-1]))
 
                             lr_str = parts[3].split()[-1]
                             # Convert scientific notation
-                            if 'e' in lr_str:
-                                metrics['learning_rates'].append(float(lr_str))
+                            if "e" in lr_str:
+                                metrics["learning_rates"].append(float(lr_str))
                             else:
-                                metrics['learning_rates'].append(float(lr_str))
+                                metrics["learning_rates"].append(float(lr_str))
 
-                            sparsity_str = parts[4].split()[1].rstrip('%')
-                            metrics['sparsities'].append(float(sparsity_str))
+                            sparsity_str = parts[4].split()[1].rstrip("%")
+                            metrics["sparsities"].append(float(sparsity_str))
 
                             # Extract time if present
-                            if 'ms/iter' in parts[-1]:
-                                time_str = parts[-1].split()[-1].replace('ms/iter', '')
-                                metrics['times'].append(float(time_str))
+                            if "ms/iter" in parts[-1]:
+                                time_str = parts[-1].split()[-1].replace("ms/iter", "")
+                                metrics["times"].append(float(time_str))
                         except (ValueError, IndexError):
                             continue
 
         return metrics
 
-    def create_ascii_graph(self, values: List[float], width: int = 50, height: int = 10,
-                           title: str = "") -> str:
+    def create_ascii_graph(
+        self, values: List[float], width: int = 50, height: int = 10, title: str = ""
+    ) -> str:
         """Create an ASCII graph of values with gradient coloring."""
         if not values:
             return "No data"
@@ -486,53 +512,72 @@ class TrackIOConsole:
         print(f"{Term.clear}{Term.hide_cursor}")
 
         # Header with colors
-        print(f"{Theme.border}" + "═"*60 + f"{Term.normal}")
-        print(f"  {Theme.title}TrackIO Console Dashboard - Project: {self.project}{Term.normal}")
-        print(f"{Theme.border}" + "═"*60 + f"{Term.normal}")
+        print(f"{Theme.border}" + "═" * 60 + f"{Term.normal}")
+        print(
+            f"  {Theme.title}TrackIO Console Dashboard - Project: {self.project}{Term.normal}"
+        )
+        print(f"{Theme.border}" + "═" * 60 + f"{Term.normal}")
 
         if not metrics:
             print("\n  No metrics found. Is training running?")
             return
 
         # If we have parsed training metrics
-        if 'iterations' in metrics and metrics['iterations']:
-            iters = metrics['iterations']
-            losses = metrics['losses']
+        if "iterations" in metrics and metrics["iterations"]:
+            iters = metrics["iterations"]
+            losses = metrics["losses"]
 
             # Color code the metrics
-            print(f"\n  {Theme.text}Latest Iteration: {Theme.success}{iters[-1]}{Term.normal}")
+            print(
+                f"\n  {Theme.text}Latest Iteration: {Theme.success}{iters[-1]}{Term.normal}"
+            )
 
             # Color code loss based on value
-            loss_color = Theme.success if losses[-1] < 2 else Theme.warning if losses[-1] < 4 else Theme.error
-            print(f"  {Theme.text}Latest Loss: {loss_color}{losses[-1]:.4f}{Term.normal}")
+            loss_color = (
+                Theme.success
+                if losses[-1] < 2
+                else Theme.warning if losses[-1] < 4 else Theme.error
+            )
+            print(
+                f"  {Theme.text}Latest Loss: {loss_color}{losses[-1]:.4f}{Term.normal}"
+            )
 
             if len(losses) > 1:
                 change = losses[-1] - losses[0]
                 change_color = Theme.success if change < 0 else Theme.error
-                print(f"  {Theme.text}Loss Change: {change_color}{change:+.4f}{Term.normal}")
+                print(
+                    f"  {Theme.text}Loss Change: {change_color}{change:+.4f}{Term.normal}"
+                )
 
             # ASCII graph of loss
             if len(losses) > 5:
-                print("\n" + self.create_ascii_graph(
-                    losses[-50:] if len(losses) > 50 else losses,
-                    width=50, height=8, title="Loss Trend"
-                ))
+                print(
+                    "\n"
+                    + self.create_ascii_graph(
+                        losses[-50:] if len(losses) > 50 else losses,
+                        width=50,
+                        height=8,
+                        title="Loss Trend",
+                    )
+                )
 
             # Show learning rate if available with color
-            if 'learning_rates' in metrics and metrics['learning_rates']:
-                lr = metrics['learning_rates'][-1]
+            if "learning_rates" in metrics and metrics["learning_rates"]:
+                lr = metrics["learning_rates"][-1]
                 lr_color = Color.gradient(lr / 1e-2, Theme.lr_gradient)
                 print(f"\n  {Theme.text}Learning Rate: {lr_color}{lr:.2e}{Term.normal}")
 
             # Show sparsity if available with gradient color
-            if 'sparsities' in metrics and metrics['sparsities']:
-                sparsity = metrics['sparsities'][-1]
+            if "sparsities" in metrics and metrics["sparsities"]:
+                sparsity = metrics["sparsities"][-1]
                 sparsity_color = Color.gradient(sparsity / 100, Theme.sparsity_gradient)
-                print(f"  {Theme.text}Sparsity: {sparsity_color}{sparsity:.1f}%{Term.normal}")
+                print(
+                    f"  {Theme.text}Sparsity: {sparsity_color}{sparsity:.1f}%{Term.normal}"
+                )
 
             # Estimate time remaining
-            if 'times' in metrics and metrics['times'] and len(metrics['times']) > 1:
-                avg_time = sum(metrics['times'][-10:]) / len(metrics['times'][-10:])
+            if "times" in metrics and metrics["times"] and len(metrics["times"]) > 1:
+                avg_time = sum(metrics["times"][-10:]) / len(metrics["times"][-10:])
                 if iters[-1] < 500:  # Assume 500 iterations total
                     remaining = (500 - iters[-1]) * avg_time / 1000 / 60
                     print(f"\n  Estimated time remaining: {remaining:.1f} minutes")
@@ -546,11 +591,13 @@ class TrackIOConsole:
         layout.split_column(
             Layout(name="header", size=3),
             Layout(name="body"),
-            Layout(name="footer", size=3)
+            Layout(name="footer", size=3),
         )
 
         # Header
-        header_text = Text(f"TrackIO Console Dashboard - {self.project}", justify="center")
+        header_text = Text(
+            f"TrackIO Console Dashboard - {self.project}", justify="center"
+        )
         header_text.stylize("bold magenta")
         layout["header"].update(Panel(header_text))
 
@@ -560,8 +607,7 @@ class TrackIOConsole:
         else:
             body_layout = Layout()
             body_layout.split_row(
-                Layout(name="metrics", ratio=1),
-                Layout(name="graph", ratio=2)
+                Layout(name="metrics", ratio=1), Layout(name="graph", ratio=2)
             )
 
             # Metrics table
@@ -569,33 +615,45 @@ class TrackIOConsole:
             table.add_column("Metric", style="cyan")
             table.add_column("Value", style="green")
 
-            if 'iterations' in metrics and metrics['iterations']:
-                table.add_row("Iteration", str(metrics['iterations'][-1]))
+            if "iterations" in metrics and metrics["iterations"]:
+                table.add_row("Iteration", str(metrics["iterations"][-1]))
                 table.add_row("Loss", f"{metrics['losses'][-1]:.4f}")
 
-                if 'perplexities' in metrics:
+                if "perplexities" in metrics:
                     table.add_row("Perplexity", f"{metrics['perplexities'][-1]:.1f}")
-                if 'learning_rates' in metrics:
-                    table.add_row("Learning Rate", f"{metrics['learning_rates'][-1]:.2e}")
-                if 'sparsities' in metrics:
+                if "learning_rates" in metrics:
+                    table.add_row(
+                        "Learning Rate", f"{metrics['learning_rates'][-1]:.2e}"
+                    )
+                if "sparsities" in metrics:
                     table.add_row("Sparsity", f"{metrics['sparsities'][-1]:.1f}%")
 
             body_layout["metrics"].update(Panel(table, title="Current Metrics"))
 
             # Graph
-            if 'losses' in metrics and len(metrics['losses']) > 1:
+            if "losses" in metrics and len(metrics["losses"]) > 1:
                 graph_text = self.create_ascii_graph(
-                    metrics['losses'][-50:] if len(metrics['losses']) > 50 else metrics['losses'],
-                    width=40, height=10, title="Loss"
+                    (
+                        metrics["losses"][-50:]
+                        if len(metrics["losses"]) > 50
+                        else metrics["losses"]
+                    ),
+                    width=40,
+                    height=10,
+                    title="Loss",
                 )
-                body_layout["graph"].update(Panel(graph_text, title="Training Progress"))
+                body_layout["graph"].update(
+                    Panel(graph_text, title="Training Progress")
+                )
 
             layout["body"].update(body_layout)
 
         # Footer
-        layout["footer"].update(Panel(
-            Text("Press Ctrl+C to exit | Updates every 2 seconds", justify="center")
-        ))
+        layout["footer"].update(
+            Panel(
+                Text("Press Ctrl+C to exit | Updates every 2 seconds", justify="center")
+            )
+        )
 
         self.console.print(layout)
 
@@ -640,15 +698,20 @@ class TrackIOConsole:
         print(Term.clear)
 
         # Draw border box
-        self._draw_box(1, 1, Term.width - 2, Term.height - 2,
-                      f"TrackIO Dashboard - {self.project}")
+        self._draw_box(
+            1, 1, Term.width - 2, Term.height - 2, f"TrackIO Dashboard - {self.project}"
+        )
 
         if not metrics:
-            self._center_text(Term.height // 2, "No metrics found. Is training running?", Theme.warning)
+            self._center_text(
+                Term.height // 2,
+                "No metrics found. Is training running?",
+                Theme.warning,
+            )
             return
 
         # If we have parsed training metrics
-        if 'iterations' in metrics and metrics['iterations']:
+        if "iterations" in metrics and metrics["iterations"]:
             self._display_training_metrics(metrics)
 
     def _draw_box(self, x: int, y: int, w: int, h: int, title: str = ""):
@@ -676,8 +739,8 @@ class TrackIOConsole:
 
     def _display_training_metrics(self, metrics: Dict[str, Any]):
         """Display training metrics with graphs."""
-        iters = metrics['iterations']
-        losses = metrics['losses']
+        iters = metrics["iterations"]
+        losses = metrics["losses"]
 
         # Stats panel
         stats_y = 3
@@ -687,37 +750,57 @@ class TrackIOConsole:
         stats_y += 2
 
         # Iteration
-        print(f"\033[{stats_y};{stats_x}f{Theme.text}Iteration: {Theme.success}{iters[-1]}{Term.normal}")
+        print(
+            f"\033[{stats_y};{stats_x}f{Theme.text}Iteration: {Theme.success}{iters[-1]}{Term.normal}"
+        )
         stats_y += 1
 
         # Loss with color coding
-        loss_color = Theme.success if losses[-1] < 2 else Theme.warning if losses[-1] < 4 else Theme.error
-        print(f"\033[{stats_y};{stats_x}f{Theme.text}Loss: {loss_color}{losses[-1]:.4f}{Term.normal}")
+        loss_color = (
+            Theme.success
+            if losses[-1] < 2
+            else Theme.warning if losses[-1] < 4 else Theme.error
+        )
+        print(
+            f"\033[{stats_y};{stats_x}f{Theme.text}Loss: {loss_color}{losses[-1]:.4f}{Term.normal}"
+        )
         stats_y += 1
 
         # Loss change
         if len(losses) > 1:
             change = losses[-1] - losses[0]
             change_color = Theme.success if change < 0 else Theme.error
-            print(f"\033[{stats_y};{stats_x}f{Theme.text}Change: {change_color}{change:+.4f}{Term.normal}")
+            print(
+                f"\033[{stats_y};{stats_x}f{Theme.text}Change: {change_color}{change:+.4f}{Term.normal}"
+            )
             stats_y += 1
 
         # Additional metrics
-        if 'perplexities' in metrics and metrics['perplexities']:
-            ppl = metrics['perplexities'][-1]
-            ppl_color = Theme.success if ppl < 100 else Theme.warning if ppl < 200 else Theme.error
-            print(f"\033[{stats_y};{stats_x}f{Theme.text}Perplexity: {ppl_color}{ppl:.1f}{Term.normal}")
+        if "perplexities" in metrics and metrics["perplexities"]:
+            ppl = metrics["perplexities"][-1]
+            ppl_color = (
+                Theme.success
+                if ppl < 100
+                else Theme.warning if ppl < 200 else Theme.error
+            )
+            print(
+                f"\033[{stats_y};{stats_x}f{Theme.text}Perplexity: {ppl_color}{ppl:.1f}{Term.normal}"
+            )
             stats_y += 1
 
-        if 'learning_rates' in metrics and metrics['learning_rates']:
-            lr = metrics['learning_rates'][-1]
-            print(f"\033[{stats_y};{stats_x}f{Theme.text}LR: {Theme.warning}{lr:.2e}{Term.normal}")
+        if "learning_rates" in metrics and metrics["learning_rates"]:
+            lr = metrics["learning_rates"][-1]
+            print(
+                f"\033[{stats_y};{stats_x}f{Theme.text}LR: {Theme.warning}{lr:.2e}{Term.normal}"
+            )
             stats_y += 1
 
-        if 'sparsities' in metrics and metrics['sparsities']:
-            sparsity = metrics['sparsities'][-1]
+        if "sparsities" in metrics and metrics["sparsities"]:
+            sparsity = metrics["sparsities"][-1]
             sparsity_color = Color.gradient(sparsity / 100, Theme.sparsity_gradient)
-            print(f"\033[{stats_y};{stats_x}f{Theme.text}Sparsity: {sparsity_color}{sparsity:.1f}%{Term.normal}")
+            print(
+                f"\033[{stats_y};{stats_x}f{Theme.text}Sparsity: {sparsity_color}{sparsity:.1f}%{Term.normal}"
+            )
             stats_y += 1
 
         # Graph panel - Loss over time
@@ -739,36 +822,31 @@ class TrackIOConsole:
                 print(f"\033[{graph_y + i + 1};{graph_x - 8}f{line}")
 
         # Time estimate
-        if 'times' in metrics and metrics['times'] and len(metrics['times']) > 1:
-            avg_time = sum(metrics['times'][-10:]) / len(metrics['times'][-10:])
+        if "times" in metrics and metrics["times"] and len(metrics["times"]) > 1:
+            avg_time = sum(metrics["times"][-10:]) / len(metrics["times"][-10:])
             if iters[-1] < 500:  # Assume 500 iterations total
                 remaining = (500 - iters[-1]) * avg_time / 1000 / 60
                 time_y = Term.height - 3
-                print(f"\033[{time_y};{stats_x}f{Theme.text}Est. remaining: {Theme.warning}{remaining:.1f} min{Term.normal}")
+                print(
+                    f"\033[{time_y};{stats_x}f{Theme.text}Est. remaining: {Theme.warning}{remaining:.1f} min{Term.normal}"
+                )
 
 
 def main():
     parser = argparse.ArgumentParser(description="TrackIO Console Dashboard")
+    parser.add_argument("--project", "-p", help="TrackIO project name", default=None)
     parser.add_argument(
-        "--project", "-p",
-        help="TrackIO project name",
-        default=None
+        "--log", "-l", help="Path to training output.log file", default=None
     )
     parser.add_argument(
-        "--log", "-l",
-        help="Path to training output.log file",
-        default=None
-    )
-    parser.add_argument(
-        "--interval", "-i",
+        "--interval",
+        "-i",
         type=int,
         default=2,
-        help="Update interval in seconds (default: 2)"
+        help="Update interval in seconds (default: 2)",
     )
     parser.add_argument(
-        "--once",
-        action="store_true",
-        help="Display once and exit (no live monitoring)"
+        "--once", action="store_true", help="Display once and exit (no live monitoring)"
     )
 
     args = parser.parse_args()
