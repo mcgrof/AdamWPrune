@@ -21,7 +21,7 @@ def load_json(file_path):
 
 
 def extract_gpu_stats(data):
-    """Extract GPU memory statistics from data."""
+    """Extract GPU memory statistics from data, supporting both single and multi-GPU formats."""
     samples = None
 
     if isinstance(data, list):
@@ -33,8 +33,25 @@ def extract_gpu_stats(data):
         return None
 
     memory_values = []
+    per_gpu_data = {}
+    has_multi_gpu = False
+
     for s in samples:
-        if "memory_used" in s:
+        # Check for multi-GPU aggregate data first
+        if "aggregate_stats" in s:
+            memory_values.append(s["aggregate_stats"]["total_memory_used"])
+            has_multi_gpu = True
+
+            # Extract per-GPU breakdown
+            if "multi_gpu_data" in s:
+                for gpu_data in s["multi_gpu_data"]:
+                    gpu_idx = gpu_data["gpu_index"]
+                    if gpu_idx not in per_gpu_data:
+                        per_gpu_data[gpu_idx] = []
+                    per_gpu_data[gpu_idx].append(gpu_data["memory_used"])
+
+        # Fall back to single GPU data
+        elif "memory_used" in s:
             memory_values.append(s["memory_used"])
         elif "memory_mb" in s:
             memory_values.append(s["memory_mb"])
@@ -44,13 +61,28 @@ def extract_gpu_stats(data):
     if not memory_values:
         return None
 
-    return {
+    result = {
         "mean": np.mean(memory_values),
         "max": max(memory_values),
         "min": min(memory_values),
         "std": np.std(memory_values),
         "samples": len(memory_values),
+        "multi_gpu": has_multi_gpu,
     }
+
+    # Add per-GPU statistics if available
+    if per_gpu_data:
+        result["per_gpu_stats"] = {}
+        for gpu_idx, gpu_memory_vals in per_gpu_data.items():
+            result["per_gpu_stats"][gpu_idx] = {
+                "mean": np.mean(gpu_memory_vals),
+                "max": max(gpu_memory_vals),
+                "min": min(gpu_memory_vals),
+                "std": np.std(gpu_memory_vals),
+                "samples": len(gpu_memory_vals),
+            }
+
+    return result
 
 
 def main():
@@ -64,10 +96,16 @@ def main():
     # Collect all GPU data
     all_gpu_data = {}
 
-    # Find all GPU monitoring files
+    # Find all GPU monitoring files (including multi-GPU)
     gpu_files = glob("**/gpu_*.json", recursive=True)
+    # Remove multi-GPU files from main list to avoid double processing
+    gpu_files = [f for f in gpu_files if "_multi_gpu.json" not in f]
 
-    for gpu_file in gpu_files:
+    # Also find multi-GPU files
+    multi_gpu_files = glob("**/gpu_*_multi_gpu.json", recursive=True)
+
+    # Process both regular and multi-GPU files
+    for gpu_file in gpu_files + multi_gpu_files:
         path = Path(gpu_file)
 
         # Determine optimizer and phase
@@ -246,6 +284,46 @@ def main():
         print(
             f"   {training_data[0][0].upper()} with {training_data[0][1]:.1f} MB during training"
         )
+
+    # Multi-GPU analysis if available
+    has_multi_gpu_data = any(
+        data.get("stats", {}).get("multi_gpu", False)
+        for opt_data in optimizers.values()
+        for data in opt_data.values()
+    )
+
+    if has_multi_gpu_data:
+        print("\n" + "=" * 70)
+        print("MULTI-GPU ANALYSIS (4x A10G):")
+        print("-" * 70)
+
+        for opt in sorted_opts:
+            data = optimizers[opt]
+            if "training" in data:
+                stats = data["training"]["stats"]
+                if stats.get("multi_gpu", False) and "per_gpu_stats" in stats:
+                    print(f"\n{opt.upper()} Training - Per-GPU Breakdown:")
+                    per_gpu = stats["per_gpu_stats"]
+
+                    # Calculate load balance
+                    gpu_means = [per_gpu[str(i)]["mean"] for i in range(len(per_gpu)) if str(i) in per_gpu]
+                    if gpu_means:
+                        avg_memory = np.mean(gpu_means)
+                        std_memory = np.std(gpu_means)
+                        cv = (std_memory / avg_memory) * 100 if avg_memory > 0 else 0
+
+                        for gpu_idx in sorted(per_gpu.keys(), key=int):
+                            gpu_stats = per_gpu[gpu_idx]
+                            print(f"    GPU {gpu_idx}: {gpu_stats['mean']:7.1f} MB (±{gpu_stats['std']:5.1f})")
+
+                        print(f"    Total:    {stats['mean']:7.1f} MB")
+                        print(f"    Balance:  CV = {cv:5.1f}% ({'Excellent' if cv < 5 else 'Good' if cv < 10 else 'Fair' if cv < 20 else 'Poor'})")
+
+        print("\nLoad Balance Legend:")
+        print("  Excellent: CV < 5%  (Very well balanced)")
+        print("  Good:      CV < 10% (Well balanced)")
+        print("  Fair:      CV < 20% (Acceptable)")
+        print("  Poor:      CV ≥ 20% (Imbalanced - investigate)")
 
     print("\n" + "=" * 70)
     print(f"Report generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

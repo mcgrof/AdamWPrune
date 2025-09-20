@@ -191,6 +191,62 @@ These tests:
   - You need cloud backup of experiments
   - You want integration with other ML tools
 
+## Multi-GPU Monitoring Integration
+
+### 4x A10G GPU Tracking
+
+The experiment tracking system automatically integrates with multi-GPU monitoring for AWS g5.12xlarge instances:
+
+```bash
+# Enable both experiment tracking and GPU monitoring
+make defconfig DEFCONFIG=gpt2/defconfigs/gpt2-finewebedu-a10gx4 TRACKER=wandb,trackio
+make test_matrix GPU_MONITOR=y
+```
+
+### Multi-GPU Metrics Logged
+
+**Aggregate Metrics:**
+- `gpu_total_memory_used` - Combined memory across all 4 A10G GPUs
+- `gpu_total_memory_percent` - Overall memory utilization
+- `gpu_average_utilization` - Mean GPU utilization across devices
+- `gpu_total_power` - Combined power consumption
+- `gpu_max_temperature` - Highest temperature across all GPUs
+
+**Load Balance Metrics:**
+- `gpu_load_balance_cv` - Coefficient of variation (lower = better balance)
+- `gpu_load_balance_quality` - Categorical rating (Excellent/Good/Fair/Poor)
+
+**Per-GPU Metrics:**
+- `gpu_{0,1,2,3}_memory_used` - Individual GPU memory usage
+- `gpu_{0,1,2,3}_utilization` - Individual GPU utilization
+- `gpu_{0,1,2,3}_temperature` - Individual GPU temperatures
+- `gpu_{0,1,2,3}_power` - Individual GPU power consumption
+
+### Generated Visualizations
+
+Multi-GPU analysis automatically creates additional graphs:
+- **Per-GPU Memory Breakdown** - 2x2 grid showing each A10G GPU
+- **GPU Load Balance Analysis** - Distribution and balance metrics
+- **Timeline Comparisons** - Multi-GPU memory usage over time
+
+### Quality Thresholds
+
+Load balance quality classification:
+- **Excellent (CV < 5%)**: Very well balanced across GPUs
+- **Good (CV 5-10%)**: Well balanced distribution
+- **Fair (CV 10-20%)**: Acceptable but could improve
+- **Poor (CV ≥ 20%)**: Imbalanced - investigate DDP configuration
+
+### Best Practices for 4x A10G
+
+1. **Monitor Load Balance**: Target CV < 5% for optimal performance
+2. **Track Total Memory**: Sum across all GPUs for true memory usage
+3. **Per-GPU Analysis**: Identify individual GPU bottlenecks
+4. **Power Monitoring**: Track total power consumption (4x A10G can draw ~600W)
+5. **Temperature Management**: Monitor max temperature across devices
+
+For detailed multi-GPU monitoring documentation, see [Multi-GPU Monitoring Guide](multi-gpu-monitoring.md).
+
 ## For Developers
 
 ### Adding Tracker Support to Your Training Script
