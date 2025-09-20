@@ -661,8 +661,17 @@ def run_single_test(
     cmd.extend(["--json-output", json_output])
 
     # Add experiment tracking configuration if specified
+    tracker = None
     if "EXPERIMENT_TRACKER" in config and config["EXPERIMENT_TRACKER"] != "none":
-        cmd.extend(["--tracker", config["EXPERIMENT_TRACKER"]])
+        tracker = config["EXPERIMENT_TRACKER"]
+    elif "TRACKER_CLI_VALUE" in config and config["TRACKER_CLI_VALUE"]:
+        # Parse tracker from CLI value (e.g., "wandb,trackio" -> use first one for training)
+        trackers = config["TRACKER_CLI_VALUE"].split(",")
+        if trackers and trackers[0] and trackers[0] != "none":
+            tracker = trackers[0]
+
+    if tracker:
+        cmd.extend(["--tracker", tracker])
 
         # Handle project name - auto-generate if empty
         if "TRACKER_PROJECT" in config and config["TRACKER_PROJECT"]:
@@ -680,7 +689,7 @@ def run_single_test(
         if "TRACKER_RUN_NAME" in config and config["TRACKER_RUN_NAME"]:
             cmd.extend(["--tracker-run-name", config["TRACKER_RUN_NAME"]])
         # Set WANDB offline mode if configured
-        if config.get("EXPERIMENT_TRACKER") == "wandb" and config.get("WANDB_OFFLINE") == "y":
+        if tracker == "wandb" and config.get("WANDB_OFFLINE") == "y":
             import os
             os.environ["WANDB_MODE"] = "offline"
 
