@@ -1111,7 +1111,6 @@ def main():
         fix_all_results_json(args.continue_dir)
 
     if args.continue_dir:
-        import subprocess
         from pathlib import Path
 
         continue_dir = Path(args.continue_dir)
