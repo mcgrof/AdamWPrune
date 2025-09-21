@@ -1,0 +1,32 @@
+# Configuration for re-running failed tests
+# This config will only test the combinations that failed in previous runs
+
+# Model to test
+CONFIG_MODEL_GPT2=y
+
+# Base optimizers to test
+CONFIG_OPTIMIZER_ADAMWPRUNE=y
+
+# Pruning methods to test
+CONFIG_PRUNING_STATE=y
+
+# Sparsity levels to test
+CONFIG_SPARSITY_50=y
+
+# Default training parameters for GPT-2
+CONFIG_GPT2_BATCH_SIZE=32
+CONFIG_GPT2_GRADIENT_ACCUMULATION=4
+CONFIG_GPT2_WARMUP_STEPS=2000
+CONFIG_GPT2_EVAL_INTERVAL=500
+CONFIG_GPT2_LEARNING_RATE=6e-4
+CONFIG_GPT2_MIN_LR=6e-5
+CONFIG_GPT2_WEIGHT_DECAY=0.1
+
+# AdamWPrune specific parameters
+CONFIG_ADAMWPRUNE_WARMUP_STEPS=100
+CONFIG_ADAMWPRUNE_FREQUENCY=50
+
+# Test configuration
+CONFIG_TEST_PARALLEL_JOBS=1
+CONFIG_TRACKER="wandb,trackio"
+CONFIG_TRACKER_PROJECT="tracking-e97b5"
