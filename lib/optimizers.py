@@ -23,7 +23,7 @@ def param_groups_for_weight_decay(model, model_type="resnet"):
         List of parameter groups with appropriate weight decay settings
     """
     # For GPT2, use its own configure_optimizers method if available
-    if model_type == "gpt2" and hasattr(model, 'configure_optimizers'):
+    if model_type == "gpt2" and hasattr(model, "configure_optimizers"):
         # GPT2 has its own parameter grouping logic for weight decay
         # Just return all parameters as a single group to avoid the duplicate warning
         # The weight decay will be applied uniformly
@@ -332,6 +332,9 @@ def create_optimizer(
                 "ramp_end_epoch": (
                     getattr(args, "adamwprune_ramp_end_epoch", 75) if args else 75
                 ),
+                "ramp_end_step": (
+                    getattr(args, "adamwprune_ramp_end_step", None) if args else None
+                ),
                 "step_count": 0,
                 "masks": {},  # module -> bool mask buffer
                 "pruning_strategy": "hybrid",  # hybrid of momentum and stability
@@ -497,9 +500,15 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, epoch):
     ):
 
         # Calculate current sparsity level (gradual ramp-up)
-        # Use ramp_end_epoch from state
-        ramp_end_epoch = adamprune_state.get("ramp_end_epoch", 75)
-        ramp_end_step = len(train_loader) * ramp_end_epoch
+        if train_loader is not None:
+            # Epoch-based training (ResNet50, etc.)
+            ramp_end_epoch = adamprune_state.get("ramp_end_epoch", 75)
+            ramp_end_step = len(train_loader) * ramp_end_epoch
+        else:
+            # Iteration-based training (GPT-2, etc.)
+            # Use ramp_end_step from state, or default to a reasonable value
+            ramp_end_step = adamprune_state.get("ramp_end_step", 10000)
+
         progress = min(
             1.0,
             (adamprune_state["step_count"] - adamprune_state["warmup_steps"])
