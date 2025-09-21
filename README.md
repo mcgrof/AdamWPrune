@@ -184,12 +184,37 @@ Industry best practices recommend saving model checkpoints at peak accuracy, not
   - [ResNet-50 CIFAR-100 Initial Results](key_results/test_matrix_results_20250908_121537/summary_report.txt): AdamWPrune achieves 72.38% at 70% sparsity with lowest GPU memory
   - [ResNet-18 CIFAR-10 Results](key_results/test_matrix_results_20250903_180836/report.md): AdamWPrune achieves 90.66% accuracy with lowest memory usage
 
+## Pruning Method Insights
+
+### Movement Pruning: Designed for Fine-tuning, Not Training from Scratch
+
+Movement pruning, introduced by Sanh et al. (2020) in "Movement Pruning: Adaptive Sparsity by Fine-Tuning", was specifically designed for **fine-tuning pre-trained models**, not training from scratch. This distinction is critical:
+
+**Key characteristics:**
+- **Fine-tuning context**: Movement pruning identifies weights moving toward zero during adaptation to downstream tasks
+- **Pre-trained models**: Works best with models that have already learned meaningful representations
+- **Architecture differences**: Transformers and CNNs exhibit different pruning behaviors
+  - Transformers: Many redundant parameters naturally move toward zero, leading to aggressive pruning
+  - CNNs: More structured weight patterns maintain their magnitudes during training
+
+**Training from scratch limitations:**
+- Random initial weights lack meaningful movement patterns
+- Weights moving toward zero early in training may still be important later
+- Can lead to aggressive over-pruning beyond target sparsity levels
+- Less stable than magnitude-based methods for random initialization
+
+**Practical implications for GPT-2 comparisons:**
+Given that movement pruning is optimized for fine-tuning scenarios, our GPT-2 training-from-scratch experiments focus primarily on comparing **magnitude pruning vs. AdamWPrune's state-based pruning**, which are both designed for training from random initialization.
+
 ## Features
 
-- **Multi-Model Support**: Extensible architecture supporting LeNet-5, ResNet-18, and more
+- **Multi-Model Support**: Extensible architecture supporting LeNet-5, ResNet-18, ResNet-50, and GPT-2
 - **GPU Optimization**: Optimized for modern GPUs with detailed monitoring
 - **Vendor-Agnostic GPU Monitoring**: Uses [gputop.py](https://github.com/mcgrof/gputop) for consistent memory tracking across NVIDIA/AMD/Intel GPUs
-- **Multiple Pruning Methods**: Movement, magnitude, and state-based pruning
+- **Multiple Pruning Methods**:
+  - **Magnitude pruning**: Conservative, suitable for training from scratch
+  - **Movement pruning**: Best for fine-tuning pre-trained models
+  - **State-based pruning (AdamWPrune)**: Novel approach using optimizer states
 - **Kconfig System**: Linux kernel-style configuration for experiment management
 - **Test Matrix**: Automated testing across optimizer and pruning combinations
 - **Comprehensive Visualization**: Memory timeline, efficiency analysis, and trade-off plots
