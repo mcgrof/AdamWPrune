@@ -450,6 +450,7 @@ def main():
         args.adamwprune_target_sparsity = args.target_sparsity
         args.adamwprune_warmup_steps = args.pruning_warmup
         args.adamwprune_ramp_end_epoch = min(8, args.num_epochs - 1)
+        args.adamwprune_ramp_end_step = args.max_iters
 
     # Create optimizer using the library function
     optimizer, scheduler, gradient_clip_norm, spam_state, adamwprune_state = (
