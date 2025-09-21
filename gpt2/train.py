@@ -479,6 +479,7 @@ def main():
                 model=model,
                 target_sparsity=args.target_sparsity,
                 warmup_steps=args.pruning_warmup,
+                pruning_frequency=50,
                 ramp_end_step=args.max_iters,
             )
 
