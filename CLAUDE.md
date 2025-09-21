@@ -77,3 +77,7 @@ When optimizing PyTorch training for AMD GPUs:
 
 You are not allowed to use the word "comprehensive". It is overused
 and does not explain anything. We prefer to be terse and to the point.
+
+# Memory
+
+I want you to remember most of our conversations about this project.
