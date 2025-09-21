@@ -62,3 +62,6 @@ Thumbs.db
 .config.*
 config.py
 include/
+
+gpt2/wandb/
+gpt2/outputs/
