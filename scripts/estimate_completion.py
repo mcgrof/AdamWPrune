@@ -304,6 +304,9 @@ def analyze_test_directory(matrix_dir):
                                     max_iter_matches = re.findall(r"--max-iters\s+(\d+)", content)
                                     if max_iter_matches:
                                         total_iters = int(max_iter_matches[0])
+                                    else:
+                                        # Default for GPT-2 train.py when --max-iters not specified
+                                        total_iters = 10000
 
                                     # Look for epochs in command (GPT-2 specific)
                                     epoch_arg_matches = re.findall(r"--epochs\s+(\d+)", content)
@@ -380,42 +383,48 @@ def estimate_completion_time(analysis):
 
     # Estimate for in-progress tests
     for test in analysis["in_progress_tests"]:
-        if test["total_epochs"] > 0:
+        # Use iterations if available (more accurate for GPT-2), otherwise epochs
+        if test.get("total_iters", 0) > 0 and test.get("current_iter", 0) > 0:
+            progress = test["current_iter"] / test["total_iters"]
+        elif test["total_epochs"] > 0:
             progress = test["current_epoch"] / test["total_epochs"]
-            elapsed = datetime.now().timestamp() - test["start_time"]
+        else:
+            progress = 0
 
-            # For early epochs (< 5%), use average time instead of extrapolation
-            # which can be wildly inaccurate
-            if progress < 0.05 and avg_time > 0:
-                # Use historical average, adjusted for progress already made
-                remaining = avg_time * (1 - progress)
-            elif progress > 0:
-                # For later epochs, use actual progress-based estimation
-                total_expected = elapsed / progress
-                remaining = total_expected - elapsed
+        elapsed = datetime.now().timestamp() - test["start_time"]
 
-                # Sanity check: if estimated total time is way off from average,
-                # blend the estimates (this handles variations in early epochs)
-                if avg_time > 0 and total_expected > avg_time * 2:
-                    # Blend with historical average if estimate seems too high
-                    weight = min(
-                        progress * 2, 1.0
-                    )  # Give more weight to actual as progress increases
-                    remaining = (remaining * weight) + (
-                        avg_time * (1 - progress) * (1 - weight)
-                    )
-            else:
-                continue
+        # For early epochs (< 5%), use average time instead of extrapolation
+        # which can be wildly inaccurate
+        if progress < 0.05 and avg_time > 0:
+            # Use historical average, adjusted for progress already made
+            remaining = avg_time * (1 - progress)
+        elif progress > 0:
+            # For later epochs, use actual progress-based estimation
+            total_expected = elapsed / progress
+            remaining = total_expected - elapsed
 
-            estimates[test["name"]] = {
-                "remaining_time": max(0, remaining),  # Never negative
-                "progress_percent": progress * 100,
-                "current_epoch": test["current_epoch"],
-                "total_epochs": test["total_epochs"],
-                "current_iter": test.get("current_iter", 0),
-                "total_iters": test.get("total_iters", 0),
-                "using_average": progress < 0.05,  # Flag if using historical average
-            }
+            # Sanity check: if estimated total time is way off from average,
+            # blend the estimates (this handles variations in early epochs)
+            if avg_time > 0 and total_expected > avg_time * 2:
+                # Blend with historical average if estimate seems too high
+                weight = min(
+                    progress * 2, 1.0
+                )  # Give more weight to actual as progress increases
+                remaining = (remaining * weight) + (
+                    avg_time * (1 - progress) * (1 - weight)
+                )
+        else:
+            continue
+
+        estimates[test["name"]] = {
+            "remaining_time": max(0, remaining),  # Never negative
+            "progress_percent": progress * 100,
+            "current_epoch": test["current_epoch"],
+            "total_epochs": test["total_epochs"],
+            "current_iter": test.get("current_iter", 0),
+            "total_iters": test.get("total_iters", 0),
+            "using_average": progress < 0.05,  # Flag if using historical average
+        }
 
     # Add time for incomplete tests (will need full run)
     incomplete_count = len(analysis["incomplete_tests"])
