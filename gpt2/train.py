@@ -681,12 +681,10 @@ def main():
             pruner.apply_masks()
 
         # Update AdamWPrune state-based pruning
-        # Calculate current epoch based on iterations (approximate)
-        iters_per_epoch = (
-            args.max_iters // args.num_epochs if args.num_epochs > 0 else args.max_iters
-        )
-        current_epoch = iter_num // iters_per_epoch
-        update_adamprune_masks(optimizer, adamwprune_state, None, current_epoch)
+        if adamwprune_state is not None and adamwprune_state.get("enabled", False):
+            # For GPT-2, we're using iteration-based training, not epochs
+            # Pass the current iteration as the step count
+            update_adamprune_masks(optimizer, adamwprune_state, None, iter_num)
 
         # Update pruning for external pruners
         if pruner is not None:
@@ -706,8 +704,16 @@ def main():
             if pruner is not None:
                 sparsity = pruner.get_sparsity()
             elif args.optimizer == "adamwprune" and args.pruning_method == "state":
-                # Get sparsity from AdamWPrune
-                sparsity = 0.0  # TODO: implement sparsity calculation
+                # Get sparsity from AdamWPrune masks
+                if adamwprune_state is not None and "masks" in adamwprune_state:
+                    total_params = 0
+                    total_pruned = 0
+                    for module, mask in adamwprune_state["masks"].items():
+                        total_params += mask.numel()
+                        total_pruned += (mask == 0).sum().item()
+                    sparsity = total_pruned / total_params if total_params > 0 else 0.0
+                else:
+                    sparsity = 0.0
             else:
                 sparsity = 0.0
 
