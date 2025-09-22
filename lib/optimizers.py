@@ -321,7 +321,8 @@ def create_optimizer(
         # Only create adamprune_state if pruning is enabled
         if adamwprune_enable_pruning:
             adamprune_state = {
-                "pruning_enabled": True,
+                "enabled": True,  # Main flag for pruning activation
+                "pruning_enabled": True,  # Legacy compatibility
                 "target_sparsity": adamwprune_target_sparsity,
                 "warmup_steps": (
                     getattr(args, "adamwprune_warmup_steps", 100) if args else 100
@@ -485,13 +486,26 @@ def apply_adamprune_masking(optimizer, adamprune_state):
             module.weight.grad.data.mul_(mask.to(module.weight.grad.dtype))
 
 
-def update_adamprune_masks(optimizer, adamprune_state, train_loader, epoch):
-    """Update AdamWPrune pruning masks based on Adam states."""
-    if adamprune_state is None or not adamprune_state["pruning_enabled"]:
+def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
+    """Update AdamWPrune pruning masks based on Adam states.
+
+    Args:
+        optimizer: The optimizer with Adam states
+        adamprune_state: State dictionary for AdamWPrune
+        train_loader: DataLoader (can be None for iteration-based training like GPT-2)
+        step: Current training step (iteration number for GPT-2, epoch for ResNet)
+    """
+    if adamprune_state is None or not adamprune_state.get("pruning_enabled", False):
         return
 
-    # Always increment step count when called
-    adamprune_state["step_count"] += 1
+    # For iteration-based training (GPT-2), use step directly as step_count
+    # For epoch-based training (ResNet), increment step_count
+    if train_loader is None:
+        # Iteration-based: step is the iteration number
+        adamprune_state["step_count"] = step
+    else:
+        # Epoch-based: increment on each call
+        adamprune_state["step_count"] += 1
 
     # Update masks based on Adam states
     if (
