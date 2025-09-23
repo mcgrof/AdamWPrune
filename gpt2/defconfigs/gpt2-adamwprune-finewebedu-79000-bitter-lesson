@@ -102,7 +102,6 @@ CONFIG_CHECKPOINT_INTERVAL=5000
 
 # Tracking Configuration
 CONFIG_TRACKER="wandb,trackio"
-CONFIG_TRACKER_PROJECT="adamwprune-bitter-lesson"
 
 # Resource Configuration
 CONFIG_NUM_WORKERS=16
