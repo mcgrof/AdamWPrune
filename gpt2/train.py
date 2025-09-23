@@ -238,6 +238,15 @@ def main():
     if args.epochs is not None:
         args.num_epochs = args.epochs
 
+    # Environment variable overrides (highest precedence)
+    # These override both command-line args and config file settings
+    if "TRACKER" in os.environ:
+        args.tracker = os.environ["TRACKER"]
+    if "TRACKER_PROJECT" in os.environ:
+        args.tracker_project = os.environ["TRACKER_PROJECT"]
+    if "TRACKER_RUN_NAME" in os.environ:
+        args.tracker_run_name = os.environ["TRACKER_RUN_NAME"]
+
     # -----------------------------------------------------------------------------
     # Setup
 
