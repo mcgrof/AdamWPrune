@@ -424,6 +424,18 @@ def get_test_matrix(config):
     ):
         matrix["pruning_methods"].append("state")
 
+    # Check for AdamWPrune variants (bitter0, bitter1, bitter2)
+    adamwprune_variants = []
+    if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER0") == "y":
+        adamwprune_variants.append("bitter0")
+    if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER1") == "y":
+        adamwprune_variants.append("bitter1")
+    if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER2") == "y":
+        adamwprune_variants.append("bitter2")
+
+    # Store variants in matrix for later use
+    matrix["adamwprune_variants"] = adamwprune_variants if adamwprune_variants else ["bitter0"]
+
     # Get sparsity levels from individual TEST_SPARSITY_* configs
     matrix["sparsity_levels"] = []
 
@@ -466,6 +478,9 @@ def generate_combinations(matrix):
         "sparsity_levels", ["0.9"]
     )  # Default to 90% if not specified
 
+    # Get AdamWPrune variants
+    adamwprune_variants = matrix.get("adamwprune_variants", ["bitter0"])
+
     for model, optimizer, pruning in itertools.product(
         matrix["models"], matrix["optimizers"], matrix["pruning_methods"]
     ):
@@ -477,25 +492,51 @@ def generate_combinations(matrix):
 
         # For no pruning, sparsity is always 0
         if pruning == "none":
-            combinations.append(
-                {
-                    "model": model,
-                    "optimizer": optimizer,
-                    "pruning": pruning,
-                    "sparsity": "0.0",
-                }
-            )
-        else:
-            # For pruning methods, test each sparsity level
-            for sparsity in sparsity_levels:
+            # For AdamWPrune, generate combinations for each variant
+            if optimizer == "adamwprune":
+                for variant in adamwprune_variants:
+                    combinations.append(
+                        {
+                            "model": model,
+                            "optimizer": optimizer,
+                            "pruning": pruning,
+                            "sparsity": "0.0",
+                            "variant": variant,
+                        }
+                    )
+            else:
                 combinations.append(
                     {
                         "model": model,
                         "optimizer": optimizer,
                         "pruning": pruning,
-                        "sparsity": sparsity,
+                        "sparsity": "0.0",
                     }
                 )
+        else:
+            # For pruning methods, test each sparsity level
+            for sparsity in sparsity_levels:
+                # For AdamWPrune, generate combinations for each variant
+                if optimizer == "adamwprune":
+                    for variant in adamwprune_variants:
+                        combinations.append(
+                            {
+                                "model": model,
+                                "optimizer": optimizer,
+                                "pruning": pruning,
+                                "sparsity": sparsity,
+                                "variant": variant,
+                            }
+                        )
+                else:
+                    combinations.append(
+                        {
+                            "model": model,
+                            "optimizer": optimizer,
+                            "pruning": pruning,
+                            "sparsity": sparsity,
+                        }
+                    )
 
     return combinations
 
@@ -512,18 +553,26 @@ def run_single_test(
 ):
     """Run a single test combination."""
     import os  # Explicit import to fix UnboundLocalError
+
     model = combination["model"]
     optimizer = combination["optimizer"]
     pruning = combination["pruning"]
     sparsity = combination.get("sparsity", "0.0")
+    variant = combination.get("variant", None)
 
-    # Create test identifier including sparsity level
+    # Create test identifier including sparsity level and variant if applicable
     if pruning == "none":
-        test_id = f"{model}_{optimizer}_{pruning}"
+        if variant:
+            test_id = f"{model}_{optimizer}_{variant}_{pruning}"
+        else:
+            test_id = f"{model}_{optimizer}_{pruning}"
     else:
         # Include sparsity in the test ID (e.g., sgd_movement_90)
         sparsity_pct = int(float(sparsity) * 100)
-        test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
+        if variant:
+            test_id = f"{model}_{optimizer}_{variant}_{pruning}_{sparsity_pct}"
+        else:
+            test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
     test_output_dir = os.path.join(output_dir, test_id)
     os.makedirs(test_output_dir, exist_ok=True)
 
@@ -535,6 +584,8 @@ def run_single_test(
     if not parallel_mode:
         print(f"Model: {model}")
         print(f"Optimizer: {optimizer}")
+        if variant:
+            print(f"Variant: {variant}")
         print(f"Pruning: {pruning}")
         if pruning != "none":
             print(f"Sparsity: {float(sparsity)*100:.0f}%")
@@ -645,7 +696,12 @@ def run_single_test(
     # Add AdamWPrune tuning parameters if present
     if optimizer == "adamwprune":
         if "ADAMWPRUNE_BASE_OPTIMIZER_NAME" in config:
-            cmd.extend(["--adamwprune-base-optimizer-name", config["ADAMWPRUNE_BASE_OPTIMIZER_NAME"]])
+            cmd.extend(
+                [
+                    "--adamwprune-base-optimizer-name",
+                    config["ADAMWPRUNE_BASE_OPTIMIZER_NAME"],
+                ]
+            )
         if "ADAMWPRUNE_BETA1" in config:
             cmd.extend(["--adamwprune-beta1", config["ADAMWPRUNE_BETA1"]])
         if "ADAMWPRUNE_BETA2" in config:
@@ -681,6 +737,7 @@ def run_single_test(
         else:
             # Auto-generate project name based on directory and checksum
             import hashlib
+
             cwd = os.getcwd()
             dir_name = os.path.basename(cwd)
             # Create a short checksum of the full path for uniqueness
@@ -693,6 +750,7 @@ def run_single_test(
         # Set WANDB offline mode if configured
         if tracker == "wandb" and config.get("WANDB_OFFLINE") == "y":
             import os
+
             os.environ["WANDB_MODE"] = "offline"
 
     # Override epochs if requested (for quick testing)
@@ -757,9 +815,15 @@ def run_single_test(
                     gpu_data = json.load(f)
                     if gpu_data and isinstance(gpu_data, list):
                         # Calculate mean and max memory usage
-                        memory_values = [d.get("memory_used", 0) for d in gpu_data if "memory_used" in d]
+                        memory_values = [
+                            d.get("memory_used", 0)
+                            for d in gpu_data
+                            if "memory_used" in d
+                        ]
                         if memory_values:
-                            metrics["gpu_memory_mean"] = sum(memory_values) / len(memory_values)
+                            metrics["gpu_memory_mean"] = sum(memory_values) / len(
+                                memory_values
+                            )
                             metrics["gpu_memory_max"] = max(memory_values)
             except Exception as e:
                 print(f"  Warning: Could not extract GPU memory data: {e}")
@@ -841,9 +905,15 @@ def fix_all_results_json(results_dir):
                             gpu_data = json.load(gf)
                             if gpu_data and isinstance(gpu_data, list):
                                 # Calculate mean and max memory usage
-                                memory_values = [d.get("memory_used", 0) for d in gpu_data if "memory_used" in d]
+                                memory_values = [
+                                    d.get("memory_used", 0)
+                                    for d in gpu_data
+                                    if "memory_used" in d
+                                ]
                                 if memory_values:
-                                    data["gpu_memory_mean"] = sum(memory_values) / len(memory_values)
+                                    data["gpu_memory_mean"] = sum(memory_values) / len(
+                                        memory_values
+                                    )
                                     data["gpu_memory_max"] = max(memory_values)
                                     fixed_count += 1
                     except Exception:
@@ -1099,9 +1169,10 @@ def main():
         help="Continue from an existing test matrix directory (clean and resume incomplete tests)",
     )
     parser.add_argument(
-        "--yes", "-y",
+        "--yes",
+        "-y",
         action="store_true",
-        help="Automatically answer yes to all prompts"
+        help="Automatically answer yes to all prompts",
     )
     args = parser.parse_args()
 
@@ -1174,7 +1245,9 @@ def main():
 
         # Report on missing tests
         if missing_tests:
-            print(f"\n⚠️  Found {len(missing_tests)} MISSING test(s) from expected configuration:")
+            print(
+                f"\n⚠️  Found {len(missing_tests)} MISSING test(s) from expected configuration:"
+            )
             for missing_test in sorted(missing_tests):
                 print(f"   ❌ {missing_test}")
 
@@ -1218,7 +1291,7 @@ def main():
                         len(tests_to_run),
                         parallel_mode=False,
                         override_epochs=None,
-                        time_estimates=None
+                        time_estimates=None,
                     )
                     if result:
                         all_results.append(result)
@@ -1520,11 +1593,12 @@ def main():
     if args.dry_run:
         print("\nDry run - would execute:")
         for i, combo in enumerate(combinations, 1):
+            variant_part = f"_{combo['variant']}" if combo.get("variant") else ""
             if combo["pruning"] == "none":
-                test_id = f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}"
+                test_id = f"{combo['model']}_{combo['optimizer']}{variant_part}_{combo['pruning']}"
             else:
                 sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
-                test_id = f"{combo['model']}_{combo['optimizer']}_{combo['pruning']}_{sparsity_pct}"
+                test_id = f"{combo['model']}_{combo['optimizer']}{variant_part}_{combo['pruning']}_{sparsity_pct}"
             print(f"  {i}. {test_id}")
         return
 
@@ -1614,11 +1688,14 @@ def main():
             if opt not in tests_by_optimizer:
                 tests_by_optimizer[opt] = []
 
+            variant_str = f"{combo.get('variant', '')} " if combo.get("variant") else ""
             if combo["pruning"] == "none":
-                test_desc = f"  - {combo['pruning']} (no sparsity)"
+                test_desc = f"  - {variant_str}{combo['pruning']} (no sparsity)"
             else:
                 sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
-                test_desc = f"  - {combo['pruning']} @ {sparsity_pct}% sparsity"
+                test_desc = (
+                    f"  - {variant_str}{combo['pruning']} @ {sparsity_pct}% sparsity"
+                )
             tests_by_optimizer[opt].append(test_desc)
 
         for optimizer in sorted(tests_by_optimizer.keys()):
