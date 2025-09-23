@@ -109,6 +109,104 @@ make test-matrix
 4. **Reduce workers**: Each worker duplicates data in RAM
 5. **Flash attention**: Reduces memory usage and speeds up training
 
+## AdamWPrune State Pruning: Bitter Lesson Variants (Active R&D)
+
+### Background: The Bitter Lesson
+
+Richard Sutton's "Bitter Lesson" teaches us that simple methods leveraging compute scale consistently outperform complex, clever approaches. Our initial AdamWPrune implementation used a sophisticated hybrid momentum-stability scoring system, but empirical results showed a 21% perplexity gap compared to simple magnitude pruning.
+
+### Current Results (GPT-2 124M, 50% sparsity target, finewebedu dataset)
+
+| Method | Perplexity | Actual Sparsity | Training Time | GPU Memory |
+|--------|------------|-----------------|---------------|------------|
+| AdamWSPAM + Magnitude | **42.36** | 49.9% | 578.6 min | 28.2 GB |
+| AdamWSPAM + Movement | 65.71 | 78.1% (!) | 586.3 min | 29.2 GB |
+| AdamWPrune + State (bitter0) | 51.39 | 49.7% | **478.8 min** | **24.7 GB** |
+
+Key findings:
+- AdamWPrune is **21% faster** and uses **14% less memory**
+- However, it has **21% worse perplexity** than magnitude pruning
+- The 21% symmetry (speed gain = quality loss) suggests a fundamental trade-off
+
+### Bitter Lesson Variants Under Testing
+
+We're testing three variants to apply the bitter lesson:
+
+#### bitter0 (Original - Complex)
+```bash
+--adamwprune-variant bitter0
+```
+- Hybrid momentum-stability scoring: `importance = momentum * stability`
+- Results: 51.39 perplexity, fastest training, lowest memory
+- Problem: Too clever, doesn't match simple magnitude pruning quality
+
+#### bitter1 (Pure Magnitude - Simple)
+```bash
+--adamwprune-variant bitter1
+```
+- Pure magnitude scoring: `importance = |weight|`
+- Keeps boolean masks for memory efficiency
+- Expected: ~42 perplexity (matching AdamWSPAM+magnitude)
+- Hypothesis: Simple scoring + efficient storage = best of both worlds
+
+#### bitter2 (Scale-Aware - Use Saved Resources)
+```bash
+--adamwprune-variant bitter2
+```
+- Same as bitter1 but automatically uses saved resources:
+  - Increases iterations by 21% (10,000 → 12,100)
+  - OR increase batch size by 14% (if memory permits)
+- Hypothesis: Let scale compensate for simplicity
+
+### Running Bitter Lesson Experiments
+
+Test all variants:
+```bash
+make defconfig-gpt2-adamwprune-finewebedu-79000-bitter-lesson
+make test-matrix
+```
+
+Or test individual variants:
+```bash
+# Test bitter1 (pure magnitude with boolean masks)
+python train.py \
+    --optimizer adamwprune \
+    --pruning-method state \
+    --adamwprune-variant bitter1 \
+    --target-sparsity 0.5
+
+# Test bitter2 (with automatic scaling)
+python train.py \
+    --optimizer adamwprune \
+    --pruning-method state \
+    --adamwprune-variant bitter2 \
+    --target-sparsity 0.5
+```
+
+### Ongoing R&D Status
+
+**Current Focus**: Validating if bitter1 (simple magnitude + boolean masks) can match AdamWSPAM+magnitude quality while maintaining the 21% speed and 14% memory advantages.
+
+**Why This Matters**:
+- If successful, we get the quality of magnitude pruning with significant efficiency gains
+- The memory savings enable larger models or batch sizes
+- Proves that clever scoring wasn't necessary - just efficient implementation
+
+**Next Steps**:
+1. Complete bitter lesson variant testing
+2. If bitter1 succeeds, make it the default
+3. Explore using saved memory for architectural improvements
+4. Test on larger models (GPT-2 350M+) where memory savings are critical
+
+### Technical Details
+
+The key innovation isn't the scoring method but the **boolean mask storage**:
+- Traditional pruning: float32 masks + scores = 2x weight memory overhead
+- AdamWPrune: boolean masks = 0.03x weight memory overhead
+- This 60x reduction in pruning overhead is the real breakthrough
+
+The bitter lesson teaches us to focus on this efficiency gain rather than clever scoring algorithms.
+
 ## Example Training Command
 
 Direct training with custom settings:

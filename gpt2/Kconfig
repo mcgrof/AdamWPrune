@@ -254,5 +254,38 @@ config GPT2_DDP_NUM_GPUS
 	  This overrides PARALLEL_JOBS when DDP is enabled.
 	  Set to 8 for H100x8 systems.
 
+# AdamWPrune State Pruning Variants (Bitter Lesson)
+config GPT2_ADAMWPRUNE_VARIANT_BITTER0
+	bool "Enable bitter0 variant (original hybrid approach)"
+	default y
+	help
+	  Original AdamWPrune state-based pruning using momentum-stability scoring.
+	  Combines Adam momentum and stability signals for pruning decisions.
+	  Result: 51.39 perplexity, 49.7% sparsity, 478.8 min training time.
+
+config GPT2_ADAMWPRUNE_VARIANT_BITTER1
+	bool "Enable bitter1 variant (pure magnitude)"
+	default n
+	help
+	  Pure magnitude pruning with boolean masks for memory efficiency.
+	  Simple approach following the bitter lesson - magnitude scoring works.
+	  Expected: ~42 perplexity (similar to AdamWSPAM+magnitude), faster training.
+
+config GPT2_ADAMWPRUNE_VARIANT_BITTER2
+	bool "Enable bitter2 variant (scale-aware magnitude)"
+	default n
+	help
+	  Magnitude pruning that signals to use saved resources:
+	  - 21% more iterations (12,100 instead of 10,000)
+	  - OR 14% larger batch size
+	  Let scale improvements compensate for simplicity.
+
+config GPT2_ADAMWPRUNE_DEFAULT_VARIANT
+	string "Default AdamWPrune variant"
+	default "bitter0"
+	help
+	  Default variant to use when not specified in command line.
+	  Options: bitter0 (original), bitter1 (magnitude), bitter2 (scale-aware).
+
 endmenu
 

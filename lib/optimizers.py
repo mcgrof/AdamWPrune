@@ -339,6 +339,11 @@ def create_optimizer(
                 "step_count": 0,
                 "masks": {},  # module -> bool mask buffer
                 "pruning_strategy": "hybrid",  # hybrid of momentum and stability
+                "variant": (
+                    getattr(args, "adamwprune_variant", "bitter0")
+                    if args
+                    else "bitter0"
+                ),  # bitter0=original, bitter1=magnitude, bitter2=scale-aware
             }
 
             # Initialize masks for prunable layers as boolean buffers
@@ -351,6 +356,7 @@ def create_optimizer(
                 f"  - Pruning: Enabled (target: {adamprune_state['target_sparsity']:.1%})"
             )
             logger.info(f"  - Pruning warmup: {adamprune_state['warmup_steps']} steps")
+            logger.info(f"  - Pruning variant: {adamprune_state['variant']}")
         else:
             adamprune_state = None
             logger.info("  - Pruning: Disabled")
@@ -530,30 +536,45 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
         )
         current_sparsity = adamprune_state["target_sparsity"] * progress
 
+        # Get the pruning variant (bitter lesson approach)
+        variant = adamprune_state.get("variant", "bitter0")
+
         # Compute importance scores using Adam states
         all_scores = []
         for module in adamprune_state["masks"].keys():
             # Get Adam states for this layer
             state = optimizer.state.get(module.weight, {})
-            if "exp_avg" in state and "exp_avg_sq" in state:
-                exp_avg = state["exp_avg"]
-                exp_avg_sq = state["exp_avg_sq"]
 
-                # Hybrid strategy: combine momentum and stability signals
-                # Momentum signal: weights moving strongly in one direction
-                momentum_score = torch.abs(module.weight.data * exp_avg)
-
-                # Stability signal: weights with consistent updates
-                stability_score = torch.abs(module.weight.data) / (
-                    torch.sqrt(exp_avg_sq) + 1e-8
-                )
-
-                # Combine both signals
-                importance = momentum_score * stability_score
-                all_scores.append(importance.flatten())
+            if variant == "bitter1":
+                # Bitter lesson variant 1: Pure magnitude pruning
+                importance = torch.abs(module.weight.data)
+            elif variant == "bitter2":
+                # Bitter lesson variant 2: Scale-aware - use saved resources
+                # This is magnitude pruning but signals to use 21% more iterations
+                # or 14% larger batch size at the training script level
+                importance = torch.abs(module.weight.data)
             else:
-                # Fallback to magnitude if no Adam states yet
-                all_scores.append(torch.abs(module.weight.data).flatten())
+                # Default bitter0: Original hybrid momentum-stability approach
+                if "exp_avg" in state and "exp_avg_sq" in state:
+                    exp_avg = state["exp_avg"]
+                    exp_avg_sq = state["exp_avg_sq"]
+
+                    # Hybrid strategy: combine momentum and stability signals
+                    # Momentum signal: weights moving strongly in one direction
+                    momentum_score = torch.abs(module.weight.data * exp_avg)
+
+                    # Stability signal: weights with consistent updates
+                    stability_score = torch.abs(module.weight.data) / (
+                        torch.sqrt(exp_avg_sq) + 1e-8
+                    )
+
+                    # Combine both signals
+                    importance = momentum_score * stability_score
+                else:
+                    # Fallback to magnitude if no Adam states yet
+                    importance = torch.abs(module.weight.data)
+
+            all_scores.append(importance.flatten())
 
         if all_scores:
             all_scores = torch.cat(all_scores)
@@ -566,16 +587,22 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                 # Update masks
                 for module in adamprune_state["masks"].keys():
                     state = optimizer.state.get(module.weight, {})
-                    if "exp_avg" in state and "exp_avg_sq" in state:
-                        exp_avg = state["exp_avg"]
-                        exp_avg_sq = state["exp_avg_sq"]
-                        momentum_score = torch.abs(module.weight.data * exp_avg)
-                        stability_score = torch.abs(module.weight.data) / (
-                            torch.sqrt(exp_avg_sq) + 1e-8
-                        )
-                        importance = momentum_score * stability_score
-                    else:
+
+                    if variant == "bitter1" or variant == "bitter2":
+                        # Pure magnitude for bitter lesson variants
                         importance = torch.abs(module.weight.data)
+                    else:
+                        # Original bitter0 logic
+                        if "exp_avg" in state and "exp_avg_sq" in state:
+                            exp_avg = state["exp_avg"]
+                            exp_avg_sq = state["exp_avg_sq"]
+                            momentum_score = torch.abs(module.weight.data * exp_avg)
+                            stability_score = torch.abs(module.weight.data) / (
+                                torch.sqrt(exp_avg_sq) + 1e-8
+                            )
+                            importance = momentum_score * stability_score
+                        else:
+                            importance = torch.abs(module.weight.data)
 
                     # Update boolean mask buffer
                     new_mask = importance > threshold

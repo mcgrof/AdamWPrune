@@ -156,6 +156,13 @@ parser.add_argument(
 parser.add_argument(
     "--adamwprune-amsgrad", type=str, default="false", help="Use AMSGrad for AdamWPrune"
 )
+parser.add_argument(
+    "--adamwprune-variant",
+    type=str,
+    default="bitter0",
+    choices=["bitter0", "bitter1", "bitter2"],
+    help="AdamWPrune variant: bitter0 (original), bitter1 (magnitude), bitter2 (scale-aware)",
+)
 
 # SPAM configuration
 parser.add_argument("--spam-theta", type=float, default=50.0, help="SPAM theta")
@@ -452,6 +459,14 @@ def main():
         args.adamwprune_warmup_steps = args.pruning_warmup
         args.adamwprune_ramp_end_epoch = min(8, args.num_epochs - 1)
         args.adamwprune_ramp_end_step = args.max_iters
+
+        # Handle bitter2 variant: increase iterations by 21% to use saved compute
+        if args.adamwprune_variant == "bitter2" and args.max_iters == 10000:
+            args.max_iters = 12100
+            print(
+                f"Bitter2 variant: Increased max_iters to {args.max_iters} (+21%)",
+                flush=True,
+            )
 
     # Create optimizer using the library function
     optimizer, scheduler, gradient_clip_norm, spam_state, adamwprune_state = (
