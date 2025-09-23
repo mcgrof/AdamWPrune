@@ -129,7 +129,6 @@ CONFIG_OUTPUT_DIR="./results/adamwspam-movement-vs-adamwprune-50"
 
 # Experiment Tracking
 CONFIG_GPT2_TRACKER="wandb,trackio"
-CONFIG_TRACKER_PROJECT="tracking-e97b5"
 
 # Test execution
 CONFIG_TEST_PARALLEL_JOBS=1
