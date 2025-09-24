@@ -843,6 +843,9 @@ def run_single_test(
 
         if "TRACKER_RUN_NAME" in config and config["TRACKER_RUN_NAME"]:
             cmd.extend(["--tracker-run-name", config["TRACKER_RUN_NAME"]])
+        else:
+            # Use the test ID as the run name for better clarity in wandb/trackio
+            cmd.extend(["--tracker-run-name", test_id])
         # Set WANDB offline mode if configured
         if tracker == "wandb" and config.get("WANDB_OFFLINE") == "y":
             import os
