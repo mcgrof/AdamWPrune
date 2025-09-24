@@ -76,6 +76,20 @@ The memory savings directly translate to the ability to:
 - Run **multiple experiments** in parallel with saved memory
 - **Deploy on smaller GPUs** that couldn't fit the baseline
 
+#### Perplexity Matching Projections
+![Perplexity Projections](images/gpt2/gpt2_perplexity_projections.png)
+*Projected iterations needed to match baseline perplexity - even with 2x training, memory savings persist*
+
+**Feasibility Analysis** (assuming 0.75 ppl improvement per 1000 iterations):
+- **Bitter2**: Would need **+64% more iterations** (16,433 total) to match baseline
+- **Bitter1**: Would need **+96% more iterations** (19,560 total)
+- **Bitter0**: Would need **+116% more iterations** (21,587 total)
+
+**Critical Trade-off**: Even if we trained AdamWPrune variants 2x longer to match perplexity:
+- Still **40% memory savings** throughout training
+- But lose the **20% speed advantage**
+- Makes sense only when memory is the primary constraint
+
 → See [GPT-2 detailed analysis](docs/gpt2.md) for complete findings and more visualizations
 
 ## ResNet CNN Results
