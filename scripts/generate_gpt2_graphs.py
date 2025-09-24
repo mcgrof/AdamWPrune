@@ -157,7 +157,7 @@ def create_bitter_lesson_chart(results, output_dir):
         ax.text(bar.get_x() + bar.get_width()/2., 47.0,
                 f'{variant}', ha='center', va='bottom', fontsize=10, fontweight='bold',
                 color='white', bbox=dict(boxstyle='round,pad=0.3', facecolor=colors[i], alpha=0.8))
-        ax.text(bar.get_x() + bar.get_width()/2., 46.0,
+        ax.text(bar.get_x() + bar.get_width()/2., 45.2,
                 f'({descriptions[i]})', ha='center', va='bottom', fontsize=9, fontweight='bold', color='white')
 
     # Highlight the trend with an arrow
