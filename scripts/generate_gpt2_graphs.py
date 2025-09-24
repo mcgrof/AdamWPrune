@@ -139,21 +139,24 @@ def create_bitter_lesson_chart(results, output_dir):
 
     # Extract algorithm complexity order (reversed so simpler is better)
     algorithms = ['AdamWPrune + Bitter1', 'AdamWPrune + Bitter2', 'AdamWPrune + Bitter0']
-    complexity = ['Simple\n(Pure Magnitude)', 'Medium\n(Scale-aware)', 'Complex\n(Hybrid)']
+    complexity = ['Simple', 'Medium', 'Complex']
     perplexities = [adamwprune_results[alg]['perplexity'] for alg in algorithms]
     colors = [adamwprune_results[alg]['color'] for alg in algorithms]
 
     bars = ax.bar(complexity, perplexities, color=colors, edgecolor='black', linewidth=2)
 
-    # Add value labels and algorithm names
+    # Add value labels and algorithm details
     for i, (bar, perp, alg) in enumerate(zip(bars, perplexities, algorithms)):
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width()/2., height + 0.1,
                 f'{perp:.2f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
-        # Add algorithm variant name below
+        # Add algorithm variant name and description below x-axis label
         variant = alg.split(' + ')[1]
-        ax.text(bar.get_x() + bar.get_width()/2., 47.8,
-                f'({variant})', ha='center', va='top', fontsize=9, style='italic')
+        descriptions = ['Pure Magnitude', 'Scale-aware', 'Hybrid']
+        ax.text(bar.get_x() + bar.get_width()/2., 47.5,
+                f'{variant}', ha='center', va='top', fontsize=10, fontweight='bold')
+        ax.text(bar.get_x() + bar.get_width()/2., 47.15,
+                f'({descriptions[i]})', ha='center', va='top', fontsize=8, style='italic', color='gray')
 
     # Highlight the trend with an arrow
     ax.annotate('', xy=(2.3, 51.8), xytext=(0.3, 50.2),
@@ -165,17 +168,18 @@ def create_bitter_lesson_chart(results, output_dir):
     ax.set_xlabel('Algorithm Complexity', fontsize=12, fontweight='bold')
     ax.set_title('The Bitter Lesson: Simpler Algorithms Win\n(AdamWPrune Variants on GPT-2)',
                  fontsize=14, fontweight='bold')
-    ax.set_ylim(48, 52.5)
+    ax.set_ylim(47.2, 52.5)
 
     # Add grid
     ax.yaxis.grid(True, alpha=0.3)
     ax.set_axisbelow(True)
 
-    # Add text box with bitter lesson quote - positioned to not interfere with bars or title
-    textstr = '"The bitter lesson is that general methods\nthat leverage computation ultimately\ndominate specialized methods."'
-    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    ax.text(0.98, 0.75, textstr, transform=ax.transAxes, fontsize=9,
-            verticalalignment='top', horizontalalignment='right', bbox=props, style='italic')
+    # Add text box with bitter lesson quote - positioned inside the chart area
+    textstr = '"The bitter lesson is that\ngeneral methods that leverage\ncomputation ultimately dominate\nspecialized methods."'
+    props = dict(boxstyle='round', facecolor='#2E86AB', alpha=0.9)
+    ax.text(0.5, 0.35, textstr, transform=ax.transAxes, fontsize=8,
+            verticalalignment='center', horizontalalignment='center',
+            bbox=props, style='italic', color='white', fontweight='bold')
 
     plt.tight_layout()
     plt.savefig(output_dir / 'gpt2_bitter_lesson.png', dpi=300, bbox_inches='tight')
