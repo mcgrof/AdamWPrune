@@ -37,7 +37,7 @@ def format_time(seconds):
 
 
 def calculate_time_estimates(completed_results, remaining_tests):
-    """Calculate time estimates based on completed tests."""
+    """Calculate time estimates based on completed tests, accounting for variants."""
     if not completed_results:
         return {}
 
@@ -57,6 +57,97 @@ def calculate_time_estimates(completed_results, remaining_tests):
         "per_test": avg_time_per_test,
         "total_remaining": avg_time_per_test * remaining_tests,
         "completed_count": len(successful_times),
+    }
+
+
+def calculate_variant_aware_time_estimates(completed_results, remaining_combinations):
+    """Calculate time estimates with awareness of AdamWPrune variants and iterations."""
+    if not completed_results:
+        # No completed tests yet, use rough estimates
+        base_estimate = 8 * 3600  # 8 hours as baseline
+        total_estimate = 0
+
+        for combo in remaining_combinations:
+            if (
+                combo.get("optimizer") == "adamwprune"
+                and combo.get("variant") == "bitter2"
+            ):
+                # Bitter2 runs 21% more iterations
+                total_estimate += base_estimate * 1.21
+            else:
+                total_estimate += base_estimate
+
+        return {
+            "per_test": base_estimate,
+            "total_remaining": total_estimate,
+            "completed_count": 0,
+        }
+
+    # Group completed results by optimizer type for better estimates
+    optimizer_times = {}
+    for r in completed_results:
+        if r.get("success", False) and "elapsed_time" in r:
+            opt_key = r.get("optimizer", "unknown")
+            # Include variant in key for AdamWPrune
+            if opt_key == "adamwprune" and "variant" in r:
+                opt_key = f"{opt_key}_{r['variant']}"
+
+            if opt_key not in optimizer_times:
+                optimizer_times[opt_key] = []
+            optimizer_times[opt_key].append(r["elapsed_time"])
+
+    # Calculate averages per optimizer/variant
+    avg_times = {}
+    for key, times in optimizer_times.items():
+        avg_times[key] = sum(times) / len(times) if times else 0
+
+    # Estimate remaining time
+    total_remaining = 0
+    for combo in remaining_combinations:
+        opt = combo.get("optimizer", "unknown")
+        variant = combo.get("variant", "")
+
+        # Build key to look up timing
+        if opt == "adamwprune" and variant:
+            lookup_key = f"{opt}_{variant}"
+        else:
+            lookup_key = opt
+
+        if lookup_key in avg_times:
+            estimated_time = avg_times[lookup_key]
+        elif opt in avg_times:
+            # Fall back to optimizer without variant
+            estimated_time = avg_times[opt]
+        elif avg_times:
+            # Fall back to overall average
+            estimated_time = sum(avg_times.values()) / len(avg_times)
+        else:
+            estimated_time = 8 * 3600  # Default 8 hours
+
+        # Adjust for bitter2's extended iterations
+        if opt == "adamwprune" and variant == "bitter2":
+            # If we have timing from bitter0 or bitter1, adjust it
+            if "adamwprune_bitter0" in avg_times or "adamwprune_bitter1" in avg_times:
+                base_time = avg_times.get(
+                    "adamwprune_bitter0",
+                    avg_times.get("adamwprune_bitter1", estimated_time),
+                )
+                estimated_time = base_time * 1.21  # 21% more iterations
+            elif estimated_time > 0:
+                estimated_time *= 1.21
+
+        total_remaining += estimated_time
+
+    # Calculate average for display
+    avg_per_test = (
+        total_remaining / len(remaining_combinations) if remaining_combinations else 0
+    )
+
+    return {
+        "per_test": avg_per_test,
+        "total_remaining": total_remaining,
+        "completed_count": len(completed_results),
+        "optimizer_times": avg_times,  # Include for debugging
     }
 
 
@@ -434,7 +525,9 @@ def get_test_matrix(config):
         adamwprune_variants.append("bitter2")
 
     # Store variants in matrix for later use
-    matrix["adamwprune_variants"] = adamwprune_variants if adamwprune_variants else ["bitter0"]
+    matrix["adamwprune_variants"] = (
+        adamwprune_variants if adamwprune_variants else ["bitter0"]
+    )
 
     # Get sparsity levels from individual TEST_SPARSITY_* configs
     matrix["sparsity_levels"] = []
@@ -839,6 +932,9 @@ def run_single_test(
         metrics["target_sparsity"] = float(sparsity) if pruning != "none" else 0
         metrics["elapsed_time"] = elapsed_time
         metrics["success"] = True
+        # Add variant information if present
+        if variant:
+            metrics["variant"] = variant
 
         if not parallel_mode:
             print(f"✓ Test completed in {elapsed_time:.2f} seconds")
@@ -1803,14 +1899,24 @@ def main():
             # Calculate time estimates based on completed tests
             time_estimates = None
             if i > 1:  # After first test completes
-                time_estimates = calculate_time_estimates(results, total_tests - i + 1)
+                # Get remaining combinations for variant-aware estimates
+                remaining_combinations = combinations[
+                    i - 1 :
+                ]  # Current and future tests
+                time_estimates = calculate_variant_aware_time_estimates(
+                    results, remaining_combinations
+                )
                 if (
                     i == 2 and time_estimates
                 ):  # After first test, show full test plan estimate
                     print(f"\n{'='*60}")
                     print(
-                        f"Time Estimate: Based on first test, full test plan will take approximately {format_time(time_estimates['per_test'] * total_tests)}"
+                        f"Time Estimate: Total remaining time approximately {format_time(time_estimates['total_remaining'])}"
                     )
+                    if "optimizer_times" in time_estimates:
+                        print("Per-optimizer/variant estimates:")
+                        for key, time in time_estimates["optimizer_times"].items():
+                            print(f"  {key}: {format_time(time)}")
                     print(f"{'='*60}")
 
             result = run_single_test(
