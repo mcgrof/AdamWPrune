@@ -153,22 +153,23 @@ def create_bitter_lesson_chart(results, output_dir):
         # Add algorithm variant name and description below x-axis label
         variant = alg.split(' + ')[1]
         descriptions = ['Pure Magnitude', 'Scale-aware', 'Hybrid']
-        ax.text(bar.get_x() + bar.get_width()/2., 47.5,
+        # Place variant names below the bars but above x-axis
+        ax.text(bar.get_x() + bar.get_width()/2., 44.8,
                 f'{variant}', ha='center', va='top', fontsize=10, fontweight='bold')
-        ax.text(bar.get_x() + bar.get_width()/2., 47.15,
+        ax.text(bar.get_x() + bar.get_width()/2., 44.5,
                 f'({descriptions[i]})', ha='center', va='top', fontsize=8, style='italic', color='gray')
 
     # Highlight the trend with an arrow
     ax.annotate('', xy=(2.3, 51.8), xytext=(0.3, 50.2),
                 arrowprops=dict(arrowstyle='->', color='red', lw=3))
-    ax.text(1.3, 49.5, 'Complexity hurts\nperformance',
+    ax.text(1.3, 48.5, 'Complexity hurts\nperformance',
             fontsize=11, color='red', fontweight='bold', ha='center')
 
     ax.set_ylabel('Perplexity (lower is better)', fontsize=12, fontweight='bold')
     ax.set_xlabel('Algorithm Complexity', fontsize=12, fontweight='bold')
     ax.set_title('The Bitter Lesson: Simpler Algorithms Win\n(AdamWPrune Variants on GPT-2)',
                  fontsize=14, fontweight='bold')
-    ax.set_ylim(47.2, 52.5)
+    ax.set_ylim(45, 53)
 
     # Add grid
     ax.yaxis.grid(True, alpha=0.3)
