@@ -1,0 +1,75 @@
+Test Matrix Summary Report (Regenerated)
+Generated: 2025-09-24T14:00:28.989949
+From: test_matrix_results_20250923_010926
+================================================================================
+
+Total tests: 2
+Successful: 2
+Failed: 0
+
+Results Table:
+---------------------------------------------------------------------------------------------------------
+Test ID                                  Accuracy Sparsity GPU Mean (MiB) GPU Max (MiB) Status    
+---------------------------------------------------------------------------------------------------------
+gpt2_adamwprune_bitter1_state_50           0.0000   0.0000        25311.5       25344.0 ✓ Success 
+gpt2_adamwprune_bitter2_state_50           0.0000   0.0000        25304.1       25328.0 ✓ Success 
+--------------------------------------------------------------------------------
+
+Best Performers:
+--------------------------------------------------------------------------------
+Top 20 by Accuracy:
+1. gpt2_adamwprune_bitter1_state_50: 0.0000
+2. gpt2_adamwprune_bitter2_state_50: 0.0000
+
+Best by Optimizer:
+  adamwprune: gpt2_adamwprune_bitter1_state_50 (0.0000)
+
+GPU Memory Usage (Real Measurements):
+--------------------------------------------------------------------------------
+Most Memory-Efficient Tests:
+1. gpt2_adamwprune_bitter2_state_50:
+   Accuracy: 0.00%, GPU Mean: 25304.1 MiB, GPU Max: 25328.0 MiB
+2. gpt2_adamwprune_bitter1_state_50:
+   Accuracy: 0.00%, GPU Mean: 25311.5 MiB, GPU Max: 25344.0 MiB
+
+GPU Memory by Optimizer:
+  adamwprune  :  25307.8 MiB (avg of 2 runs)
+
+Memory Efficiency Analysis:
+--------------------------------------------------------------------------------
+Note: Memory shown as multiplier of weight tensor size
+Training memory = weights + optimizer states + pruning overhead
+Inference memory = active weights only (benefits from sparsity)
+
+Top 20 Most Memory-Efficient (Accuracy/Training Memory Ratio):
+1. gpt2_adamwprune_bitter1_state_50
+   Accuracy: 0.00%, Training Memory: 3.03x weights, Efficiency Score: 0.00
+2. gpt2_adamwprune_bitter2_state_50
+   Accuracy: 0.00%, Training Memory: 3.03x weights, Efficiency Score: 0.00
+
+Top 20 Lowest Inference Memory (with sparsity benefits):
+1. gpt2_adamwprune_bitter1_state_50
+   Accuracy: 0.00%, Sparsity: 0.0%, Inference Memory: 1.00x weights
+2. gpt2_adamwprune_bitter2_state_50
+   Accuracy: 0.00%, Sparsity: 0.0%, Inference Memory: 1.00x weights
+
+AdamWPrune Performance (State-Based Pruning with Minimal Overhead):
+--------------------------------------------------------------------------------
+Memory breakdown for AdamWPrune:
+  - Weights: 1.0x
+  - Adam states (exp_avg, exp_avg_sq): 2.0x
+  - Pruning overhead (boolean mask): 0.03x
+  - Total training memory: 3.03x weights
+
+Comparison with other pruning methods:
+  - SGD + movement pruning: 3.03x (1x weights + 2.03x pruning)
+  - AdamW + movement pruning: 5.03x (3x Adam + 2.03x pruning)
+  - AdamWPrune: 3.03x (3x Adam + 0.03x mask)
+
+Top AdamWPrune configurations:
+  gpt2_adamwprune_bitter1_state_50:
+    Accuracy: 0.00%, Sparsity: 0.0%
+    Training Memory: 3.03x weights, Inference Memory: 1.00x weights
+  gpt2_adamwprune_bitter2_state_50:
+    Accuracy: 0.00%, Sparsity: 0.0%
+    Training Memory: 3.03x weights, Inference Memory: 1.00x weights

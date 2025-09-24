@@ -1,0 +1,25 @@
+GPU Performance Summary
+========================
+
+GPU: AMD GPU
+Type: amd
+Duration: 29959 seconds
+Start: 2025-09-24T04:19:23.615445
+End: 2025-09-24T14:00:18.364875
+
+GPU Utilization:
+  Average: 99.4%
+  Max: 100.0%
+  Min: 0.0%
+
+Memory Usage:
+  Average: 51.5%
+  Max: 51.5%
+  Min: 0.1%
+
+Temperature Sensors:
+
+Power Draw:
+  Average: 239.6W
+  Max: 502.0W
+  Min: 27.0W

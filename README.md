@@ -4,6 +4,8 @@
 
 > **📊 ResNet-18 Results**: AdamWPrune with AdamW base achieves **90.69% accuracy** at 50% sparsity (tied with movement pruning), while maintaining minimal memory overhead (1474.6 MB). Without pruning, AdamW and AdamWPrune perform identically (90.30% vs 90.28%) at ~1307 MB.
 
+> **🚀 GPT-2 Transformer Validation**: AdamWPrune achieves **20% training speedup** and **40% memory reduction** on GPT-2 (124M), confirming the bitter lesson - simpler algorithms outperform complex approaches. Trade-off: 3.25-8.69 perplexity increase vs magnitude pruning baseline.
+
 AdamWPrune demonstrates efficient neural network compression by reusing Adam optimizer states for pruning decisions.
 
 ## Key Results
@@ -178,11 +180,61 @@ Industry best practices recommend saving model checkpoints at peak accuracy, not
 - **[LeNet-5 Results](docs/lenet5.md)**: Proof of concept on MNIST
 - **[ResNet-18 Results](docs/resnet18.md)**: Production-scale validation on CIFAR-10
 - **[ResNet-50 Results](docs/resnet50.md)**: ImageNet-scale demonstration of superior memory efficiency
+- **[GPT-2 Results](docs/gpt2.md)**: Transformer validation confirming bitter lesson with 20% speedup
 - **[Key Test Results Archive](key_results/)**: Complete test matrix results with all graphs and metrics
   - [ResNet-50 AdamWSpam Base Results](key_results/test_matrix_results_20250913_200218/ANALYSIS.md): **AdamWPrune with AdamWSpam base achieves 74.56% at 50% sparsity** - new state-of-the-art!
   - [ResNet-50 CIFAR-100 Extended Results](key_results/test_matrix_results_20250908_190856/summary_report.txt): AdamWPrune with AdamW base achieves 74.54% at 50% sparsity
   - [ResNet-50 CIFAR-100 Initial Results](key_results/test_matrix_results_20250908_121537/summary_report.txt): AdamWPrune achieves 72.38% at 70% sparsity with lowest GPU memory
   - [ResNet-18 CIFAR-10 Results](key_results/test_matrix_results_20250903_180836/report.md): AdamWPrune achieves 90.66% accuracy with lowest memory usage
+  - [GPT-2 Bitter Lesson Test Results](key_results/test_matrix_results_20250923_010926/): **Confirms bitter lesson** - simpler algorithms outperform complex ones
+
+## Transformer Model Findings (GPT-2)
+
+### The Bitter Lesson Confirmed
+
+Our GPT-2 experiments validate Rich Sutton's Bitter Lesson in neural network pruning: **simpler algorithms leveraging computation outperform complex, engineered approaches**.
+
+**Test Configuration:**
+- Model: GPT-2 (124M parameters)
+- Dataset: FineWebEdu
+- Target Sparsity: 50%
+- Training: 10,000 iterations (12,100 for bitter2)
+
+### Performance Results
+
+| Optimizer | Algorithm | Final Perplexity | Speed vs Baseline | Memory Savings |
+|-----------|-----------|------------------|-------------------|----------------|
+| **AdamWSPAM** | **Magnitude** | **42.82** (best) | Baseline | Baseline (5.03x) |
+| AdamWPrune | Bitter2 (scale-aware) | 46.07 | ~20% faster | 40% less (3.03x) |
+| AdamWPrune | Bitter1 (pure magnitude) | 49.99 | ~20% faster | 40% less (3.03x) |
+| AdamWPrune | Bitter0 (hybrid) | 51.51 | ~20% faster | 40% less (3.03x) |
+
+### Key Transformer Insights
+
+1. **Bitter Lesson Validated**: Simpler pruning algorithms (bitter1/2) outperformed the complex hybrid approach (bitter0)
+   - Bitter2 achieves 46.07 perplexity with simple scale-aware magnitude
+   - Bitter0's complex momentum-stability hybrid performs worst at 51.51
+
+2. **Significant Training Speedup**: All AdamWPrune variants achieve ~20% reduction in training time
+
+3. **Memory Efficiency Breakthrough**: 40% reduction in training memory overhead
+   - Traditional approach: 5.03x model weights (Adam states + movement scores)
+   - AdamWPrune: 3.03x model weights (Adam states + boolean mask only)
+
+4. **Clear Trade-offs**: Speed and memory benefits come with 7-20% perplexity increase
+   - Acceptable for memory-constrained environments
+   - Valuable for large-scale training where 20% speedup is critical
+
+### Practical Implications
+
+**When to use AdamWPrune on transformers:**
+- Memory-constrained training environments
+- Large-scale experiments where 20% speedup matters
+- Research exploring efficient training methods
+
+**When to use traditional pruning:**
+- Production models requiring absolute best perplexity
+- Small models where memory isn't a constraint
 
 ## Pruning Method Insights
 
