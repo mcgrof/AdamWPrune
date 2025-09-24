@@ -711,6 +711,9 @@ def run_single_test(
         if "ADAMWPRUNE_AMSGRAD" in config:
             amsgrad_val = "true" if config["ADAMWPRUNE_AMSGRAD"] == "y" else "false"
             cmd.extend(["--adamwprune-amsgrad", amsgrad_val])
+        # Add variant parameter if specified
+        if variant:
+            cmd.extend(["--adamwprune-variant", variant])
 
     # Note: batch size is configured via config.py, not command line arguments
 
