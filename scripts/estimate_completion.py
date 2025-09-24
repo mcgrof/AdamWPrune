@@ -118,6 +118,8 @@ def generate_expected_tests(config):
         models = ["resnet18"]
     elif config.get("MODEL_SELECT_LENET5") == "y":
         models = ["lenet5"]
+    elif config.get("MODEL_SELECT_GPT2") == "y":
+        models = ["gpt2"]
 
     # Determine optimizers
     optimizers = []
@@ -158,6 +160,19 @@ def generate_expected_tests(config):
     if config.get("SPARSITY_ENABLE_99") == "y" or config.get("TEST_SPARSITY_99") == "y":
         sparsity_levels.append("99")
 
+    # Check for AdamWPrune variants (bitter0, bitter1, bitter2)
+    adamwprune_variants = []
+    if "adamwprune" in optimizers:
+        if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER0") == "y":
+            adamwprune_variants.append("bitter0")
+        if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER1") == "y":
+            adamwprune_variants.append("bitter1")
+        if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER2") == "y":
+            adamwprune_variants.append("bitter2")
+        # Default to bitter0 if no variants specified
+        if not adamwprune_variants:
+            adamwprune_variants = ["bitter0"]
+
     # Generate all valid combinations
     for model, optimizer, pruning in itertools.product(
         models, optimizers, pruning_methods
@@ -170,13 +185,25 @@ def generate_expected_tests(config):
 
         # For no pruning, sparsity is always 0
         if pruning == "none":
-            test_name = f"{model}_{optimizer}_none"
-            combinations.append(test_name)
+            if optimizer == "adamwprune":
+                # Generate a test for each variant
+                for variant in adamwprune_variants:
+                    test_name = f"{model}_{optimizer}_{variant}_none"
+                    combinations.append(test_name)
+            else:
+                test_name = f"{model}_{optimizer}_none"
+                combinations.append(test_name)
         else:
             # For pruning methods, add each sparsity level
             for sparsity in sparsity_levels:
-                test_name = f"{model}_{optimizer}_{pruning}_{sparsity}"
-                combinations.append(test_name)
+                if optimizer == "adamwprune":
+                    # Generate a test for each variant
+                    for variant in adamwprune_variants:
+                        test_name = f"{model}_{optimizer}_{variant}_{pruning}_{sparsity}"
+                        combinations.append(test_name)
+                else:
+                    test_name = f"{model}_{optimizer}_{pruning}_{sparsity}"
+                    combinations.append(test_name)
 
     return combinations
 
@@ -434,9 +461,18 @@ def estimate_completion_time(analysis):
     failed_count = len(analysis.get("failed_tests", []))
     failed_time = failed_count * avg_time
 
-    # Add time for not-started tests
+    # Add time for not-started tests (with variant awareness)
     not_started_count = len(analysis["not_started_tests"])
-    not_started_time = not_started_count * avg_time
+    not_started_time = 0
+
+    # Check for bitter2 variants that need extra time
+    for test in analysis["not_started_tests"]:
+        test_name = test.get("name", "")
+        if "adamwprune_bitter2" in test_name:
+            # Bitter2 runs 21% more iterations
+            not_started_time += avg_time * 1.21
+        else:
+            not_started_time += avg_time
 
     # Calculate total remaining
     in_progress_remaining = sum(
