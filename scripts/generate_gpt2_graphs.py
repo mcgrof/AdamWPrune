@@ -154,15 +154,22 @@ def create_bitter_lesson_chart(results, output_dir):
         variant = alg.split(' + ')[1]
         descriptions = ['Pure Magnitude', 'Scale-aware', 'Hybrid']
         # Place variant names and descriptions inside the bars
-        # Position relative to bar height to ensure it's inside
-        label_y = min(height - 1.5, 47.0)  # Either 1.5 below bar top or at 47.0, whichever is lower
-        desc_y = min(height - 2.5, 45.2)   # Description position
-
-        ax.text(bar.get_x() + bar.get_width()/2., label_y,
-                f'{variant}', ha='center', va='bottom', fontsize=10, fontweight='bold',
-                color='white', bbox=dict(boxstyle='round,pad=0.3', facecolor=colors[i], alpha=0.8))
-        ax.text(bar.get_x() + bar.get_width()/2., desc_y,
-                f'({descriptions[i]})', ha='center', va='bottom', fontsize=9, fontweight='bold', color='white')
+        # For Bitter2 (middle bar), position differently due to its short height
+        if i == 1:  # Bitter2 is the second item (index 1)
+            # Put Bitter2 box right below its perplexity value
+            ax.text(bar.get_x() + bar.get_width()/2., height - 0.5,
+                    f'{variant}', ha='center', va='top', fontsize=10, fontweight='bold',
+                    color='white', bbox=dict(boxstyle='round,pad=0.3', facecolor=colors[i], alpha=0.8))
+            # Put description below with margin
+            ax.text(bar.get_x() + bar.get_width()/2., height - 1.2,
+                    f'({descriptions[i]})', ha='center', va='top', fontsize=9, fontweight='bold', color='white')
+        else:
+            # For other bars, use standard positioning
+            ax.text(bar.get_x() + bar.get_width()/2., 47.0,
+                    f'{variant}', ha='center', va='bottom', fontsize=10, fontweight='bold',
+                    color='white', bbox=dict(boxstyle='round,pad=0.3', facecolor=colors[i], alpha=0.8))
+            ax.text(bar.get_x() + bar.get_width()/2., 45.2,
+                    f'({descriptions[i]})', ha='center', va='bottom', fontsize=9, fontweight='bold', color='white')
 
     # Highlight the trend with an arrow
     ax.annotate('', xy=(2.3, 51.8), xytext=(0.3, 50.2),
