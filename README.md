@@ -1,6 +1,6 @@
 # AdamWPrune: Multi-Model State-Based Weight Pruning
 
-> **🚀 GPT-2 Transformer Validation**: AdamWPrune achieves **20% training speedup** and **40% memory reduction** on GPT-2 (124M), confirming the bitter lesson - simpler algorithms outperform complex approaches. Trade-off: 3.25-8.69 perplexity increase vs magnitude pruning baseline.
+> **🚀 GPT-2 Transformer Validation**: AdamWPrune achieves **20% training speedup** and **40% memory reduction** on GPT-2 (124M), confirming the bitter lesson - simpler algorithms outperform complex approaches, with a cost of a modest 3-9 perplexity increase compared to magnitude pruning.
 
 > **🏆 ResNet-50 Breakthrough**: AdamWPrune with AdamWSpam base achieves **74.56% accuracy** at 50% sparsity - surpassing all previous results! Consistently outperforms AdamWSpam across all sparsity levels while maintaining competitive memory usage (12602.5 MB).
 
