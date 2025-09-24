@@ -1324,12 +1324,19 @@ def main():
             optimizer = combo["optimizer"]
             pruning = combo["pruning"]
             sparsity = combo.get("sparsity", "0.0")
+            variant = combo.get("variant", None)
 
             if pruning == "none":
-                test_id = f"{model}_{optimizer}_{pruning}"
+                if variant:
+                    test_id = f"{model}_{optimizer}_{variant}_{pruning}"
+                else:
+                    test_id = f"{model}_{optimizer}_{pruning}"
             else:
                 sparsity_pct = int(float(sparsity) * 100)
-                test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
+                if variant:
+                    test_id = f"{model}_{optimizer}_{variant}_{pruning}_{sparsity_pct}"
+                else:
+                    test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
             expected_tests.add(test_id)
 
         # Check what tests actually exist
@@ -1368,12 +1375,21 @@ def main():
                 optimizer = combo["optimizer"]
                 pruning = combo["pruning"]
                 sparsity = combo.get("sparsity", "0.0")
+                variant = combo.get("variant", None)
 
                 if pruning == "none":
-                    test_id = f"{model}_{optimizer}_{pruning}"
+                    if variant:
+                        test_id = f"{model}_{optimizer}_{variant}_{pruning}"
+                    else:
+                        test_id = f"{model}_{optimizer}_{pruning}"
                 else:
                     sparsity_pct = int(float(sparsity) * 100)
-                    test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
+                    if variant:
+                        test_id = (
+                            f"{model}_{optimizer}_{variant}_{pruning}_{sparsity_pct}"
+                        )
+                    else:
+                        test_id = f"{model}_{optimizer}_{pruning}_{sparsity_pct}"
 
                 if test_id in missing_tests:
                     tests_to_run.append(combo)
