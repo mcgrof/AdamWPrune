@@ -69,9 +69,10 @@ def create_gpu_memory_comparison():
     # Highlight the memory savings
     ax1.axhline(y=memory_mib[0], color='red', linestyle='--', alpha=0.5, label='AdamWSPAM baseline')
     savings_pct = (1 - memory_mib[1]/memory_mib[0]) * 100
-    ax1.text(2, memory_mib[0] - 500, f'{savings_pct:.1f}% memory reduction',
-            fontsize=11, color='green', fontweight='bold', ha='center',
-            bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.3))
+    # Place text inside Bitter2 bar (index 3) which has best perplexity among AdamWPrune
+    ax1.text(3, memory_mib[3]/2, f'{savings_pct:.1f}%\nmemory\nreduction',
+            fontsize=11, color='white', fontweight='bold', ha='center', va='center',
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='darkgreen', alpha=0.8))
 
     ax1.set_ylabel('GPU Memory Usage (MiB)', fontsize=12, fontweight='bold')
     ax1.set_title('GPU Memory Consumption', fontsize=14, fontweight='bold')
