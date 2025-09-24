@@ -1,10 +1,10 @@
 # AdamWPrune: Multi-Model State-Based Weight Pruning
 
+> **🚀 GPT-2 Transformer Validation**: AdamWPrune achieves **20% training speedup** and **40% memory reduction** on GPT-2 (124M), confirming the bitter lesson - simpler algorithms outperform complex approaches. Trade-off: 3.25-8.69 perplexity increase vs magnitude pruning baseline.
+
 > **🏆 ResNet-50 Breakthrough**: AdamWPrune with AdamWSpam base achieves **74.56% accuracy** at 50% sparsity - surpassing all previous results! Consistently outperforms AdamWSpam across all sparsity levels while maintaining competitive memory usage (12602.5 MB).
 
 > **📊 ResNet-18 Results**: AdamWPrune with AdamW base achieves **90.69% accuracy** at 50% sparsity (tied with movement pruning), while maintaining minimal memory overhead (1474.6 MB). Without pruning, AdamW and AdamWPrune perform identically (90.30% vs 90.28%) at ~1307 MB.
-
-> **🚀 GPT-2 Transformer Validation**: AdamWPrune achieves **20% training speedup** and **40% memory reduction** on GPT-2 (124M), confirming the bitter lesson - simpler algorithms outperform complex approaches. Trade-off: 3.25-8.69 perplexity increase vs magnitude pruning baseline.
 
 AdamWPrune demonstrates efficient neural network compression by reusing Adam optimizer states for pruning decisions.
 
@@ -12,13 +12,48 @@ AdamWPrune demonstrates efficient neural network compression by reusing Adam opt
 
 ### Memory Efficiency Across Models
 
-| Model | Parameters | Dataset | Sparsity | GPU Memory | Accuracy | Efficiency |
-|-------|------------|---------|----------|------------|----------|------------|
-| LeNet-5 | 61.7K | MNIST | 70% | 434.5 MiB* | 98.9% | 22.74/100MiB |
+| Model | Parameters | Dataset | Sparsity | GPU Memory | Accuracy/Perplexity | Efficiency |
+|-------|------------|---------|----------|------------|---------------------|------------|
+| **GPT-2** | **124M** | **FineWebEdu** | **50%** | **25311 MiB** | **49.99 ppl** | **40% memory savings** |
+| ResNet-50 | 25.6M | CIFAR-100 | 50% | 12602.5 MiB | 74.56% | 6.06/100MiB |
 | ResNet-18 | 11.2M | CIFAR-10 | 70% | 1489.2 MiB | 90.66% | 6.09/100MiB |
-| **ResNet-50** | **25.6M** | **CIFAR-100** | **50%** | **12602.5 MiB** | **74.56%** | **6.06/100MiB** |
+| LeNet-5 | 61.7K | MNIST | 70% | 434.5 MiB* | 98.9% | 22.74/100MiB |
 
 *CUDA/PyTorch baseline overhead (~450 MiB) dominates for small models
+
+## GPT-2 Transformer Results (124M Parameters)
+
+### The Bitter Lesson Confirmed
+
+Our GPT-2 experiments validate Rich Sutton's Bitter Lesson: **simpler algorithms leveraging computation outperform complex, engineered approaches**.
+
+**Test Configuration:**
+- Model: GPT-2 (124M parameters)
+- Dataset: FineWebEdu
+- Target Sparsity: 50%
+- Training: 10,000 iterations (12,100 for bitter2*)
+
+### Performance Results
+
+| Optimizer | Algorithm | Final Perplexity | Iterations | Training Time | Memory |
+|-----------|-----------|------------------|------------|---------------|--------|
+| **AdamWSPAM** | **Magnitude** | **42.82** (best) | 10,000 | Baseline | 5.03x weights |
+| AdamWPrune | Bitter2* | 46.07 | 12,100* | Baseline* | 3.03x weights |
+| AdamWPrune | Bitter1 | 49.99 | 10,000 | ~20% faster | 3.03x weights |
+| AdamWPrune | Bitter0 | 51.51 | 10,000 | ~20% faster | 3.03x weights |
+
+*Bitter2 uses 21% more iterations (12,100) to explore scale-aware pruning, resulting in similar wall-clock time despite faster per-iteration speed.
+
+### Key Insights
+
+1. **Bitter Lesson Validated**: Simpler pruning (bitter1) outperforms complex hybrid (bitter0)
+2. **Memory Breakthrough**: 40% reduction (5.03x → 3.03x weights)
+3. **Training Efficiency**: 20% faster per-iteration for bitter0/1; bitter2 trades this for better quality
+4. **Clear Trade-offs**: 3.25-8.69 perplexity increase for memory/speed benefits
+
+→ See [GPT-2 detailed analysis](docs/gpt2.md) for complete findings
+
+## ResNet CNN Results
 
 ### Optimizer Performance vs Model Size
 
@@ -33,7 +68,7 @@ Our testing reveals that **the best-performing optimizer depends on model size**
 - AdamWAdv: 89.42% (-0.88%)
 - SGD: 89.22% (-1.08%)
 
-**ResNet-50 (25.6M parameters, ImageNet) - Latest Results (September 2025):**
+**ResNet-50 (25.6M parameters, CIFAR-100) - Latest Results (September 2025):**
 
 **🏆 AdamWPrune with AdamWSpam Base Sets New Record:**
 
@@ -202,12 +237,14 @@ Our GPT-2 experiments validate Rich Sutton's Bitter Lesson in neural network pru
 
 ### Performance Results
 
-| Optimizer | Algorithm | Final Perplexity | Speed vs Baseline | Memory Savings |
-|-----------|-----------|------------------|-------------------|----------------|
-| **AdamWSPAM** | **Magnitude** | **42.82** (best) | Baseline | Baseline (5.03x) |
-| AdamWPrune | Bitter2 (scale-aware) | 46.07 | ~20% faster | 40% less (3.03x) |
-| AdamWPrune | Bitter1 (pure magnitude) | 49.99 | ~20% faster | 40% less (3.03x) |
-| AdamWPrune | Bitter0 (hybrid) | 51.51 | ~20% faster | 40% less (3.03x) |
+| Optimizer | Algorithm | Final Perplexity | Iterations | Training Time | Memory |
+|-----------|-----------|------------------|------------|---------------|--------|
+| **AdamWSPAM** | **Magnitude** | **42.82** (best) | 10,000 | Baseline | 5.03x weights |
+| AdamWPrune | Bitter2* | 46.07 | 12,100* | Baseline* | 3.03x weights |
+| AdamWPrune | Bitter1 | 49.99 | 10,000 | ~20% faster | 3.03x weights |
+| AdamWPrune | Bitter0 | 51.51 | 10,000 | ~20% faster | 3.03x weights |
+
+*Bitter2 uses 21% more iterations (12,100) to explore scale-aware pruning, resulting in similar wall-clock time despite faster per-iteration speed.
 
 ### Key Transformer Insights
 
@@ -215,7 +252,7 @@ Our GPT-2 experiments validate Rich Sutton's Bitter Lesson in neural network pru
    - Bitter2 achieves 46.07 perplexity with simple scale-aware magnitude
    - Bitter0's complex momentum-stability hybrid performs worst at 51.51
 
-2. **Significant Training Speedup**: All AdamWPrune variants achieve ~20% reduction in training time
+2. **Training Efficiency**: Bitter0/1 achieve ~20% speedup; bitter2 trades speed for quality with extended training
 
 3. **Memory Efficiency Breakthrough**: 40% reduction in training memory overhead
    - Traditional approach: 5.03x model weights (Adam states + movement scores)
@@ -263,6 +300,7 @@ Given that movement pruning is optimized for fine-tuning scenarios, our GPT-2 tr
 - **Multi-Model Support**: Extensible architecture supporting LeNet-5, ResNet-18, ResNet-50, and GPT-2
 - **GPU Optimization**: Optimized for modern GPUs with detailed monitoring
 - **Vendor-Agnostic GPU Monitoring**: Uses [gputop.py](https://github.com/mcgrof/gputop) for consistent memory tracking across NVIDIA/AMD/Intel GPUs
+- **TrackIO Integration**: Visualize training metrics with [TrackIO](https://github.com/mcgrof/trackio/tree/20250921-trackio-view) for beautiful GPU utilization graphs
 - **Multiple Pruning Methods**:
   - **Magnitude pruning**: Conservative, suitable for training from scratch
   - **Movement pruning**: Best for fine-tuning pre-trained models
