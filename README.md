@@ -61,6 +61,21 @@ Our GPT-2 experiments validate Rich Sutton's Bitter Lesson: **simpler algorithms
 ![The Bitter Lesson](images/gpt2/gpt2_bitter_lesson.png)
 *Simpler algorithms (bitter1) outperform complex hybrid approaches (bitter0), confirming Sutton's principle*
 
+#### GPU Memory Consumption Analysis
+![GPU Memory Analysis](images/gpt2/gpt2_gpu_memory_analysis.png)
+*AdamWPrune variants consistently use 8.2% less GPU memory while achieving 17-20% faster training*
+
+**Key GPU Memory Observations:**
+- **AdamWSPAM baseline**: 27.2 GiB (56.1% of 48GB AMD W7900)
+- **All AdamWPrune variants**: 25.0 GiB (51.5%) - **8.2% memory reduction**
+- **Training speed**: Bitter0/1 complete in ~6.9 hours vs baseline's 8.3 hours
+- **Bitter2 exception**: Intentionally trains longer (8.3 hours) for better quality
+
+The memory savings directly translate to the ability to:
+- Train with **9% larger batch sizes** on the same hardware
+- Run **multiple experiments** in parallel with saved memory
+- **Deploy on smaller GPUs** that couldn't fit the baseline
+
 → See [GPT-2 detailed analysis](docs/gpt2.md) for complete findings and more visualizations
 
 ## ResNet CNN Results
