@@ -154,10 +154,14 @@ def create_bitter_lesson_chart(results, output_dir):
         variant = alg.split(' + ')[1]
         descriptions = ['Pure Magnitude', 'Scale-aware', 'Hybrid']
         # Place variant names and descriptions inside the bars
-        ax.text(bar.get_x() + bar.get_width()/2., 47.0,
+        # Position relative to bar height to ensure it's inside
+        label_y = min(height - 1.5, 47.0)  # Either 1.5 below bar top or at 47.0, whichever is lower
+        desc_y = min(height - 2.5, 45.2)   # Description position
+
+        ax.text(bar.get_x() + bar.get_width()/2., label_y,
                 f'{variant}', ha='center', va='bottom', fontsize=10, fontweight='bold',
                 color='white', bbox=dict(boxstyle='round,pad=0.3', facecolor=colors[i], alpha=0.8))
-        ax.text(bar.get_x() + bar.get_width()/2., 45.2,
+        ax.text(bar.get_x() + bar.get_width()/2., desc_y,
                 f'({descriptions[i]})', ha='center', va='bottom', fontsize=9, fontweight='bold', color='white')
 
     # Highlight the trend with an arrow
