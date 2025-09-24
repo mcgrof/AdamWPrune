@@ -153,10 +153,11 @@ def create_bitter_lesson_chart(results, output_dir):
         # Add algorithm variant name and description below x-axis label
         variant = alg.split(' + ')[1]
         descriptions = ['Pure Magnitude', 'Scale-aware', 'Hybrid']
-        # Place variant names below the bars but above x-axis
-        ax.text(bar.get_x() + bar.get_width()/2., 44.8,
-                f'{variant}', ha='center', va='top', fontsize=10, fontweight='bold')
-        ax.text(bar.get_x() + bar.get_width()/2., 44.5,
+        # Place variant names inside the bottom of bars to avoid overlap
+        ax.text(bar.get_x() + bar.get_width()/2., 45.5,
+                f'{variant}', ha='center', va='bottom', fontsize=10, fontweight='bold',
+                color='white', bbox=dict(boxstyle='round,pad=0.3', facecolor=colors[i], alpha=0.8))
+        ax.text(bar.get_x() + bar.get_width()/2., 44.2,
                 f'({descriptions[i]})', ha='center', va='top', fontsize=8, style='italic', color='gray')
 
     # Highlight the trend with an arrow
@@ -166,10 +167,13 @@ def create_bitter_lesson_chart(results, output_dir):
             fontsize=11, color='red', fontweight='bold', ha='center')
 
     ax.set_ylabel('Perplexity (lower is better)', fontsize=12, fontweight='bold')
-    ax.set_xlabel('Algorithm Complexity', fontsize=12, fontweight='bold')
+    ax.set_xlabel('Algorithm Complexity', fontsize=12, fontweight='bold', labelpad=20)  # Add padding to prevent overlap
     ax.set_title('The Bitter Lesson: Simpler Algorithms Win\n(AdamWPrune Variants on GPT-2)',
                  fontsize=14, fontweight='bold')
-    ax.set_ylim(45, 53)
+    ax.set_ylim(44, 53)
+
+    # Add extra space at bottom for labels
+    plt.subplots_adjust(bottom=0.15)
 
     # Add grid
     ax.yaxis.grid(True, alpha=0.3)
