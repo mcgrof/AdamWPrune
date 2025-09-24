@@ -148,33 +148,33 @@ def create_bitter_lesson_chart(results, output_dir):
     # Add value labels and algorithm names
     for i, (bar, perp, alg) in enumerate(zip(bars, perplexities, algorithms)):
         height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+        ax.text(bar.get_x() + bar.get_width()/2., height + 0.1,
                 f'{perp:.2f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
         # Add algorithm variant name below
         variant = alg.split(' + ')[1]
-        ax.text(bar.get_x() + bar.get_width()/2., -2,
+        ax.text(bar.get_x() + bar.get_width()/2., 47.8,
                 f'({variant})', ha='center', va='top', fontsize=9, style='italic')
 
     # Highlight the trend with an arrow
-    ax.annotate('', xy=(2.3, 52), xytext=(0.3, 49),
+    ax.annotate('', xy=(2.3, 51.8), xytext=(0.3, 50.2),
                 arrowprops=dict(arrowstyle='->', color='red', lw=3))
-    ax.text(1.3, 48, 'Complexity hurts\nperformance',
+    ax.text(1.3, 49.5, 'Complexity hurts\nperformance',
             fontsize=11, color='red', fontweight='bold', ha='center')
 
     ax.set_ylabel('Perplexity (lower is better)', fontsize=12, fontweight='bold')
     ax.set_xlabel('Algorithm Complexity', fontsize=12, fontweight='bold')
     ax.set_title('The Bitter Lesson: Simpler Algorithms Win\n(AdamWPrune Variants on GPT-2)',
                  fontsize=14, fontweight='bold')
-    ax.set_ylim(45, 53)
+    ax.set_ylim(48, 52.5)
 
     # Add grid
     ax.yaxis.grid(True, alpha=0.3)
     ax.set_axisbelow(True)
 
-    # Add text box with bitter lesson quote
+    # Add text box with bitter lesson quote - positioned to not interfere with bars or title
     textstr = '"The bitter lesson is that general methods\nthat leverage computation ultimately\ndominate specialized methods."'
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    ax.text(0.98, 0.98, textstr, transform=ax.transAxes, fontsize=9,
+    ax.text(0.98, 0.75, textstr, transform=ax.transAxes, fontsize=9,
             verticalalignment='top', horizontalalignment='right', bbox=props, style='italic')
 
     plt.tight_layout()
