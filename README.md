@@ -51,7 +51,17 @@ Our GPT-2 experiments validate Rich Sutton's Bitter Lesson: **simpler algorithms
 3. **Training Efficiency**: 20% faster per-iteration for bitter0/1; bitter2 trades this for better quality
 4. **Clear Trade-offs**: 3.25-8.69 perplexity increase for memory/speed benefits
 
-→ See [GPT-2 detailed analysis](docs/gpt2.md) for complete findings
+### Visual Evidence
+
+#### Perplexity Comparison
+![GPT-2 Perplexity Comparison](images/gpt2/gpt2_perplexity_comparison.png)
+*All AdamWPrune variants achieve significant speedup with modest perplexity trade-offs*
+
+#### The Bitter Lesson Confirmed
+![The Bitter Lesson](images/gpt2/gpt2_bitter_lesson.png)
+*Simpler algorithms (bitter1) outperform complex hybrid approaches (bitter0), confirming Sutton's principle*
+
+→ See [GPT-2 detailed analysis](docs/gpt2.md) for complete findings and more visualizations
 
 ## ResNet CNN Results
 

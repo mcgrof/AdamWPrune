@@ -49,6 +49,9 @@ We evaluated four configurations:
 
 ### Perplexity Comparison
 
+![GPT-2 Perplexity Comparison](../images/gpt2/gpt2_perplexity_comparison.png)
+*Perplexity comparison across all pruning methods - lower is better*
+
 | Configuration | Final Perplexity | Speedup vs Baseline | Memory Savings |
 |--------------|------------------|---------------------|----------------|
 | **AdamWSPAM + Magnitude** | **42.82** | Baseline | Baseline |
@@ -58,16 +61,25 @@ We evaluated four configurations:
 
 ### Key Findings
 
+![GPT-2 Efficiency Analysis](../images/gpt2/gpt2_efficiency_analysis.png)
+*Training speedup and memory reduction achieved by AdamWPrune*
+
 1. **Bitter Lesson Confirmed**: The simpler algorithms (bitter1, bitter2) outperformed the complex hybrid approach (bitter0)
    - Bitter2 (scale-aware): 46.07 perplexity
    - Bitter1 (pure magnitude): 49.99 perplexity
    - Bitter0 (hybrid): 51.51 perplexity
+
+![The Bitter Lesson Visualization](../images/gpt2/gpt2_bitter_lesson.png)
+*The bitter lesson confirmed: simpler algorithms consistently outperform complex approaches*
 
 2. **Significant Speedup**: All AdamWPrune variants achieved ~20% training time reduction compared to traditional magnitude pruning
 
 3. **Memory Efficiency**: AdamWPrune reduces memory overhead from 5.03x to 3.03x weights - a 40% reduction in training memory
 
 4. **Trade-offs**: The speedup comes with a perplexity increase of 3.25-8.69 points, representing the accuracy-efficiency trade-off
+
+![Trade-off Analysis](../images/gpt2/gpt2_trade_off_analysis.png)
+*Speed vs quality trade-offs: AdamWPrune variants offer different points on the efficiency spectrum*
 
 ## Algorithm Details
 
