@@ -55,9 +55,9 @@ We evaluated four configurations:
 | Configuration | Final Perplexity | Speedup vs Baseline | Memory Savings |
 |--------------|------------------|---------------------|----------------|
 | **AdamWSPAM + Magnitude** | **42.82** | Baseline | Baseline |
-| AdamWPrune + Bitter2 | 46.07 | ~20% faster | 40% less memory |
-| AdamWPrune + Bitter1 | 49.99 | ~20% faster | 40% less memory |
-| AdamWPrune + Bitter0 | 51.51 | ~20% faster | 40% less memory |
+| AdamWPrune + Bitter2 | 46.07 | ~20% faster | 8.2% less GPU memory |
+| AdamWPrune + Bitter1 | 49.99 | ~20% faster | 8.2% less GPU memory |
+| AdamWPrune + Bitter0 | 51.51 | ~20% faster | 8.2% less GPU memory |
 
 ### Key Findings
 
@@ -74,7 +74,7 @@ We evaluated four configurations:
 
 2. **Significant Speedup**: All AdamWPrune variants achieved ~20% training time reduction compared to traditional magnitude pruning
 
-3. **Memory Efficiency**: AdamWPrune reduces memory overhead from 5.03x to 3.03x weights - a 40% reduction in training memory
+3. **Memory Efficiency**: AdamWPrune reduces theoretical overhead from 5.03x to 3.03x weights (40% reduction) - actual GPU memory savings of 8.2%
 
 4. **Trade-offs**: The speedup comes with a perplexity increase of 3.25-8.69 points, representing the accuracy-efficiency trade-off
 
@@ -120,7 +120,7 @@ score = |weight| * sqrt(exp_avg_sq) / (|exp_avg| + ε)
 - Boolean mask only: 0.03x
 - **Total: 3.03x weights**
 
-**Result: 40% memory reduction during training**
+**Result: 40% reduction in theoretical overhead, 8.2% actual GPU memory reduction**
 
 ## Training Dynamics
 
@@ -156,7 +156,7 @@ The training progression showed consistent patterns:
 
 The GPT-2 experiments successfully validated AdamWPrune on transformer architectures:
 
-1. **Efficiency Gains**: 20% training speedup and 40% memory reduction
+1. **Efficiency Gains**: 20% training speedup and 8.2% GPU memory reduction
 2. **Bitter Lesson Validated**: Simpler algorithms outperformed complex ones
 3. **Clear Trade-offs**: Speed and memory benefits vs. 7-20% perplexity increase
 4. **Production Ready**: Stable training dynamics suitable for deployment
