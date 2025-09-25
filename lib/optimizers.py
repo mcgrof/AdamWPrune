@@ -343,7 +343,7 @@ def create_optimizer(
                     getattr(args, "adamwprune_variant", "bitter0")
                     if args
                     else "bitter0"
-                ),  # bitter0=original, bitter1=magnitude, bitter2=scale-aware
+                ),  # bitter0=original, bitter1=magnitude, bitter2=scale-aware, bitter3=gradient-magnitude
             }
 
             # Initialize masks for prunable layers as boolean buffers
@@ -534,6 +534,12 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
             (adamprune_state["step_count"] - adamprune_state["warmup_steps"])
             / (ramp_end_step - adamprune_state["warmup_steps"]),
         )
+
+        # Use cubic schedule for bitter3, linear for others
+        if variant == "bitter3":
+            # Cubic schedule: slower initial pruning, faster at the end
+            progress = progress**3
+
         current_sparsity = adamprune_state["target_sparsity"] * progress
 
         # Get the pruning variant (bitter lesson approach)
@@ -553,6 +559,17 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                 # This is magnitude pruning but signals to use 21% more iterations
                 # or 14% larger batch size at the training script level
                 importance = torch.abs(module.weight.data)
+            elif variant == "bitter3":
+                # Bitter lesson variant 3: Gradient-magnitude pruning
+                # Combines weight magnitude with gradient information
+                state = optimizer.state.get(module.weight, {})
+                if "exp_avg" in state:
+                    # Use exponential moving average of gradients as activity signal
+                    grad_importance = torch.sqrt(torch.abs(state["exp_avg"]) + 1e-8)
+                    importance = torch.abs(module.weight.data) * grad_importance
+                else:
+                    # Fallback to magnitude if no gradient history yet
+                    importance = torch.abs(module.weight.data)
             else:
                 # Default bitter0: Original hybrid momentum-stability approach
                 if "exp_avg" in state and "exp_avg_sq" in state:
@@ -591,6 +608,15 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                     if variant == "bitter1" or variant == "bitter2":
                         # Pure magnitude for bitter lesson variants
                         importance = torch.abs(module.weight.data)
+                    elif variant == "bitter3":
+                        # Gradient-magnitude for bitter3
+                        if "exp_avg" in state:
+                            grad_importance = torch.sqrt(
+                                torch.abs(state["exp_avg"]) + 1e-8
+                            )
+                            importance = torch.abs(module.weight.data) * grad_importance
+                        else:
+                            importance = torch.abs(module.weight.data)
                     else:
                         # Original bitter0 logic
                         if "exp_avg" in state and "exp_avg_sq" in state:
