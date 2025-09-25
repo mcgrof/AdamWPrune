@@ -1,6 +1,6 @@
 # AdamWPrune: Multi-Model State-Based Weight Pruning
 
-> **🚀 GPT-2 Transformer Validation**: AdamWPrune achieves **20% training speedup** and **40% memory reduction** on GPT-2 (124M), confirming the bitter lesson - simpler algorithms outperform complex approaches, with a cost of a modest 3-9 perplexity increase compared to magnitude pruning.
+> **🚀 GPT-2 Transformer Validation**: AdamWPrune achieves **20% training speedup** and **8.2% GPU memory reduction** on GPT-2 (124M), confirming the bitter lesson - simpler algorithms outperform complex approaches, with a cost of a modest 3-9 perplexity increase compared to magnitude pruning.
 
 > **🏆 ResNet-50 Breakthrough**: AdamWPrune with AdamWSpam base achieves **74.56% accuracy** at 50% sparsity - surpassing all previous results! Consistently outperforms AdamWSpam across all sparsity levels while maintaining competitive memory usage (12602.5 MB).
 
@@ -14,7 +14,7 @@ AdamWPrune demonstrates efficient neural network compression by reusing Adam opt
 
 | Model | Parameters | Dataset | Sparsity | GPU Memory | Accuracy/Perplexity | Efficiency |
 |-------|------------|---------|----------|------------|---------------------|------------|
-| **GPT-2** | **124M** | **FineWebEdu** | **50%** | **25311 MiB** | **49.99 ppl** | **40% memory savings** |
+| **GPT-2** | **124M** | **FineWebEdu** | **50%** | **25311 MiB** | **49.99 ppl** | **8.2% GPU memory savings** |
 | ResNet-50 | 25.6M | CIFAR-100 | 50% | 12602.5 MiB | 74.56% | 6.06/100MiB |
 | ResNet-18 | 11.2M | CIFAR-10 | 70% | 1489.2 MiB | 90.66% | 6.09/100MiB |
 | LeNet-5 | 61.7K | MNIST | 70% | 434.5 MiB* | 98.9% | 22.74/100MiB |
@@ -47,7 +47,7 @@ Our GPT-2 experiments validate Rich Sutton's Bitter Lesson: **simpler algorithms
 ### Key Insights
 
 1. **Bitter Lesson Validated**: Simpler pruning (bitter1) outperforms complex hybrid (bitter0)
-2. **Memory Breakthrough**: 40% reduction (5.03x → 3.03x weights)
+2. **Memory Efficiency**: 40% reduction in theoretical overhead (5.03x → 3.03x weights), 8.2% actual GPU savings
 3. **Training Efficiency**: 20% faster per-iteration for bitter0/1; bitter2 trades this for better quality
 4. **Clear Trade-offs**: 3.25-8.69 perplexity increase for memory/speed benefits
 
@@ -86,7 +86,7 @@ The memory savings directly translate to the ability to:
 - **Bitter0**: Would need **+116% more iterations** (21,587 total)
 
 **Critical Trade-off**: Even if we trained AdamWPrune variants 2x longer to match perplexity:
-- Still **40% memory savings** throughout training
+- Still **8.2% GPU memory savings** throughout training
 - But lose the **20% speed advantage**
 - Makes sense only when memory is the primary constraint
 
@@ -293,7 +293,7 @@ Our GPT-2 experiments validate Rich Sutton's Bitter Lesson in neural network pru
 
 2. **Training Efficiency**: Bitter0/1 achieve ~20% speedup; bitter2 trades speed for quality with extended training
 
-3. **Memory Efficiency Breakthrough**: 40% reduction in training memory overhead
+3. **Memory Efficiency**: 40% reduction in theoretical overhead, 8.2% actual GPU memory savings
    - Traditional approach: 5.03x model weights (Adam states + movement scores)
    - AdamWPrune: 3.03x model weights (Adam states + boolean mask only)
 
