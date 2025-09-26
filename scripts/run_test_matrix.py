@@ -515,7 +515,7 @@ def get_test_matrix(config):
     ):
         matrix["pruning_methods"].append("state")
 
-    # Check for AdamWPrune variants (bitter0, bitter1, bitter2)
+    # Check for AdamWPrune variants (bitter0, bitter1, bitter2, bitter3, bitter4)
     adamwprune_variants = []
     if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER0") == "y":
         adamwprune_variants.append("bitter0")
@@ -523,6 +523,10 @@ def get_test_matrix(config):
         adamwprune_variants.append("bitter1")
     if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER2") == "y":
         adamwprune_variants.append("bitter2")
+    if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER3") == "y":
+        adamwprune_variants.append("bitter3")
+    if config.get("GPT2_ADAMWPRUNE_VARIANT_BITTER4") == "y":
+        adamwprune_variants.append("bitter4")
 
     # Store variants in matrix for later use
     matrix["adamwprune_variants"] = (
