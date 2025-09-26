@@ -72,17 +72,19 @@ The "bitter" naming follows Rich Sutton's Bitter Lesson: simpler methods with mo
 - **Intuition**: Use the efficiency gains from faster pruning to train longer
 - **Result**: 46.07 perplexity - significant improvement from extra training
 
-#### Bitter3 (Gradient-Magnitude)
-- **Formula**: `|w| × sqrt(|exp_avg_grad|)`
-- **Philosophy**: Combine weight importance with gradient activity
+#### Bitter3 (Gradient-Magnitude with Adam States)
+- **Formula**: `|w| × sqrt(|exp_avg_grad|)` where `exp_avg_grad` is Adam's first moment
+- **Philosophy**: Combine weight importance with gradient activity using optimizer state
 - **Intuition**: Important weights are both large AND actively being updated
-- **Key Innovation**: Uses Adam's exponential moving average of gradients for stability
+- **Key Innovation**: Leverages Adam's exponential moving average (state["exp_avg"]) for stable gradient signal
+- **State Usage**: Uses Adam's first moment only (simpler than bitter0's dual-moment approach)
 - **Schedule**: Cubic sparsity ramping (gentler early pruning)
 - **Result**: **43.11 perplexity** - nearly matches AdamWSPAM baseline (42.82)
 
-#### Bitter4 (Gradient-Magnitude + Layer-Adaptive)
-- **Formula**: `|w| × sqrt(|exp_avg_grad|)` with varying sparsity per layer
+#### Bitter4 (Gradient-Magnitude + Layer-Adaptive with Adam States)
+- **Formula**: `|w| × sqrt(|exp_avg_grad|)` with varying sparsity per layer (using Adam's state["exp_avg"])
 - **Philosophy**: Same as bitter3 but recognizes layers have different redundancy
+- **State Usage**: Same as bitter3 - Adam's first moment for gradient activity
 - **Layer Distribution**:
   - Early layers: 0.7× target sparsity (preserve feature extraction)
   - Late layers: 1.3× target sparsity (more task-specific redundancy)
