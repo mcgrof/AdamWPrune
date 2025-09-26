@@ -39,7 +39,7 @@ Our GPT-2 experiments validate Rich Sutton's Bitter Lesson: **simpler algorithms
 |-----------|-----------|------------------|------------|---------------|--------|
 | **AdamWSPAM** | **Magnitude** | **42.82** (baseline) | 10,000 | 8.3 hours | 5.03x weights |
 | AdamWPrune | Bitter3* | **43.11** | 13,000* | 10.4 hours | 3.03x weights |
-| AdamWPrune | Bitter4* | (in progress) | 13,000* | ~10.4 hours | 3.03x weights |
+| AdamWPrune | Bitter4* | **44.88** | 13,000* | 10.3 hours | 3.03x weights |
 | AdamWPrune | Bitter2† | 46.07 | 12,100† | 8.3 hours | 3.03x weights |
 | AdamWPrune | Bitter1 | 49.99 | 10,000 | ~6.9 hours | 3.03x weights |
 | AdamWPrune | Bitter0 | 51.51 | 10,000 | ~6.9 hours | 3.03x weights |
@@ -90,14 +90,22 @@ The "bitter" naming follows Rich Sutton's Bitter Lesson: simpler methods with mo
 - **Layer Distribution**:
   - Early layers: 0.7× target sparsity (preserve feature extraction)
   - Late layers: 1.3× target sparsity (more task-specific redundancy)
-- **Result**: Currently testing (expected ~41-42 perplexity)
+- **Result**: **44.88 perplexity** - layer-adaptive underperformed uniform sparsity for GPT-2
 
 ### Key Insights
 
 1. **Bitter Lesson Validated**: Gradient-magnitude (bitter3) achieves near state-of-the-art with simple formula
-2. **Memory Efficiency**: 40% reduction in theoretical overhead (5.03x → 3.03x weights), 8.2% actual GPU savings
-3. **Training Efficiency**: 20% faster per-iteration than AdamWSPAM baseline
-4. **Breakthrough**: Bitter3 proves simple `|w| × sqrt(|grad|)` can match complex methods
+2. **Surprising Finding**: Layer-adaptive sparsity (bitter4) underperformed uniform sparsity by 1.77 perplexity
+3. **Memory Efficiency**: 40% reduction in theoretical overhead (5.03x → 3.03x weights), 8.2% actual GPU savings
+4. **Training Efficiency**: 20% faster per-iteration than AdamWSPAM baseline
+5. **Breakthrough**: Bitter3 proves simple `|w| × sqrt(|grad_ema|)` nearly matches SOTA with better efficiency
+
+### Final Rankings
+
+1. **Best Overall**: AdamWSPAM (42.82 ppl) - when quality is paramount
+2. **Best AdamWPrune**: Bitter3 (43.11 ppl) - best efficiency/quality trade-off
+3. **Unexpected**: Bitter4 (44.88 ppl) - layer-adaptive complexity didn't help transformers
+4. **Clear Pattern**: Simpler methods (bitter3 > bitter1) outperform complex ones (bitter0, bitter4)
 
 ### Visual Evidence
 
