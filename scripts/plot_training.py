@@ -161,7 +161,7 @@ def plot_single_training(metrics, output_prefix="training"):
 
     # Create summary text
     summary_text = f"""Training Summary:
-    
+
 • Model: LeNet-5
 • Device: {metrics.get('device', {}).get('type', 'N/A').upper()}
 • GPU: {metrics.get('device', {}).get('name', 'N/A')}

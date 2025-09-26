@@ -156,7 +156,7 @@ def analyze_accuracy_details(metrics_file):
                 acc = epoch.get("test_accuracy") or epoch.get("accuracy") or epoch.get("val_accuracy")
                 if acc is not None:
                     test_accs.append(acc)
-        
+
         if not test_accs:
             # Fallback to top-level accuracy fields
             final_acc = metrics.get("final_accuracy", metrics.get("best_accuracy", 0))
