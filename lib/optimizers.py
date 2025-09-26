@@ -347,11 +347,19 @@ def create_optimizer(
             }
 
             # Initialize masks for prunable layers as boolean buffers
-            for _, module in model.named_modules():
+            # Also build layer index mapping for adaptive sparsity
+            layer_index = {}
+            layer_count = 0
+            for name, module in model.named_modules():
                 if isinstance(module, (nn.Linear, nn.Conv2d)):
                     mask = torch.ones_like(module.weight.data, dtype=torch.bool)
                     module.register_buffer("adamprune_mask", mask)
                     adamprune_state["masks"][module] = module.adamprune_mask
+                    layer_index[module] = layer_count
+                    layer_count += 1
+
+            adamprune_state["layer_index"] = layer_index
+            adamprune_state["total_layers"] = layer_count
             logger.info(
                 f"  - Pruning: Enabled (target: {adamprune_state['target_sparsity']:.1%})"
             )
@@ -492,6 +500,38 @@ def apply_adamprune_masking(optimizer, adamprune_state):
             module.weight.grad.data.mul_(mask.to(module.weight.grad.dtype))
 
 
+def compute_layer_sparsity(base_sparsity, layer_idx, total_layers, variant):
+    """Compute layer-specific sparsity for adaptive distribution.
+
+    Args:
+        base_sparsity: Target sparsity for the entire model
+        layer_idx: Index of the current layer (0 to total_layers-1)
+        total_layers: Total number of prunable layers
+        variant: Pruning variant (affects sparsity distribution)
+
+    Returns:
+        Layer-specific sparsity ratio
+    """
+    if variant not in ["bitter3", "bitter4"]:
+        # Non-adaptive variants use uniform sparsity
+        return base_sparsity
+
+    # Linear scaling: earlier layers pruned less, later layers pruned more
+    # This follows the intuition that early layers extract basic features
+    # while later layers are more task-specific and can be pruned more
+    position = layer_idx / max(total_layers - 1, 1)
+
+    # Scale from 0.7x to 1.3x of base sparsity
+    # Early layers: 0.7 * base_sparsity
+    # Late layers: 1.3 * base_sparsity
+    scale = 0.7 + 0.6 * position
+
+    # Ensure sparsity stays in valid range [0, 0.95]
+    layer_sparsity = min(0.95, base_sparsity * scale)
+
+    return layer_sparsity
+
+
 def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
     """Update AdamWPrune pruning masks based on Adam states.
 
@@ -545,6 +585,10 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
         # Get the pruning variant (bitter lesson approach)
         variant = adamprune_state.get("variant", "bitter0")
 
+        # Get layer mapping for adaptive sparsity
+        layer_index = adamprune_state.get("layer_index", {})
+        total_layers = adamprune_state.get("total_layers", 1)
+
         # Compute importance scores using Adam states
         all_scores = []
         for module in adamprune_state["masks"].keys():
@@ -594,21 +638,18 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
             all_scores.append(importance.flatten())
 
         if all_scores:
-            all_scores = torch.cat(all_scores)
-
-            # Find global threshold for target sparsity
-            k = int(current_sparsity * all_scores.numel())
-            if k > 0:
-                threshold = torch.kthvalue(all_scores, k).values
-
-                # Update masks
+            # For layer-adaptive sparsity, update masks per layer
+            if variant in ["bitter3", "bitter4"]:
+                # Update masks with layer-specific thresholds
                 for module in adamprune_state["masks"].keys():
+                    layer_idx = layer_index.get(module, 0)
+                    layer_sparsity = compute_layer_sparsity(
+                        current_sparsity, layer_idx, total_layers, variant
+                    )
+
                     state = optimizer.state.get(module.weight, {})
 
-                    if variant == "bitter1" or variant == "bitter2":
-                        # Pure magnitude for bitter lesson variants
-                        importance = torch.abs(module.weight.data)
-                    elif variant == "bitter3":
+                    if variant == "bitter3":
                         # Gradient-magnitude for bitter3
                         if "exp_avg" in state:
                             grad_importance = torch.sqrt(
@@ -618,26 +659,70 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                         else:
                             importance = torch.abs(module.weight.data)
                     else:
-                        # Original bitter0 logic
-                        if "exp_avg" in state and "exp_avg_sq" in state:
-                            exp_avg = state["exp_avg"]
-                            exp_avg_sq = state["exp_avg_sq"]
-                            momentum_score = torch.abs(module.weight.data * exp_avg)
-                            stability_score = torch.abs(module.weight.data) / (
-                                torch.sqrt(exp_avg_sq) + 1e-8
-                            )
-                            importance = momentum_score * stability_score
-                        else:
-                            importance = torch.abs(module.weight.data)
+                        # Fallback to magnitude
+                        importance = torch.abs(module.weight.data)
 
-                    # Update boolean mask buffer
-                    new_mask = importance > threshold
+                    # Find layer-specific threshold
+                    layer_scores = importance.flatten()
+                    k = int(layer_sparsity * layer_scores.numel())
+                    if k > 0 and k < layer_scores.numel():
+                        threshold = torch.kthvalue(layer_scores, k).values
+                        new_mask = importance > threshold
+                    else:
+                        new_mask = torch.ones_like(importance, dtype=torch.bool)
+
                     adamprune_state["masks"][module].data = new_mask.to(torch.bool)
-
-                    # Apply mask to weights immediately
                     module.weight.data.mul_(
                         adamprune_state["masks"][module].to(module.weight.dtype)
                     )
+            else:
+                # Original global threshold approach for non-adaptive variants
+                all_scores = torch.cat(all_scores)
+
+                # Find global threshold for target sparsity
+                k = int(current_sparsity * all_scores.numel())
+                if k > 0:
+                    threshold = torch.kthvalue(all_scores, k).values
+
+                    # Update masks
+                    for module in adamprune_state["masks"].keys():
+                        state = optimizer.state.get(module.weight, {})
+
+                        if variant == "bitter1" or variant == "bitter2":
+                            # Pure magnitude for bitter lesson variants
+                            importance = torch.abs(module.weight.data)
+                        elif variant == "bitter3":
+                            # Gradient-magnitude for bitter3
+                            if "exp_avg" in state:
+                                grad_importance = torch.sqrt(
+                                    torch.abs(state["exp_avg"]) + 1e-8
+                                )
+                                importance = (
+                                    torch.abs(module.weight.data) * grad_importance
+                                )
+                            else:
+                                importance = torch.abs(module.weight.data)
+                        else:
+                            # Original bitter0 logic
+                            if "exp_avg" in state and "exp_avg_sq" in state:
+                                exp_avg = state["exp_avg"]
+                                exp_avg_sq = state["exp_avg_sq"]
+                                momentum_score = torch.abs(module.weight.data * exp_avg)
+                                stability_score = torch.abs(module.weight.data) / (
+                                    torch.sqrt(exp_avg_sq) + 1e-8
+                                )
+                                importance = momentum_score * stability_score
+                            else:
+                                importance = torch.abs(module.weight.data)
+
+                        # Update boolean mask buffer
+                        new_mask = importance > threshold
+                        adamprune_state["masks"][module].data = new_mask.to(torch.bool)
+
+                        # Apply mask to weights immediately
+                        module.weight.data.mul_(
+                            adamprune_state["masks"][module].to(module.weight.dtype)
+                        )
 
     # Always apply existing masks to maintain sparsity
     elif adamprune_state["step_count"] > adamprune_state["warmup_steps"]:
