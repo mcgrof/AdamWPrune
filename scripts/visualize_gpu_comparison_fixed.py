@@ -167,7 +167,7 @@ def create_improved_comparison(training_data, inference_data, output_file):
     ax2.axis("off")
 
     explanation_text = """Why is inference memory the same?
-    
+
 During inference, only the model weights are loaded
 into GPU memory, without optimizer states or gradients.
 

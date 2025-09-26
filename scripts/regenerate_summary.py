@@ -128,14 +128,14 @@ def regenerate_summary(results_dir):
                 r for r in success_results
                 if r.get("gpu_memory_mean") is not None
             ]
-            
+
             if gpu_results:
                 f.write("GPU Memory Usage (Real Measurements):\n")
                 f.write("-" * 80 + "\n")
-                
+
                 # Sort by GPU memory usage
                 gpu_results.sort(key=lambda x: x.get("gpu_memory_mean", float('inf')))
-                
+
                 f.write("Most Memory-Efficient Tests:\n")
                 for i, result in enumerate(gpu_results[:10], 1):
                     test_id = result.get("test_id", "unknown")
@@ -144,7 +144,7 @@ def regenerate_summary(results_dir):
                     gpu_max = result.get("gpu_memory_max", 0)
                     f.write(f"{i}. {test_id}:\n")
                     f.write(f"   Accuracy: {acc:.2f}%, GPU Mean: {gpu_mean:.1f} MiB, GPU Max: {gpu_max:.1f} MiB\n")
-                
+
                 # Group by optimizer
                 gpu_by_optimizer = {}
                 for r in gpu_results:
@@ -152,13 +152,13 @@ def regenerate_summary(results_dir):
                     if opt not in gpu_by_optimizer:
                         gpu_by_optimizer[opt] = []
                     gpu_by_optimizer[opt].append(r)
-                
+
                 f.write("\nGPU Memory by Optimizer:\n")
                 for opt in sorted(gpu_by_optimizer.keys()):
                     opt_results = gpu_by_optimizer[opt]
                     avg_memory = sum(r.get("gpu_memory_mean", 0) for r in opt_results) / len(opt_results)
                     f.write(f"  {opt:12}: {avg_memory:8.1f} MiB (avg of {len(opt_results)} runs)\n")
-                
+
                 f.write("\n")
 
             # Memory efficiency analysis

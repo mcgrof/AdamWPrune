@@ -34,7 +34,7 @@ EXAMPLES:
 MEMORY RECOMMENDATIONS:
     GPU Memory    Recommended Jobs
     < 16GB        1-4 jobs
-    24GB          4-8 jobs  
+    24GB          4-8 jobs
     48GB (W7900)  8-20 jobs
     > 48GB        16-50 jobs
 
