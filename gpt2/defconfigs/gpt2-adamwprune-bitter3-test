@@ -32,7 +32,7 @@ CONFIG_GPT2_ADAMWPRUNE_VARIANT_BITTER3=y
 # Training Configuration
 CONFIG_BATCH_SIZE=32
 CONFIG_MAX_ITERS=10000  # Will be auto-adjusted to 13000 for bitter3
-CONFIG_NUM_EPOCHS=n  # GPT-2 uses iterations, not epochs
+# GPT-2 uses iterations, not epochs - NUM_EPOCHS ignored
 CONFIG_LEARNING_RATE="6e-4"
 CONFIG_WEIGHT_DECAY="0.1"
 CONFIG_DEVICE="cuda"
