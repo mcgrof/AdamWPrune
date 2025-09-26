@@ -343,7 +343,7 @@ def create_optimizer(
                     getattr(args, "adamwprune_variant", "bitter0")
                     if args
                     else "bitter0"
-                ),  # bitter0=original, bitter1=magnitude, bitter2=scale-aware, bitter3=gradient-magnitude
+                ),  # bitter0=original, bitter1=magnitude, bitter2=scale-aware, bitter3=gradient-magnitude, bitter4=gradient-magnitude+layer-adaptive
             }
 
             # Initialize masks for prunable layers as boolean buffers
@@ -512,8 +512,8 @@ def compute_layer_sparsity(base_sparsity, layer_idx, total_layers, variant):
     Returns:
         Layer-specific sparsity ratio
     """
-    if variant not in ["bitter3", "bitter4"]:
-        # Non-adaptive variants use uniform sparsity
+    if variant != "bitter4":
+        # Only bitter4 uses layer-adaptive sparsity
         return base_sparsity
 
     # Linear scaling: earlier layers pruned less, later layers pruned more
@@ -575,8 +575,8 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
             / (ramp_end_step - adamprune_state["warmup_steps"]),
         )
 
-        # Use cubic schedule for bitter3, linear for others
-        if variant == "bitter3":
+        # Use cubic schedule for bitter3/bitter4, linear for others
+        if variant in ["bitter3", "bitter4"]:
             # Cubic schedule: slower initial pruning, faster at the end
             progress = progress**3
 
@@ -614,6 +614,15 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                 else:
                     # Fallback to magnitude if no gradient history yet
                     importance = torch.abs(module.weight.data)
+            elif variant == "bitter4":
+                # Bitter lesson variant 4: Gradient-magnitude + layer-adaptive sparsity
+                # Same as bitter3 but with layer-adaptive sparsity distribution
+                state = optimizer.state.get(module.weight, {})
+                if "exp_avg" in state:
+                    grad_importance = torch.sqrt(torch.abs(state["exp_avg"]) + 1e-8)
+                    importance = torch.abs(module.weight.data) * grad_importance
+                else:
+                    importance = torch.abs(module.weight.data)
             else:
                 # Default bitter0: Original hybrid momentum-stability approach
                 if "exp_avg" in state and "exp_avg_sq" in state:
@@ -638,8 +647,8 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
             all_scores.append(importance.flatten())
 
         if all_scores:
-            # For layer-adaptive sparsity, update masks per layer
-            if variant in ["bitter3", "bitter4"]:
+            # For layer-adaptive sparsity (bitter4 only), update masks per layer
+            if variant == "bitter4":
                 # Update masks with layer-specific thresholds
                 for module in adamprune_state["masks"].keys():
                     layer_idx = layer_index.get(module, 0)
@@ -649,17 +658,11 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
 
                     state = optimizer.state.get(module.weight, {})
 
-                    if variant == "bitter3":
-                        # Gradient-magnitude for bitter3
-                        if "exp_avg" in state:
-                            grad_importance = torch.sqrt(
-                                torch.abs(state["exp_avg"]) + 1e-8
-                            )
-                            importance = torch.abs(module.weight.data) * grad_importance
-                        else:
-                            importance = torch.abs(module.weight.data)
+                    # bitter4 uses gradient-magnitude importance
+                    if "exp_avg" in state:
+                        grad_importance = torch.sqrt(torch.abs(state["exp_avg"]) + 1e-8)
+                        importance = torch.abs(module.weight.data) * grad_importance
                     else:
-                        # Fallback to magnitude
                         importance = torch.abs(module.weight.data)
 
                     # Find layer-specific threshold
@@ -691,8 +694,8 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                         if variant == "bitter1" or variant == "bitter2":
                             # Pure magnitude for bitter lesson variants
                             importance = torch.abs(module.weight.data)
-                        elif variant == "bitter3":
-                            # Gradient-magnitude for bitter3
+                        elif variant in ["bitter3", "bitter4"]:
+                            # Gradient-magnitude for bitter3/bitter4
                             if "exp_avg" in state:
                                 grad_importance = torch.sqrt(
                                     torch.abs(state["exp_avg"]) + 1e-8
