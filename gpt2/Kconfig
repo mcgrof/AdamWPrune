@@ -280,6 +280,24 @@ config GPT2_ADAMWPRUNE_VARIANT_BITTER2
 	  - OR 14% larger batch size
 	  Let scale improvements compensate for simplicity.
 
+config GPT2_ADAMWPRUNE_VARIANT_BITTER3
+	bool "Enable bitter3 variant (gradient-magnitude)"
+	default n
+	help
+	  Gradient-magnitude pruning: |w| * sqrt(|grad_avg|)
+	  Uses gradient information with cubic sparsity schedule.
+	  Extended to 13000 iterations (+30%) for better quality.
+	  Expected: ~42-44 perplexity, improvement over bitter2.
+
+config GPT2_ADAMWPRUNE_VARIANT_BITTER4
+	bool "Enable bitter4 variant (gradient-magnitude + layer-adaptive)"
+	default n
+	help
+	  Gradient-magnitude with layer-adaptive sparsity distribution.
+	  Early layers: 0.7x sparsity, later layers: 1.3x sparsity.
+	  Extended to 13000 iterations (+30%) with cubic schedule.
+	  Expected: ~40-42 perplexity, best performance.
+
 config GPT2_ADAMWPRUNE_DEFAULT_VARIANT
 	string "Default AdamWPrune variant"
 	default "bitter0"
