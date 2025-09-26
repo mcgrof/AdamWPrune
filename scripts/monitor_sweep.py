@@ -5,7 +5,7 @@ Monitor hyperparameter sweep progress without interfering with running tests.
 
 Usage:
     python scripts/monitor_sweep.py [sweep_directory]
-    
+
     If no directory specified, finds the latest sweep_* directory.
 """
 
@@ -31,12 +31,12 @@ def parse_training_metrics(metrics_file):
     try:
         with open(metrics_file, 'r') as f:
             data = json.load(f)
-            
+
         # Handle both formats (test_acc and test_accuracy)
         test_acc_key = 'test_accuracy' if 'test_accuracy' in data else 'test_acc'
         test_loss_key = 'test_loss'
         sparsity_key = 'sparsity'
-        
+
         # Try to get from arrays or use final values
         if data.get('epochs'):
             final_idx = -1
@@ -65,7 +65,7 @@ def get_current_epoch_from_log(log_file):
     try:
         with open(log_file, 'r') as f:
             lines = f.readlines()
-        
+
         # Search from end for epoch progress
         for line in reversed(lines):
             if 'Epoch [' in line and '/' in line:
@@ -88,7 +88,7 @@ def parse_config_params(config_file):
                     key, value = line.split('=', 1)
                     key = key.strip()
                     value = value.strip().strip('"')
-                    
+
                     # Extract key parameters
                     if 'ADAMWPRUNE_WEIGHT_DECAY' in key:
                         params['wd'] = value
@@ -114,7 +114,7 @@ def format_time_elapsed(start_time):
     """Format elapsed time as HH:MM:SS."""
     if not start_time:
         return "??:??:??"
-    
+
     try:
         # Parse timestamp from directory name or file
         if isinstance(start_time, str):
@@ -123,7 +123,7 @@ def format_time_elapsed(start_time):
             elapsed = datetime.now() - dt
         else:
             elapsed = datetime.now() - start_time
-        
+
         total_seconds = int(elapsed.total_seconds())
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
@@ -136,30 +136,30 @@ def format_time_elapsed(start_time):
 def monitor_sweep(sweep_dir):
     """Monitor sweep progress and display leaderboard."""
     sweep_path = Path(sweep_dir)
-    
+
     if not sweep_path.exists():
         print(f"Error: Directory '{sweep_dir}' not found")
         return
-    
+
     # Get all test directories
     test_dirs = sorted([d for d in sweep_path.iterdir() if d.is_dir() and d.name.startswith('config_')])
-    
+
     if not test_dirs:
         print("No test directories found")
         return
-    
+
     # Collect results
     results = []
     running = []
     pending = []
     failed = []
-    
+
     for test_dir in test_dirs:
         # Extract config number (e.g., config_001_resnet18_adamwprune_state_70 -> 001)
         dir_parts = test_dir.name.split('_')
         config_name = dir_parts[1] if len(dir_parts) > 1 else test_dir.name
         config_file = test_dir / "config.txt"
-        
+
         # Find the actual test output directory (it's a subdirectory)
         test_subdirs = [d for d in test_dir.iterdir() if d.is_dir()]
         if test_subdirs:
@@ -171,10 +171,10 @@ def monitor_sweep(sweep_dir):
             # Fallback to direct path if no subdirectory
             metrics_file = test_dir / "training_metrics.json"
             log_file = test_dir / "output.log"
-        
+
         # Get hyperparameters
         params = parse_config_params(config_file)
-        
+
         # Check status
         if metrics_file.exists():
             # Completed
@@ -219,27 +219,27 @@ def monitor_sweep(sweep_dir):
                 'config': f"cfg_{config_name}",
                 'params': params,
             })
-    
+
     # Clear screen for clean display
     os.system('clear' if os.name == 'posix' else 'cls')
-    
+
     # Display header
     print("=" * 80)
     print(f"HYPERPARAMETER SWEEP MONITOR - {sweep_path.name}")
     print("=" * 80)
-    
+
     # Summary
     total = len(test_dirs)
     completed = len(results)
     print(f"\nProgress: {completed}/{total} completed, {len(running)} running, {len(pending)} pending, {len(failed)} failed")
-    
+
     # Progress bar
     progress = completed / total if total > 0 else 0
     bar_length = 50
     filled = int(bar_length * progress)
     bar = '█' * filled + '░' * (bar_length - filled)
     print(f"[{bar}] {progress*100:.1f}%")
-    
+
     # Currently running
     if running:
         print("\n" + "=" * 80)
@@ -250,23 +250,23 @@ def monitor_sweep(sweep_dir):
         for r in running[:5]:  # Show max 5 running
             p = r['params']
             print(f"{r['config']:<10} {r['current_epoch']:>3}/100     {p.get('wd', '?'):<8} {p.get('b1', '?'):<8} {p.get('warmup', '?'):<10} {p.get('ramp', '?'):<8}")
-    
+
     # Leaderboard
     if results:
         print("\n" + "=" * 80)
         print("LEADERBOARD (Top 10):")
         print("-" * 80)
-        
+
         # Sort by test accuracy
         sorted_results = sorted(results, key=lambda x: x['test_acc'], reverse=True)
-        
+
         print(f"{'Rank':<6} {'Config':<10} {'Test Acc':<10} {'Sparsity':<10} {'WD':<8} {'Beta1':<8} {'Warmup':<10} {'Ramp':<8}")
         print("-" * 80)
-        
+
         for i, r in enumerate(sorted_results[:10], 1):
             p = r['params']
             print(f"{i:<6} {r['config']:<10} {r['test_acc']:>6.2f}%    {r['sparsity']:>6.1f}%    {p.get('wd', '?'):<8} {p.get('b1', '?'):<8} {p.get('warmup', '?'):<10} {p.get('ramp', '?'):<8}")
-        
+
         # Best configuration details
         if sorted_results:
             best = sorted_results[0]
@@ -286,7 +286,7 @@ def monitor_sweep(sweep_dir):
                     'sparsity': 'Target Sparsity'
                 }.get(key, key)
                 print(f"  {param_name:.<20} {value}")
-    
+
     # Failed tests
     if failed:
         print("\n" + "=" * 80)
@@ -294,11 +294,11 @@ def monitor_sweep(sweep_dir):
         print("-" * 80)
         for f in failed[:5]:  # Show max 5 failed
             print(f"  {f['config']}: wd={f['params'].get('wd', '?')}, b1={f['params'].get('b1', '?')}")
-    
+
     # Timestamp
     print("\n" + "=" * 80)
     print(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
+
     # Check if sweep is complete
     if completed == total:
         print("\n🎉 SWEEP COMPLETE! 🎉")
@@ -308,7 +308,7 @@ def monitor_sweep(sweep_dir):
 def watch_mode(sweep_dir, refresh_interval=30):
     """Continuously monitor sweep progress."""
     print(f"Watching {sweep_dir} (refresh every {refresh_interval}s, Ctrl+C to stop)")
-    
+
     try:
         while True:
             monitor_sweep(sweep_dir)
@@ -320,10 +320,10 @@ def watch_mode(sweep_dir, refresh_interval=30):
 def main():
     # Check for watch mode first
     watch = '--watch' in sys.argv or '-w' in sys.argv
-    
+
     # Remove flags from argv to get directory
     args = [arg for arg in sys.argv[1:] if not arg.startswith('-')]
-    
+
     # Get sweep directory
     if args:
         sweep_dir = args[0]
@@ -335,7 +335,7 @@ def main():
             print("\nUsage: python scripts/monitor_sweep.py [sweep_directory]")
             sys.exit(1)
         print(f"Using latest sweep: {sweep_dir}")
-    
+
     if watch:
         # Extract refresh interval if provided
         interval = 30
