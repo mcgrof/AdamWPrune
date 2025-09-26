@@ -160,8 +160,10 @@ parser.add_argument(
     "--adamwprune-variant",
     type=str,
     default="bitter0",
-    choices=["bitter0", "bitter1", "bitter2", "bitter3", "bitter4"],
-    help="AdamWPrune variant: bitter0 (original), bitter1 (magnitude), bitter2 (scale-aware), bitter3 (gradient-magnitude), bitter4 (gradient-magnitude + layer-adaptive)",
+    choices=["bitter0", "bitter1", "bitter2", "bitter3", "bitter4",
+             "bitter5", "bitter6", "bitter7", "bitter8", "bitter9"],
+    help="AdamWPrune variants: 0=original, 1=magnitude, 2=scale-aware, 3=grad-mag, 4=layer-adaptive, "
+         "5=movement-to-zero, 6=coherence, 7=second-moment, 8=bias-corrected, 9=hybrid",
 )
 
 # SPAM configuration
@@ -477,7 +479,7 @@ def main():
                 flush=True,
             )
         elif (
-            args.adamwprune_variant in ["bitter3", "bitter4"]
+            args.adamwprune_variant in ["bitter3", "bitter4", "bitter5", "bitter6", "bitter8", "bitter9"]
             and args.max_iters == 10000
         ):
             args.max_iters = 13000
