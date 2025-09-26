@@ -575,15 +575,15 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
             / (ramp_end_step - adamprune_state["warmup_steps"]),
         )
 
+        # Get the pruning variant (bitter lesson approach)
+        variant = adamprune_state.get("variant", "bitter0")
+
         # Use cubic schedule for bitter3/bitter4, linear for others
         if variant in ["bitter3", "bitter4"]:
             # Cubic schedule: slower initial pruning, faster at the end
             progress = progress**3
 
         current_sparsity = adamprune_state["target_sparsity"] * progress
-
-        # Get the pruning variant (bitter lesson approach)
-        variant = adamprune_state.get("variant", "bitter0")
 
         # Get layer mapping for adaptive sparsity
         layer_index = adamprune_state.get("layer_index", {})
