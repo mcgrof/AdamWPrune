@@ -343,7 +343,9 @@ def create_optimizer(
                     getattr(args, "adamwprune_variant", "bitter0")
                     if args
                     else "bitter0"
-                ),  # bitter0=original, bitter1=magnitude, bitter2=scale-aware, bitter3=gradient-magnitude, bitter4=gradient-magnitude+layer-adaptive
+                ),  # bitter0=original, bitter1=magnitude, bitter2=scale-aware, bitter3=gradient-magnitude,
+                   # bitter4=layer-adaptive, bitter5=movement-to-zero, bitter6=coherence-weighted,
+                   # bitter7=second-moment, bitter8=bias-corrected, bitter9=hybrid
             }
 
             # Initialize masks for prunable layers as boolean buffers
@@ -621,6 +623,76 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                 if "exp_avg" in state:
                     grad_importance = torch.sqrt(torch.abs(state["exp_avg"]) + 1e-8)
                     importance = torch.abs(module.weight.data) * grad_importance
+                else:
+                    importance = torch.abs(module.weight.data)
+            elif variant == "bitter5":
+                # Bitter lesson variant 5: Movement-to-zero scoring
+                # Identifies weights that Adam is actively pushing toward zero
+                state = optimizer.state.get(module.weight, {})
+                if "exp_avg" in state and "exp_avg_sq" in state:
+                    # Movement to zero: -(sign(w) * m) / sqrt(v + eps)
+                    # Positive score = moving toward zero (should prune)
+                    # Negative score = moving away from zero (should keep)
+                    m = state["exp_avg"]
+                    v = state["exp_avg_sq"]
+                    movement = -(module.weight.data.sign() * m) / (torch.sqrt(v) + 1e-8)
+                    # Invert so higher importance = keep (consistent with other variants)
+                    importance = -movement + torch.abs(module.weight.data) * 0.1  # Small magnitude blend
+                else:
+                    importance = torch.abs(module.weight.data)
+            elif variant == "bitter6":
+                # Bitter lesson variant 6: Coherence-weighted gradient-magnitude
+                # Penalizes oscillatory gradients using coherence signal
+                state = optimizer.state.get(module.weight, {})
+                if "exp_avg" in state and "exp_avg_sq" in state:
+                    m = state["exp_avg"]
+                    v = state["exp_avg_sq"]
+                    # Coherence: m^2 / (v + eps) - measures gradient consistency
+                    coherence = (m.pow(2) / (v + 1e-8)).sqrt()  # sqrt for gentler scaling
+                    grad_importance = torch.sqrt(torch.abs(m) + 1e-8)
+                    importance = torch.abs(module.weight.data) * grad_importance * coherence
+                else:
+                    importance = torch.abs(module.weight.data)
+            elif variant == "bitter7":
+                # Bitter lesson variant 7: Second-moment (variance) based
+                # Uses exp_avg_sq to capture gradient variance/uncertainty
+                state = optimizer.state.get(module.weight, {})
+                if "exp_avg_sq" in state:
+                    # High variance = uncertain/noisy gradients = less important
+                    # Low variance = consistent gradients = more important
+                    v = state["exp_avg_sq"]
+                    stability = 1.0 / (torch.sqrt(v) + 1e-6)  # Inverse of std
+                    importance = torch.abs(module.weight.data) * stability
+                else:
+                    importance = torch.abs(module.weight.data)
+            elif variant == "bitter8":
+                # Bitter lesson variant 8: Bias-corrected gradient-magnitude
+                # Applies Adam's bias correction before scoring
+                state = optimizer.state.get(module.weight, {})
+                if "exp_avg" in state and "step" in state:
+                    m = state["exp_avg"]
+                    step = state["step"]
+                    # Adam bias correction: m_hat = m / (1 - beta1^t)
+                    beta1 = adamprune_state.get("beta1", 0.9)
+                    bias_correction = 1.0 - (beta1 ** step)
+                    m_hat = m / (bias_correction + 1e-8)
+                    grad_importance = torch.sqrt(torch.abs(m_hat) + 1e-8)
+                    importance = torch.abs(module.weight.data) * grad_importance
+                else:
+                    importance = torch.abs(module.weight.data)
+            elif variant == "bitter9":
+                # Bitter lesson variant 9: Hybrid (magnitude + gradient + movement)
+                # Combines multiple signals for robust scoring
+                state = optimizer.state.get(module.weight, {})
+                if "exp_avg" in state and "exp_avg_sq" in state:
+                    m = state["exp_avg"]
+                    v = state["exp_avg_sq"]
+                    # Three signals combined
+                    magnitude_score = torch.abs(module.weight.data)
+                    gradient_score = torch.sqrt(torch.abs(m) + 1e-8)
+                    movement_score = -(module.weight.data.sign() * m) / (torch.sqrt(v) + 1e-8)
+                    # Normalize and combine
+                    importance = magnitude_score * gradient_score - 0.1 * movement_score
                 else:
                     importance = torch.abs(module.weight.data)
             else:

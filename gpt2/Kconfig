@@ -296,7 +296,51 @@ config GPT2_ADAMWPRUNE_VARIANT_BITTER4
 	  Gradient-magnitude with layer-adaptive sparsity distribution.
 	  Early layers: 0.7x sparsity, later layers: 1.3x sparsity.
 	  Extended to 13000 iterations (+30%) with cubic schedule.
-	  Expected: ~40-42 perplexity, best performance.
+	  Result: 44.88 perplexity, layer-adaptive underperformed uniform.
+
+config GPT2_ADAMWPRUNE_VARIANT_BITTER5
+	bool "Enable bitter5 variant (movement-to-zero)"
+	default n
+	help
+	  Movement-to-zero scoring: -(sign(w) * m) / sqrt(v).
+	  Identifies weights Adam is actively pushing toward zero.
+	  Based on Movement Pruning but uses Adam states.
+	  Expected: ~44-46 perplexity.
+
+config GPT2_ADAMWPRUNE_VARIANT_BITTER6
+	bool "Enable bitter6 variant (coherence-weighted)"
+	default n
+	help
+	  Coherence-weighted gradient-magnitude.
+	  Adds coherence signal (m^2/v) to penalize oscillatory gradients.
+	  Should improve stability over bitter3.
+	  Expected: ~42-44 perplexity.
+
+config GPT2_ADAMWPRUNE_VARIANT_BITTER7
+	bool "Enable bitter7 variant (second-moment based)"
+	default n
+	help
+	  Uses second moment (exp_avg_sq) for variance-based importance.
+	  High variance = uncertain = less important.
+	  Low variance = stable = more important.
+	  Expected: ~45-47 perplexity.
+
+config GPT2_ADAMWPRUNE_VARIANT_BITTER8
+	bool "Enable bitter8 variant (bias-corrected)"
+	default n
+	help
+	  Applies Adam's bias correction before scoring.
+	  Removes early-training bias from moments.
+	  Should improve early training stability.
+	  Expected: ~42-43 perplexity.
+
+config GPT2_ADAMWPRUNE_VARIANT_BITTER9
+	bool "Enable bitter9 variant (hybrid signals)"
+	default n
+	help
+	  Hybrid: combines magnitude, gradient, and movement signals.
+	  Most complex variant, tests if multiple signals help.
+	  Expected: ~43-45 perplexity.
 
 config GPT2_ADAMWPRUNE_DEFAULT_VARIANT
 	string "Default AdamWPrune variant"
