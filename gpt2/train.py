@@ -160,8 +160,8 @@ parser.add_argument(
     "--adamwprune-variant",
     type=str,
     default="bitter0",
-    choices=["bitter0", "bitter1", "bitter2", "bitter3"],
-    help="AdamWPrune variant: bitter0 (original), bitter1 (magnitude), bitter2 (scale-aware), bitter3 (gradient-magnitude)",
+    choices=["bitter0", "bitter1", "bitter2", "bitter3", "bitter4"],
+    help="AdamWPrune variant: bitter0 (original), bitter1 (magnitude), bitter2 (scale-aware), bitter3 (gradient-magnitude), bitter4 (gradient-magnitude + layer-adaptive)",
 )
 
 # SPAM configuration
@@ -469,17 +469,20 @@ def main():
         args.adamwprune_ramp_end_epoch = min(8, args.num_epochs - 1)
         args.adamwprune_ramp_end_step = args.max_iters
 
-        # Handle bitter2/bitter3 variants: increase iterations to use saved compute
+        # Handle bitter2/bitter3/bitter4 variants: increase iterations to use saved compute
         if args.adamwprune_variant == "bitter2" and args.max_iters == 10000:
             args.max_iters = 12100
             print(
                 f"Bitter2 variant: Increased max_iters to {args.max_iters} (+21%)",
                 flush=True,
             )
-        elif args.adamwprune_variant == "bitter3" and args.max_iters == 10000:
+        elif (
+            args.adamwprune_variant in ["bitter3", "bitter4"]
+            and args.max_iters == 10000
+        ):
             args.max_iters = 13000
             print(
-                f"Bitter3 variant: Increased max_iters to {args.max_iters} (+30%)",
+                f"{args.adamwprune_variant.capitalize()} variant: Increased max_iters to {args.max_iters} (+30%)",
                 flush=True,
             )
 
