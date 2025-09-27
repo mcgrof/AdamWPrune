@@ -580,8 +580,8 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
         # Get the pruning variant (bitter lesson approach)
         variant = adamprune_state.get("variant", "bitter0")
 
-        # Use cubic schedule for bitter3/bitter4, linear for others
-        if variant in ["bitter3", "bitter4"]:
+        # Use cubic schedule for bitter3-9, linear for bitter0-2
+        if variant in ["bitter3", "bitter4", "bitter5", "bitter6", "bitter7", "bitter8", "bitter9"]:
             # Cubic schedule: slower initial pruning, faster at the end
             progress = progress**3
 
@@ -763,18 +763,59 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                     for module in adamprune_state["masks"].keys():
                         state = optimizer.state.get(module.weight, {})
 
+                        # Use the same importance calculation logic as in the main scoring section
+                        # This ensures consistency across all variants
                         if variant == "bitter1" or variant == "bitter2":
-                            # Pure magnitude for bitter lesson variants
                             importance = torch.abs(module.weight.data)
-                        elif variant in ["bitter3", "bitter4"]:
-                            # Gradient-magnitude for bitter3/bitter4
+                        elif variant == "bitter3" or variant == "bitter4":
                             if "exp_avg" in state:
-                                grad_importance = torch.sqrt(
-                                    torch.abs(state["exp_avg"]) + 1e-8
-                                )
-                                importance = (
-                                    torch.abs(module.weight.data) * grad_importance
-                                )
+                                grad_importance = torch.sqrt(torch.abs(state["exp_avg"]) + 1e-8)
+                                importance = torch.abs(module.weight.data) * grad_importance
+                            else:
+                                importance = torch.abs(module.weight.data)
+                        elif variant == "bitter5":
+                            if "exp_avg" in state and "exp_avg_sq" in state:
+                                m = state["exp_avg"]
+                                v = state["exp_avg_sq"]
+                                movement = -(module.weight.data.sign() * m) / (torch.sqrt(v) + 1e-8)
+                                importance = -movement + torch.abs(module.weight.data) * 0.1
+                            else:
+                                importance = torch.abs(module.weight.data)
+                        elif variant == "bitter6":
+                            if "exp_avg" in state and "exp_avg_sq" in state:
+                                m = state["exp_avg"]
+                                v = state["exp_avg_sq"]
+                                coherence = (m.pow(2) / (v + 1e-8)).sqrt()
+                                grad_importance = torch.sqrt(torch.abs(m) + 1e-8)
+                                importance = torch.abs(module.weight.data) * grad_importance * coherence
+                            else:
+                                importance = torch.abs(module.weight.data)
+                        elif variant == "bitter7":
+                            if "exp_avg_sq" in state:
+                                v = state["exp_avg_sq"]
+                                stability = 1.0 / (torch.sqrt(v) + 1e-6)
+                                importance = torch.abs(module.weight.data) * stability
+                            else:
+                                importance = torch.abs(module.weight.data)
+                        elif variant == "bitter8":
+                            if "exp_avg" in state and "step" in state:
+                                m = state["exp_avg"]
+                                step = state["step"]
+                                beta1 = adamprune_state.get("beta1", 0.9)
+                                bias_correction = 1.0 - (beta1 ** step)
+                                m_hat = m / (bias_correction + 1e-8)
+                                grad_importance = torch.sqrt(torch.abs(m_hat) + 1e-8)
+                                importance = torch.abs(module.weight.data) * grad_importance
+                            else:
+                                importance = torch.abs(module.weight.data)
+                        elif variant == "bitter9":
+                            if "exp_avg" in state and "exp_avg_sq" in state:
+                                m = state["exp_avg"]
+                                v = state["exp_avg_sq"]
+                                magnitude_score = torch.abs(module.weight.data)
+                                gradient_score = torch.sqrt(torch.abs(m) + 1e-8)
+                                movement_score = -(module.weight.data.sign() * m) / (torch.sqrt(v) + 1e-8)
+                                importance = magnitude_score * gradient_score - 0.1 * movement_score
                             else:
                                 importance = torch.abs(module.weight.data)
                         else:
