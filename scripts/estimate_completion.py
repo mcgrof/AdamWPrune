@@ -42,7 +42,7 @@ def format_time(seconds):
 
 
 def find_running_train_processes():
-    """Find all running train.py processes and their working directories."""
+    """Find all running train.py or train_ra_mla.py processes and their working directories."""
     train_processes = []
 
     try:
@@ -50,11 +50,11 @@ def find_running_train_processes():
             ["pid", "name", "cmdline", "cwd", "create_time"]
         ):
             try:
-                # Check if this is a python process running train.py
+                # Check if this is a python process running train.py or train_ra_mla.py
                 cmdline = proc.info["cmdline"]
                 if cmdline and "python" in cmdline[0].lower():
                     for arg in cmdline:
-                        if "train.py" in arg:
+                        if "train.py" in arg or "train_ra_mla.py" in arg:
                             train_processes.append(
                                 {
                                     "pid": proc.info["pid"],
@@ -199,7 +199,9 @@ def generate_expected_tests(config):
                 if optimizer == "adamwprune":
                     # Generate a test for each variant
                     for variant in adamwprune_variants:
-                        test_name = f"{model}_{optimizer}_{variant}_{pruning}_{sparsity}"
+                        test_name = (
+                            f"{model}_{optimizer}_{variant}_{pruning}_{sparsity}"
+                        )
                         combinations.append(test_name)
                 else:
                     test_name = f"{model}_{optimizer}_{pruning}_{sparsity}"
@@ -275,7 +277,11 @@ def analyze_test_directory(matrix_dir):
                 try:
                     with open(output_log, "r") as f:
                         content = f.read()
-                        if "ERROR - Training failed" in content or "AttributeError" in content or "Traceback" in content:
+                        if (
+                            "ERROR - Training failed" in content
+                            or "AttributeError" in content
+                            or "Traceback" in content
+                        ):
                             is_failed = True
                             # Try to extract error message
                             error_msg = ""
@@ -284,7 +290,9 @@ def analyze_test_directory(matrix_dir):
                                 if "AttributeError" in line or "ERROR" in line:
                                     error_msg = line.strip()
                                     break
-                            results["failed_tests"].append({"name": test_dir.name, "error": error_msg})
+                            results["failed_tests"].append(
+                                {"name": test_dir.name, "error": error_msg}
+                            )
                 except Exception:
                     pass
 
@@ -328,7 +336,9 @@ def analyze_test_directory(matrix_dir):
                                     current_iter = int(iter_matches[-1])
 
                                     # Look for max_iters in command
-                                    max_iter_matches = re.findall(r"--max-iters\s+(\d+)", content)
+                                    max_iter_matches = re.findall(
+                                        r"--max-iters\s+(\d+)", content
+                                    )
                                     if max_iter_matches:
                                         total_iters = int(max_iter_matches[0])
                                     else:
@@ -336,23 +346,31 @@ def analyze_test_directory(matrix_dir):
                                         total_iters = 10000
 
                                     # Look for epochs in command (GPT-2 specific)
-                                    epoch_arg_matches = re.findall(r"--epochs\s+(\d+)", content)
+                                    epoch_arg_matches = re.findall(
+                                        r"--epochs\s+(\d+)", content
+                                    )
                                     if epoch_arg_matches:
                                         total_epochs = int(epoch_arg_matches[0])
                                         # Estimate progress based on iterations
                                         # Rough estimate: assume linear progress through epochs
                                         if total_iters > 0:
-                                            current_epoch = (current_iter / total_iters) * total_epochs
+                                            current_epoch = (
+                                                current_iter / total_iters
+                                            ) * total_epochs
                                         else:
                                             # If no max_iters, estimate from training patterns
                                             # GPT-2 typically does ~50k iters for full training
                                             estimated_iters_per_epoch = 5000
-                                            current_epoch = current_iter / estimated_iters_per_epoch
+                                            current_epoch = (
+                                                current_iter / estimated_iters_per_epoch
+                                            )
                                             if current_epoch > total_epochs:
                                                 current_epoch = total_epochs * 0.9
                                 else:
                                     # CNN models use epochs
-                                    epoch_matches = re.findall(r"Epoch[:\s]+(\d+)", content)
+                                    epoch_matches = re.findall(
+                                        r"Epoch[:\s]+(\d+)", content
+                                    )
                                     if epoch_matches:
                                         current_epoch = int(epoch_matches[-1])
                                     # Try to find total epochs
@@ -478,7 +496,9 @@ def estimate_completion_time(analysis):
     in_progress_remaining = sum(
         e["remaining_time"] for e in estimates.values() if e["remaining_time"] > 0
     )
-    total_remaining = in_progress_remaining + incomplete_time + failed_time + not_started_time
+    total_remaining = (
+        in_progress_remaining + incomplete_time + failed_time + not_started_time
+    )
 
     return {
         "in_progress_estimates": estimates,
@@ -553,16 +573,16 @@ def main():
         estimates = estimate_completion_time(analysis)
 
         # Display results
-        total_expected = len(analysis.get('expected_tests', []))
+        total_expected = len(analysis.get("expected_tests", []))
         if total_expected > 0:
             print(f"Expected tests: {total_expected}")
         print(f"Complete tests: {len(analysis['complete_tests'])}")
 
         # Show failed tests prominently
-        if len(analysis.get('failed_tests', [])) > 0:
+        if len(analysis.get("failed_tests", [])) > 0:
             print(f"\n⚠️  FAILED TESTS: {len(analysis['failed_tests'])}")
-            for failed in analysis['failed_tests']:
-                error_msg = failed.get('error', 'Unknown error')
+            for failed in analysis["failed_tests"]:
+                error_msg = failed.get("error", "Unknown error")
                 if len(error_msg) > 60:
                     error_msg = error_msg[:60] + "..."
                 print(f"   ✗ {failed['name']}: {error_msg}")
@@ -580,7 +600,7 @@ def main():
             for test_name, est in estimates["in_progress_estimates"].items():
                 print(f"  {test_name}:")
                 # Show iterations for GPT-2, epochs for CNN models
-                if est.get('current_iter', 0) > 0:
+                if est.get("current_iter", 0) > 0:
                     print(
                         f"    Progress: {est['progress_percent']:.1f}% (Iter {est.get('current_iter', 0)}, Epoch {est['current_epoch']:.1f}/{est['total_epochs']})"
                     )
@@ -594,7 +614,9 @@ def main():
                 print(f"    Time remaining: {time_str}")
 
             if estimates.get("failed_count", 0) > 0:
-                print(f"\n⚠️  Failed tests to fix and re-run: {estimates['failed_count']}")
+                print(
+                    f"\n⚠️  Failed tests to fix and re-run: {estimates['failed_count']}"
+                )
                 print(
                     f"Estimated time for failed (after fixing): {format_time(estimates.get('failed_time', 0))}"
                 )
