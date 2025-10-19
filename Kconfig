@@ -78,6 +78,7 @@ endmenu
 source "Kconfig.models"
 source "Kconfig.optimizers"
 source "Kconfig.pruning"
+source "Kconfig.ra_mla"
 
 menu "Advanced Options"
 

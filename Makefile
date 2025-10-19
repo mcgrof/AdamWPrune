@@ -171,6 +171,63 @@ train: check-config generate-config prepare-datasets
 		YES=$(YES) python3 scripts/run_test_matrix.py --config .config; \
 	fi
 
+# RA+MLA training targets
+.PHONY: train-ra-mla train-ra-mla-baseline train-ra-mla-full train-ra-mla-ablation
+
+# Direct RA+MLA training (bypasses test matrix framework)
+train-ra-mla: check-config generate-config prepare-gpt2-datasets
+	@echo "Training GPT-2 with RA+MLA..."
+	@if [ "$(CONFIG_ENABLE_RA_MLA)" != "y" ]; then \
+		echo "Error: RA+MLA not enabled in current configuration"; \
+		echo "Load an RA+MLA defconfig first:"; \
+		echo "  make defconfig-gpt2-ra-mla-baseline"; \
+		echo "  make defconfig-gpt2-ra-mla-full"; \
+		echo "  make defconfig-gpt2-ra-mla-ablation"; \
+		exit 1; \
+	fi
+	@# Build tracker argument from config
+	@TRACKER_ARGS=""; \
+	if [ "$(CONFIG_ENABLE_TRACKIO)" = "y" ]; then \
+		TRACKER_ARGS="trackio"; \
+	fi; \
+	if [ "$(CONFIG_ENABLE_WANDB)" = "y" ]; then \
+		if [ -n "$$TRACKER_ARGS" ]; then \
+			TRACKER_ARGS="$$TRACKER_ARGS,wandb"; \
+		else \
+			TRACKER_ARGS="wandb"; \
+		fi; \
+	fi; \
+	if [ -z "$$TRACKER_ARGS" ]; then \
+		TRACKER_ARGS="none"; \
+	fi; \
+	# Run training with config-derived parameters \
+	python3 gpt2/train_ra_mla.py \
+		--model-name "$(CONFIG_GPT2_MODEL_NAME)" \
+		--dataset "$(CONFIG_GPT2_DATASET_NAME)" \
+		--batch-size $(CONFIG_BATCH_SIZE) \
+		--learning-rate $(CONFIG_LEARNING_RATE) \
+		--latent-dim $(CONFIG_RA_MLA_LATENT_DIM) \
+		--ra-window $(CONFIG_RA_MLA_RA_WINDOW) \
+		--ra-alpha $(CONFIG_RA_MLA_RA_ALPHA) \
+		--tracker "$$TRACKER_ARGS" \
+		--tracker-project "$(CONFIG_TRACKER_PROJECT)" \
+		--max-iters $(if $(MAX_ITERS),$(MAX_ITERS),10000) \
+		$(if $(EXTRA_ARGS),$(EXTRA_ARGS),)
+
+# Quick shortcuts for RA+MLA experiments
+train-ra-mla-baseline:
+	@$(MAKE) defconfig-gpt2-ra-mla-baseline
+	@$(MAKE) train-ra-mla MAX_ITERS=$(if $(MAX_ITERS),$(MAX_ITERS),5000)
+
+train-ra-mla-full:
+	@$(MAKE) defconfig-gpt2-ra-mla-full
+	@$(MAKE) train-ra-mla MAX_ITERS=$(if $(MAX_ITERS),$(MAX_ITERS),5000)
+
+train-ra-mla-ablation:
+	@$(MAKE) defconfig-gpt2-ra-mla-ablation
+	@echo "Run ablation with: make train-ra-mla EXTRA_ARGS='--latent-dim 64 --ra-alpha 0.0'"
+	@echo "Or manually: python gpt2/train_ra_mla.py --latent-dim 64 --ra-alpha 0.5 --tracker trackio,wandb"
+
 # Test matrix targets
 test-matrix: check-config prepare-datasets
 	@echo "Running test matrix with configuration from .config..."
@@ -497,6 +554,14 @@ help:
 	@echo "  memory-comparison - Run all optimizer experiments with memory tracking"
 	@echo "  update-graphs     - Update visualization graphs with latest results"
 	@echo "  analyze-gpu       - Analyze GPU memory usage from battle results"
+	@echo ""
+	@echo "RA+MLA (Reciprocal Attention) targets:"
+	@echo "  train-ra-mla      - Train GPT-2 with RA+MLA (requires RA+MLA defconfig)"
+	@echo "  train-ra-mla-baseline - Quick: Pure MLA (alpha=0.0, no reciprocal)"
+	@echo "  train-ra-mla-full     - Quick: Full RA+MLA (alpha=0.5, recommended)"
+	@echo "  train-ra-mla-ablation - Quick: Ablation template (manual parameter sweep)"
+	@echo "  Example: make train-ra-mla MAX_ITERS=1000"
+	@echo "  Example: make train-ra-mla EXTRA_ARGS='--latent-dim 32 --ra-alpha 0.5'"
 	@echo ""
 	@echo "Setup targets:"
 	@echo "  deps              - Install Python dependencies from requirements.txt"
