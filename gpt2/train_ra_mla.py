@@ -224,6 +224,9 @@ try:
                 args.log_metrics = (
                     cfg.RA_MLA_LOG_METRICS == "y" or cfg.RA_MLA_LOG_METRICS is True
                 )
+            # Override training parameters
+            if hasattr(cfg, "GPT2_MAX_ITERS"):
+                args.max_iters = int(cfg.GPT2_MAX_ITERS)
 except Exception as e:
     # If config.py doesn't exist or can't be loaded, just use command line args
     pass
