@@ -63,10 +63,3 @@ CONFIG_COMPILE_MODEL=y
 CONFIG_MIXED_PRECISION=y
 CONFIG_GPU_WARMUP=y
 CONFIG_SAVE_CHECKPOINT=y
-
-# Example ablation commands:
-# make defconfig DEFCONFIG=gpt2-ra-mla-ablation && python gpt2/train_ra_mla.py --latent-dim 32 --ra-alpha 0.0 --tracker trackio,wandb
-# make defconfig DEFCONFIG=gpt2-ra-mla-ablation && python gpt2/train_ra_mla.py --latent-dim 64 --ra-alpha 0.0 --tracker trackio,wandb
-# make defconfig DEFCONFIG=gpt2-ra-mla-ablation && python gpt2/train_ra_mla.py --latent-dim 128 --ra-alpha 0.0 --tracker trackio,wandb
-# make defconfig DEFCONFIG=gpt2-ra-mla-ablation && python gpt2/train_ra_mla.py --latent-dim 64 --ra-alpha 0.5 --tracker trackio,wandb
-# make defconfig DEFCONFIG=gpt2-ra-mla-ablation && python gpt2/train_ra_mla.py --latent-dim 64 --ra-alpha 1.0 --tracker trackio,wandb
