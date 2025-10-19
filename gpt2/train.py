@@ -6,12 +6,21 @@ Integrates with the AdamWPrune optimizer for state-based pruning experiments.
 """
 
 import os
+import sys
 
 # CRITICAL: Set PYTORCH_CUDA_ALLOC_CONF before importing torch
-# This enables expandable memory segments to prevent fragmentation OOM
-os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+# Read from config.py if available, otherwise use default
+try:
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, parent_dir)
+    from config import Config
+    config = Config()
+    if hasattr(config, 'PYTORCH_CUDA_ALLOC_CONF'):
+        os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', config.PYTORCH_CUDA_ALLOC_CONF)
+except (ImportError, AttributeError):
+    # Fallback to safe default if config.py doesn't exist or doesn't have the setting
+    os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
 
-import sys
 import time
 import math
 import pickle

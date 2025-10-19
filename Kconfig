@@ -54,6 +54,21 @@ config DEVICE
 	  Default is "cuda" which will automatically fall back to CPU if no
 	  GPU is available.
 
+config PYTORCH_CUDA_ALLOC_CONF
+	string "PyTorch CUDA memory allocator configuration"
+	default "expandable_segments:True"
+	help
+	  Configuration for PyTorch CUDA memory allocator to prevent OOM.
+
+	  Default: "expandable_segments:True"
+	    - Enables expandable memory segments
+	    - Prevents memory fragmentation
+	    - Critical for avoiding OOM with torch.compile()
+
+	  See /data/TheRock/HIP_OOM_MITIGATION.md for details.
+
+	  This is set as an environment variable BEFORE importing torch.
+
 config DATA_DIR
 	string "Data directory path"
 	default "data"
