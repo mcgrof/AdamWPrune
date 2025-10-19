@@ -90,6 +90,10 @@ parser.add_argument("--min-lr", type=float, default=6e-5, help="Minimum learning
 # Optimizer
 parser.add_argument("--optimizer", type=str, default="adamw", help="Optimizer to use")
 
+# Test matrix compatibility arguments (accepted but ignored for RA+MLA)
+parser.add_argument("--decay-lr", action="store_true", default=True, help="Use LR decay (always enabled for RA+MLA)")
+parser.add_argument("--pruning-method", type=str, default="none", help="Pruning method (ignored for RA+MLA)")
+
 # Evaluation and logging
 parser.add_argument("--eval-interval", type=int, default=100, help="Evaluation interval")
 parser.add_argument("--eval-samples", type=int, default=200, help="Number of evaluation samples")
