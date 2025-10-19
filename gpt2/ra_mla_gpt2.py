@@ -177,7 +177,7 @@ class RA_MLA_Attention(nn.Module):
         return x.contiguous().view(B,T,H*D)
 
     def _expand_v(self, latent_v):  # [B,Tc,L] -> [B,Tc,H,D]
-        if self.cfg.per_head_up_proj:
+        if self.cfg.per_head_v_up:
             # einsum: [B,T,L] x [H,L,D] -> [B,T,H,D]
             return torch.einsum("btl,hld->bthd", latent_v, self.v_up)
         else:
