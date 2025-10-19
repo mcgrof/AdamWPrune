@@ -28,6 +28,11 @@ Ablation studies:
 """
 
 import os
+
+# CRITICAL: Set PYTORCH_CUDA_ALLOC_CONF before importing torch
+# This enables expandable memory segments to prevent fragmentation OOM
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 import sys
 import time
 import math
