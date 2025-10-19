@@ -475,7 +475,7 @@ def patch_gpt2_with_ra_mla(
                 head_mask=None,
                 encoder_hidden_states=None,
                 encoder_attention_mask=None,
-                use_cache=True,
+                use_cache=False,
                 output_attentions=False,
             ):
                 out, new_past = self.core(
@@ -485,10 +485,14 @@ def patch_gpt2_with_ra_mla(
                     attn_mask=attention_mask
                 )
                 # HF expects (attn_output, present, (optional) attn_probs)
+                # But during training with torch.compile, we need to return just the output
                 if output_attentions:
-                    # For brevity we don’t return attn_probs here; extend core to optionally return it if you need.
+                    # For brevity we don't return attn_probs here; extend core to optionally return it if you need.
                     return out, new_past, None
-                return out, new_past
+                if use_cache:
+                    return out, new_past
+                # During training (use_cache=False), return only output for torch.compile compatibility
+                return out
 
         block.attn = _Shim(ra_attn, n_embd, n_head)
 
