@@ -1,4 +1,7 @@
 # Core ML/Training Dependencies
+# NOTE: For AMD GPUs (W7900), use PyTorch+ROCm instead of CUDA version
+# Install from TheRock build: pip install /data/TheRock/external-builds/pytorch/pytorch/dist/torch-*.whl
+# Or official ROCm wheels: pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.2
 torch>=2.0.0
 torchvision
 numpy
