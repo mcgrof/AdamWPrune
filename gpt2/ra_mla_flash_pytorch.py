@@ -22,7 +22,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Tuple
+import sys
+import os
 
+# Handle imports from same directory
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ra_mla_gpt2 import RA_MLA_Config
 
 
@@ -261,7 +265,7 @@ def test_flash_vs_naive():
     from ra_mla_gpt2 import RA_MLA_Attention
 
     # Setup
-    B, T, E, H = 2, 512, 768, 12
+    B, T, E, H = 2, 256, 768, 12  # Smaller for CPU testing
     cfg = RA_MLA_Config(
         latent_dim=64,
         ra_window=64,
@@ -274,7 +278,7 @@ def test_flash_vs_naive():
 
     # Create models
     naive_attn = RA_MLA_Attention(E, H, cfg)
-    flash_attn = FlashRAMLAAttention(E, H, cfg, block_q=128, block_k=128)
+    flash_attn = FlashRAMLAAttention(E, H, cfg, block_q=64, block_k=64)
 
     # Copy weights
     flash_attn.load_state_dict(naive_attn.state_dict())
@@ -283,28 +287,42 @@ def test_flash_vs_naive():
     x = torch.randn(B, T, E)
 
     # Forward pass
-    torch.cuda.reset_peak_memory_stats()
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
     naive_out, _ = naive_attn(x, use_cache=False)
-    naive_mem = torch.cuda.max_memory_allocated() / 1024**2  # MB
+    if torch.cuda.is_available():
+        naive_mem = torch.cuda.max_memory_allocated() / 1024**2  # MB
+    else:
+        naive_mem = 0.0
 
-    torch.cuda.reset_peak_memory_stats()
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
     flash_out, _ = flash_attn(x, use_cache=False)
-    flash_mem = torch.cuda.max_memory_allocated() / 1024**2  # MB
+    if torch.cuda.is_available():
+        flash_mem = torch.cuda.max_memory_allocated() / 1024**2  # MB
+    else:
+        flash_mem = 0.0
 
     # Compare outputs
     max_diff = (naive_out - flash_out).abs().max().item()
     mean_diff = (naive_out - flash_out).abs().mean().item()
 
     print(f"=== FlashRAMLA vs Naive Comparison ===")
+    print(f"Device: {'CUDA' if torch.cuda.is_available() else 'CPU'}")
     print(f"Input shape: [{B}, {T}, {E}], Heads: {H}, Latent: {cfg.latent_dim}")
     print(f"Max difference: {max_diff:.2e}")
     print(f"Mean difference: {mean_diff:.2e}")
-    print(f"Naive memory: {naive_mem:.1f} MB")
-    print(f"Flash memory: {flash_mem:.1f} MB")
-    print(f"Memory reduction: {(1 - flash_mem/naive_mem)*100:.1f}%")
 
-    assert max_diff < 1e-4, f"Outputs differ too much: {max_diff}"
-    print("✓ Test passed!")
+    if torch.cuda.is_available() and naive_mem > 0:
+        print(f"Naive memory: {naive_mem:.1f} MB")
+        print(f"Flash memory: {flash_mem:.1f} MB")
+        print(f"Memory reduction: {(1 - flash_mem/naive_mem)*100:.1f}%")
+    else:
+        print("Memory measurement not available (CPU mode)")
+
+    tolerance = 1e-4
+    assert max_diff < tolerance, f"Outputs differ too much: {max_diff} > {tolerance}"
+    print(f"✓ Test passed! Outputs match within tolerance ({tolerance})")
 
 
 if __name__ == "__main__":
