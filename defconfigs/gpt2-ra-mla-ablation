@@ -12,9 +12,9 @@ CONFIG_GPT2_MODEL_NAME="gpt2"
 CONFIG_GPT2_DATASET_SHAKESPEARE=y
 CONFIG_GPT2_DATASET_NAME="shakespeare"
 CONFIG_GPT2_BLOCK_SIZE=256
-CONFIG_GPT2_GRADIENT_ACCUMULATION=2  # Smaller for faster iteration
-CONFIG_GPT2_EVAL_INTERVAL=50  # More frequent evaluation
-CONFIG_GPT2_EVAL_SAMPLES=100  # Fewer samples for speed
+CONFIG_GPT2_GRADIENT_ACCUMULATION=2
+CONFIG_GPT2_EVAL_INTERVAL=50
+CONFIG_GPT2_EVAL_SAMPLES=100
 CONFIG_GPT2_WARMUP_STEPS=50
 CONFIG_GPT2_DECAY_LR=y
 CONFIG_GPT2_MIN_LR="6e-5"
@@ -38,24 +38,20 @@ CONFIG_OPTIMIZER_SELECT_ADAMW=y
 CONFIG_OPTIMIZER="adamw"
 
 # RA+MLA Configuration - Default for ablation
-# Override these on command line for parameter sweeps:
-#   --latent-dim {32, 64, 128, 256}
-#   --ra-alpha {0.0, 0.25, 0.5, 0.75, 1.0}
-#   --ra-window {32, 64, 128, 256}
 CONFIG_ENABLE_RA_MLA=y
-CONFIG_RA_MLA_LATENT_DIM=64  # Override for ablation
-CONFIG_RA_MLA_RA_WINDOW=64  # Override for ablation
-CONFIG_RA_MLA_RA_ALPHA="0.5"  # Override for ablation
+CONFIG_RA_MLA_LATENT_DIM=64
+CONFIG_RA_MLA_RA_WINDOW=64
+CONFIG_RA_MLA_RA_ALPHA="0.5"
 CONFIG_RA_MLA_PER_HEAD_Q_LATENT=y
 CONFIG_RA_MLA_PER_HEAD_V_UP=y
 CONFIG_RA_MLA_USE_FLASH=n
-CONFIG_RA_MLA_LOG_METRICS=y  # Essential for ablation analysis
+CONFIG_RA_MLA_LOG_METRICS=y
 CONFIG_RA_MLA_CACHE_Q_WINDOW=y
 CONFIG_RA_MLA_USE_ROPE=n
 
 # Experiment Tracking - Essential for ablation tracking
 CONFIG_ENABLE_TRACKIO=y
-CONFIG_ENABLE_WANDB=y  # Enable both for comprehensive tracking
+CONFIG_ENABLE_WANDB=y
 CONFIG_TRACKER_PROJECT="gpt2-ra-mla-ablation"
 
 # Advanced options
