@@ -248,7 +248,20 @@ def estimate_loss(model, eval_samples: int, batch_size: int, block_size: int, de
 def main():
     # Setup
     os.makedirs(args.checkpoint_dir, exist_ok=True)
+
+    # Validate device - handle CUDA/ROCm availability
     device = args.device
+    if device == "cuda":
+        if not torch.cuda.is_available():
+            print("WARNING: CUDA/ROCm not available - falling back to CPU")
+            print("For AMD GPUs (W7900), install PyTorch with ROCm support:")
+            print("  pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.1")
+            device = "cpu"
+        else:
+            print(f"Using device: {device} ({torch.cuda.get_device_name(0)})")
+    else:
+        print(f"Using device: {device}")
+
     dtype_map = {'bfloat16': torch.bfloat16, 'float16': torch.float16, 'float32': torch.float32}
     dtype = dtype_map[args.dtype]
 
