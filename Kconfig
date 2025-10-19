@@ -8,10 +8,12 @@ menu "General Configuration"
 config BATCH_SIZE
 	int "Batch size for training"
 	default 512
-	range 32 2048
+	range 1 2048
 	help
 	  Batch size for training. Larger batch sizes can speed up training
 	  but require more GPU memory. Default is 512.
+	  For GPT-2 with large context (1024), smaller batch sizes (8-16)
+	  may be needed to fit in memory.
 
 config NUM_EPOCHS
 	int "Number of training epochs"
