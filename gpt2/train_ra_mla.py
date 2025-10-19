@@ -96,6 +96,11 @@ parser.add_argument("--eval-samples", type=int, default=200, help="Number of eva
 parser.add_argument("--log-interval", type=int, default=10, help="Logging interval")
 parser.add_argument("--log-metrics", action="store_true", default=True, help="Log attention metrics")
 
+# Experiment tracking
+parser.add_argument("--tracker", type=str, default="none", help="Experiment tracker(s): none, trackio, wandb, or comma-separated")
+parser.add_argument("--tracker-project", type=str, default=None, help="Project name for experiment tracking")
+parser.add_argument("--tracker-run-name", type=str, default=None, help="Run name for experiment tracking")
+
 # Output
 parser.add_argument("--json-output", type=str, default=None, help="Path to save metrics JSON")
 parser.add_argument("--checkpoint-dir", type=str, default="checkpoints_ra_mla", help="Checkpoint directory")
@@ -292,6 +297,51 @@ def main():
     # Metrics tracking
     metrics = RAMLAMetrics()
 
+    # Initialize experiment tracking
+    tracker_names = [t.strip() for t in args.tracker.split(',') if t.strip() and t.strip().lower() != 'none']
+
+    if tracker_names:
+        # Generate run name if not provided
+        run_name = args.tracker_run_name
+        if not run_name:
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            run_name = f"ra_mla_{args.model_name}_{args.optimizer}_L{args.latent_dim}_a{args.ra_alpha}_{timestamp}"
+
+        # Default project name
+        project_name = args.tracker_project if args.tracker_project else "gpt2-ra-mla"
+
+        print(f"\nInitializing experiment tracking: {', '.join(tracker_names)}")
+        print(f"  Project: {project_name}")
+        print(f"  Run: {run_name}")
+
+        if "trackio" in tracker_names:
+            try:
+                import trackio
+                trackio.init(
+                    project=project_name,
+                    config=vars(args),
+                    name=run_name,
+                    log_gpu=True
+                )
+                print("  ✓ Trackio initialized")
+            except ImportError:
+                print("  ✗ Trackio not available (install with: pip install trackio)")
+                tracker_names.remove("trackio")
+
+        if "wandb" in tracker_names:
+            try:
+                import wandb
+                wandb.init(
+                    project=project_name,
+                    config=vars(args),
+                    name=run_name,
+                )
+                print("  ✓ WandB initialized")
+            except ImportError:
+                print("  ✗ WandB not available (install with: pip install wandb)")
+                tracker_names.remove("wandb")
+
     # Training loop
     print(f"\nStarting training for {args.max_iters} iterations...")
     print(f"Batch size: {args.batch_size}, gradient accumulation: {args.gradient_accumulation}")
@@ -311,6 +361,23 @@ def main():
         if iter_num % args.eval_interval == 0 or iter_num == args.max_iters - 1:
             losses = estimate_loss(model, args.eval_samples, args.batch_size, args.block_size, device)
             print(f"Iter {iter_num:6d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | lr {lr:.2e}")
+
+            # Log evaluation metrics to trackers
+            if tracker_names:
+                eval_metrics = {
+                    "iteration": iter_num,
+                    "train_loss": losses['train'],
+                    "val_loss": losses['val'],
+                    "learning_rate": lr,
+                }
+
+                if "trackio" in tracker_names:
+                    import trackio
+                    trackio.log(eval_metrics)
+
+                if "wandb" in tracker_names:
+                    import wandb
+                    wandb.log(eval_metrics)
 
             if losses['val'] < best_val_loss:
                 best_val_loss = losses['val']
@@ -355,6 +422,30 @@ def main():
         if args.log_metrics and iter_num % args.log_interval == 0:
             metrics.log(iter_num, model, dt)
 
+            # Log RA-specific metrics to trackers
+            if tracker_names and len(metrics.attention_entropy) > 0:
+                ra_metrics = {
+                    "iteration": iter_num,
+                    "train_loss_step": total_loss,
+                    "learning_rate": lr,
+                    "forward_time_ms": dt,
+                    "memory_mb": metrics.memory_allocated[-1] if metrics.memory_allocated else 0,
+                }
+
+                # Add RA-specific metrics if available
+                if metrics.attention_entropy:
+                    ra_metrics["attention_entropy"] = metrics.attention_entropy[-1]
+                if metrics.reciprocity_score:
+                    ra_metrics["reciprocity_score"] = metrics.reciprocity_score[-1]
+
+                if "trackio" in tracker_names:
+                    import trackio
+                    trackio.log(ra_metrics)
+
+                if "wandb" in tracker_names:
+                    import wandb
+                    wandb.log(ra_metrics)
+
         # Print progress
         if iter_num % args.log_interval == 0:
             print(f"Iter {iter_num:6d} | loss {total_loss:.4f} | time {dt:.1f}ms | lr {lr:.2e}")
@@ -393,6 +484,35 @@ def main():
         print(f"  Reciprocity: {np.mean(metrics.reciprocity_score):.3f} ± {np.std(metrics.reciprocity_score):.3f}")
     if metrics.forward_time:
         print(f"  Avg iteration time: {np.mean(metrics.forward_time):.1f}ms")
+
+    # Log final summary to trackers
+    if tracker_names:
+        final_summary = {
+            "final_train_loss": final_losses['train'],
+            "final_val_loss": final_losses['val'],
+            "best_val_loss": best_val_loss,
+        }
+
+        if metrics.attention_entropy:
+            final_summary["avg_attention_entropy"] = float(np.mean(metrics.attention_entropy))
+            final_summary["std_attention_entropy"] = float(np.std(metrics.attention_entropy))
+
+        if metrics.reciprocity_score:
+            final_summary["avg_reciprocity_score"] = float(np.mean(metrics.reciprocity_score))
+            final_summary["std_reciprocity_score"] = float(np.std(metrics.reciprocity_score))
+
+        if metrics.forward_time:
+            final_summary["avg_forward_time_ms"] = float(np.mean(metrics.forward_time))
+
+        if "trackio" in tracker_names:
+            import trackio
+            trackio.log(final_summary)
+            trackio.finish()
+
+        if "wandb" in tracker_names:
+            import wandb
+            wandb.log(final_summary)
+            wandb.finish()
 
 
 if __name__ == "__main__":

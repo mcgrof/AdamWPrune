@@ -1,0 +1,182 @@
+# SPDX-License-Identifier: MIT
+# Reciprocal Attention (RA) + Multi-head Latent Attention (MLA) Configuration
+# Experimental R&D feature - see docs/ra.md for details
+
+menu "Reciprocal Attention (RA) + MLA (Experimental)"
+	depends on CONFIG_MODEL_GPT2
+
+config ENABLE_RA_MLA
+	bool "Enable Reciprocal Attention + MLA (EXPERIMENTAL)"
+	default n
+	help
+	  Enable experimental Reciprocal Attention with Multi-head Latent Attention.
+
+	  This is a research R&D feature that reduces attention complexity from
+	  O(n²·D) to O(n²·L) where L << D through low-rank KV compression.
+
+	  Status: Implementation complete, validation in progress
+	  See: docs/ra.md for full documentation and test roadmap
+
+	  WARNING: This is experimental and unproven. Quality impact unknown.
+	  Only use for research exploration, not production training.
+
+if ENABLE_RA_MLA
+
+config RA_MLA_LATENT_DIM
+	int "Latent dimension for K/V compression"
+	default 64
+	range 16 512
+	help
+	  Latent dimension L for compressing keys and values.
+	  Standard GPT-2 has D=64 per head, E=768 total.
+
+	  Compression ratio = D / L:
+	    L=32:  12× compression (high risk, max speed)
+	    L=64:  6× compression (balanced, recommended)
+	    L=128: 3× compression (safe, less benefit)
+	    L=256: 1.5× compression (minimal risk, minimal benefit)
+
+	  Lower L = faster but may hurt quality (UNTESTED!)
+	  Higher L = safer but less speedup
+
+	  Recommended: 64 for initial testing
+
+config RA_MLA_RA_WINDOW
+	int "Reciprocal attention window size"
+	default 64
+	range 16 512
+	help
+	  Width of local band for reciprocal symmetric attention.
+
+	  Reciprocal scoring is applied within |i-j| <= W:
+	    W=32:  Narrow local context
+	    W=64:  Moderate local context (recommended)
+	    W=128: Wide local context
+	    W=256: Very wide context (expensive)
+
+	  Larger W = more reciprocal computation but potentially better
+	  Smaller W = faster but may miss long-range reciprocal patterns
+
+	  Recommended: 64 for initial testing
+
+config RA_MLA_RA_ALPHA
+	string "Reciprocal attention weight (alpha)"
+	default "0.5"
+	help
+	  Weight for the reciprocal symmetric term.
+
+	  alpha=0.0: Pure MLA (no reciprocal, safest baseline)
+	  alpha=0.5: Balanced reciprocal + standard (recommended)
+	  alpha=1.0: Full reciprocal weight
+
+	  Set to "0.0" to test pure MLA first before enabling RA.
+
+	  Recommended: Start with "0.0" to validate MLA, then try "0.5"
+
+config RA_MLA_PER_HEAD_Q_LATENT
+	bool "Use per-head Q-to-latent projections"
+	default y
+	help
+	  Whether to use separate Q-to-latent projections for each attention head.
+
+	  Enabled (y): More expressive, more parameters
+	    - Each head learns its own Q-to-latent mapping
+	    - Better for complex tasks
+	    - Parameters: H × D × L (e.g., 12 × 64 × 64 = 49K per layer)
+
+	  Disabled (n): Shared projection across heads
+	    - All heads use same Q-to-latent mapping
+	    - Fewer parameters, faster
+	    - Parameters: E × L (e.g., 768 × 64 = 49K per layer)
+
+	  Recommended: Enable for maximum expressiveness
+
+config RA_MLA_PER_HEAD_V_UP
+	bool "Use per-head V up-projections"
+	default y
+	help
+	  Whether to use separate V up-projections for each attention head.
+
+	  Enabled (y): More expressive, more parameters
+	    - Each head expands latent V to head space independently
+	    - Parameters: H × L × D (e.g., 12 × 64 × 64 = 49K per layer)
+
+	  Disabled (n): Shared V up-projection
+	    - All heads use same expansion
+	    - Fewer parameters, faster
+	    - Parameters: L × D (e.g., 64 × 64 = 4K per layer)
+
+	  Recommended: Enable for maximum expressiveness
+
+config RA_MLA_USE_FLASH
+	bool "Enable FlashAttention-style tiling"
+	default n
+	help
+	  Use tiled implementation to reduce memory usage.
+
+	  Enabled (y):
+	    - Memory: O(n·L) instead of O(n²·H)
+	    - 30-50% memory reduction expected
+	    - Currently slower in pure PyTorch (no Triton kernel yet)
+	    - No caching support yet (incompatible with generation)
+
+	  Disabled (n):
+	    - Standard implementation
+	    - Full O(n²·H) memory for attention matrices
+	    - Supports caching for generation
+	    - Simpler, easier to debug
+
+	  Recommended: Disable until Triton kernel is implemented
+	  For training only, can enable to test memory savings.
+
+config RA_MLA_LOG_METRICS
+	bool "Log attention metrics (entropy, reciprocity)"
+	default y
+	help
+	  Enable logging of attention-specific metrics:
+	    - Attention entropy: measures distribution uniformity
+	    - Reciprocity score: correlation between A[i,j] and A[j,i]
+
+	  These metrics are useful for research analysis to understand
+	  how RA+MLA differs from standard attention.
+
+	  Minimal performance overhead (<1%).
+
+	  Recommended: Enable for research experiments
+
+config RA_MLA_CACHE_Q_WINDOW
+	bool "Cache queries for reciprocal attention at inference"
+	default y
+	depends on !RA_MLA_USE_FLASH
+	help
+	  Cache a window of queries for computing reciprocal scores during
+	  autoregressive generation.
+
+	  Enabled (y):
+	    - Stores last W queries (where W = RA_MLA_RA_WINDOW)
+	    - Enables full RA during generation
+	    - Memory overhead: O(W·H·D) per layer
+
+	  Disabled (n):
+	    - No query caching
+	    - Reciprocal term only uses current step's query
+	    - Less accurate but lower memory
+
+	  Not available with FlashAttention tiling.
+
+	  Recommended: Enable for generation quality
+
+config RA_MLA_USE_ROPE
+	bool "Use RoPE (Rotary Positional Embeddings)"
+	default n
+	help
+	  Apply rotary positional embeddings to latent keys.
+
+	  GPT-2 vanilla doesn't use RoPE (uses learned absolute positions).
+	  Enable this only if you've retrofitted RoPE to your GPT-2 model.
+
+	  Recommended: Disable (GPT-2 standard)
+
+endif # ENABLE_RA_MLA
+
+endmenu
