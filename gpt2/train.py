@@ -20,6 +20,12 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
+# Suppress wandb weave warning
+try:
+    import weave
+except ImportError:
+    pass
+
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -160,10 +166,20 @@ parser.add_argument(
     "--adamwprune-variant",
     type=str,
     default="bitter0",
-    choices=["bitter0", "bitter1", "bitter2", "bitter3", "bitter4",
-             "bitter5", "bitter6", "bitter7", "bitter8", "bitter9"],
+    choices=[
+        "bitter0",
+        "bitter1",
+        "bitter2",
+        "bitter3",
+        "bitter4",
+        "bitter5",
+        "bitter6",
+        "bitter7",
+        "bitter8",
+        "bitter9",
+    ],
     help="AdamWPrune variants: 0=original, 1=magnitude, 2=scale-aware, 3=grad-mag, 4=layer-adaptive, "
-         "5=movement-to-zero, 6=coherence, 7=second-moment, 8=bias-corrected, 9=hybrid",
+    "5=movement-to-zero, 6=coherence, 7=second-moment, 8=bias-corrected, 9=hybrid",
 )
 
 # SPAM configuration
@@ -479,7 +495,8 @@ def main():
                 flush=True,
             )
         elif (
-            args.adamwprune_variant in ["bitter3", "bitter4", "bitter5", "bitter6", "bitter8", "bitter9"]
+            args.adamwprune_variant
+            in ["bitter3", "bitter4", "bitter5", "bitter6", "bitter8", "bitter9"]
             and args.max_iters == 10000
         ):
             args.max_iters = 13000

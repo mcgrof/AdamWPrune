@@ -1,9 +1,9 @@
 """
-bitter5_coherence.py
+bitter10_coherence.py
 
 Summary
 -------
-This module defines a pruning score called **bitter5_coherence** for the AdamWPrune project.
+This module defines a pruning score called **bitter10_coherence** for the AdamWPrune project.
 It extends the "bitter3" idea (|w| * sqrt(|m|)) by adding temporal-coherence features:
 
 1) Sign stability (few sign flips in parameter updates).
@@ -52,7 +52,7 @@ Implementation Notes
 Integration Points
 ------------------
 1) Call `tracker.update(param)` **after** optimizer.step() each iteration to feed Δw.
-2) When it’s time to prune, call `bitter5_coherence_scores(params, optimizer, tracker, cfg)`
+2) When it’s time to prune, call `bitter10_coherence_scores(params, optimizer, tracker, cfg)`
    to get a concatenated score tensor you can percentile-cut for global sparsity.
 3) Apply masks the same way AdamWPrune does today.
 
@@ -71,7 +71,7 @@ import torch.nn as nn
 # ---------------------------
 
 @dataclass
-class Bitter5Config:
+class Bitter10Config:
     alpha: float = 1.0        # weight on |w| * sqrt(|m|)
     beta_flip: float = 1.0    # weight multiplier inside (1 - flip_rate_ema) ** beta_flip
     beta_dir: float = 1.0     # weight multiplier on cos_dir_ema ** beta_dir
@@ -122,7 +122,7 @@ class CoherenceTracker:
       # after optimizer.step():
       for p in model.parameters(): tracker.update(p)
     """
-    def __init__(self, cfg: Bitter5Config):
+    def __init__(self, cfg: Bitter10Config):
         self.cfg = cfg
         self._state: Dict[int, Dict[str, Any]] = {}
 
@@ -179,15 +179,15 @@ class CoherenceTracker:
         return self._state.get(id(p), None)
 
 # ---------------------------
-# Bitter5 score computation
+# Bitter10 score computation
 # ---------------------------
 
-def bitter5_coherence_scores(params: Iterable[nn.Parameter],
+def bitter10_coherence_scores(params: Iterable[nn.Parameter],
                              optimizer: torch.optim.Optimizer,
                              tracker: CoherenceTracker,
-                             cfg: Bitter5Config) -> torch.Tensor:
+                             cfg: Bitter10Config) -> torch.Tensor:
     """
-    Compute bitter5 scores for all provided params (concatenated).
+    Compute bitter10 scores for all provided params (concatenated).
     Requires optimizer.state[p]['exp_avg'] (Adam/AdamW first moment).
 
     Returns
@@ -261,7 +261,7 @@ def example_training_loop(model: nn.Module,
     Sketch only: shows where to plug the tracker and scorer.
     Replace pruning_impl() with your AdamWPrune masking utilities.
     """
-    cfg = Bitter5Config()
+    cfg = Bitter10Config()
     tracker = CoherenceTracker(cfg)
 
     step = 0
@@ -279,7 +279,7 @@ def example_training_loop(model: nn.Module,
         step += 1
         if step % prune_every_steps == 0:
             params = [p for p in model.parameters() if p.grad is not None]
-            scores = bitter5_coherence_scores(params, opt, tracker, cfg)
+            scores = bitter10_coherence_scores(params, opt, tracker, cfg)
 
             # global threshold for desired sparsity
             k = int(scores.numel() * target_sparsity)
@@ -292,7 +292,7 @@ def example_training_loop(model: nn.Module,
 
 def apply_global_pruning_masks(params, opt, tracker, cfg, threshold):
     """
-    Minimal illustration: build and apply binary masks based on bitter5 scores.
+    Minimal illustration: build and apply binary masks based on bitter10 scores.
     Replace with AdamWPrune's existing mask pipeline.
     """
     idx = 0
@@ -300,7 +300,7 @@ def apply_global_pruning_masks(params, opt, tracker, cfg, threshold):
         if p.grad is None:
             continue
         # recompute per-tensor scores
-        s = bitter5_coherence_scores([p], opt, tracker, cfg)
+        s = bitter10_coherence_scores([p], opt, tracker, cfg)
         if s.numel() == 0:
             continue
         mask = (s > threshold).reshape_as(p.data).to(p.data.dtype)
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     opt = torch.optim.AdamW(lin.parameters(), lr=1e-3)
 
     # Fake single batch loop
-    tracker = CoherenceTracker(Bitter5Config())
+    tracker = CoherenceTracker(Bitter10Config())
     for _ in range(5):
         x = torch.randn(8, 16)
         y = torch.randint(0, 16, (8,))
@@ -331,5 +331,5 @@ if __name__ == "__main__":
         for p in lin.parameters():
             tracker.update(p)
 
-    scores = bitter5_coherence_scores(lin.parameters(), opt, tracker, Bitter5Config())
-    print("bitter5_coherence score shape:", scores.shape, "min/max:", scores.min().item(), scores.max().item())
+    scores = bitter10_coherence_scores(lin.parameters(), opt, tracker, Bitter10Config())
+    print("bitter10_coherence score shape:", scores.shape, "min/max:", scores.min().item(), scores.max().item())
