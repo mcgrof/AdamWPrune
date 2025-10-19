@@ -493,13 +493,13 @@ def patch_gpt2_with_ra_mla(
         block.attn = _Shim(ra_attn, n_embd, n_head)
 
         # Optionally: copy initial weights from original to keep behavior close
-        # Seed q_proj from original c_attn’s Q slice, and initialize down/up near identity-ish.
+        # Seed q_proj from original c_attn's Q slice, and initialize down/up near identity-ish.
         with torch.no_grad():
-            # original c_attn projects to [Q|K|V] jointly: weight shape [E, 3E]
-            Wqkv = original_attn.c_attn.weight.data  # [E, 3E]
-            E = Wqkv.shape[0]
-            # Q slice
-            ra_attn.q_proj.weight.copy_(Wqkv[:, :E])
+            # original c_attn projects to [Q|K|V] jointly: weight shape [3E, E] (PyTorch Linear format)
+            Wqkv = original_attn.c_attn.weight.data  # [3E, E]
+            E = n_embd
+            # Q slice - first E rows (out of 3E) correspond to Q projection
+            ra_attn.q_proj.weight.copy_(Wqkv[:E, :])
             # Reasonable small init for down-proj / up-proj is already set by default normal_(0.02)
 
         # Preserve dropout configs if any
