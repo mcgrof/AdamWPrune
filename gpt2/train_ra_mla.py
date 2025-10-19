@@ -39,6 +39,12 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
+# Suppress wandb weave warning
+try:
+    import weave
+except ImportError:
+    pass
+
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
