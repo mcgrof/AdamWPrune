@@ -157,7 +157,8 @@ def run_training_with_monitoring(
                 spec.loader.exec_module(config_module)
 
                 if hasattr(config_module, 'config'):
-                    use_ra_mla = getattr(config_module.config, 'ENABLE_RA_MLA', 'n') == 'y'
+                    enable_ra_mla = getattr(config_module.config, 'ENABLE_RA_MLA', False)
+                    use_ra_mla = enable_ra_mla is True or enable_ra_mla == 'y'
                     if use_ra_mla:
                         train_script = model_dir / "train_ra_mla.py"
                         logger.info("RA+MLA enabled - using train_ra_mla.py")
