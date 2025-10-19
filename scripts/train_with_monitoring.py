@@ -97,11 +97,12 @@ def build_config_name(model: str, training_args: List[str]) -> str:
     return "_".join(config_parts)
 
 
-def extract_training_metadata(model: str, training_args: List[str]) -> Dict[str, Any]:
+def extract_training_metadata(model: str, training_args: List[str], use_ra_mla: bool = False) -> Dict[str, Any]:
     """Extract training metadata from arguments."""
+    script_name = "train_ra_mla.py" if use_ra_mla else "train.py"
     metadata = {
         "model": model,
-        "training_command": f"python {model}/train.py " + " ".join(training_args),
+        "training_command": f"python {model}/{script_name} " + " ".join(training_args),
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -144,6 +145,25 @@ def run_training_with_monitoring(
     model_dir = parent_dir / model
     train_script = model_dir / "train.py"
 
+    # Check if RA+MLA is enabled for GPT-2
+    use_ra_mla = False
+    if model == "gpt2":
+        try:
+            config_path = parent_dir / "config.py"
+            if config_path.exists():
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("config", config_path)
+                config_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(config_module)
+
+                if hasattr(config_module, 'config'):
+                    use_ra_mla = getattr(config_module.config, 'ENABLE_RA_MLA', 'n') == 'y'
+                    if use_ra_mla:
+                        train_script = model_dir / "train_ra_mla.py"
+                        logger.info("RA+MLA enabled - using train_ra_mla.py")
+        except Exception as e:
+            logger.warning(f"Could not check RA+MLA config: {e}")
+
     if not train_script.exists():
         logger.error(f"Training script not found: {train_script}")
         return None
@@ -153,7 +173,7 @@ def run_training_with_monitoring(
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Extract training metadata
-    training_metadata = extract_training_metadata(model, training_args)
+    training_metadata = extract_training_metadata(model, training_args, use_ra_mla)
 
     # Check if DDP is enabled for GPT-2
     use_ddp = False

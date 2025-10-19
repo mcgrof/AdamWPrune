@@ -3,7 +3,7 @@
 # Experimental R&D feature - see docs/ra.md for details
 
 menu "Reciprocal Attention (RA) + MLA (Experimental)"
-	depends on CONFIG_MODEL_GPT2
+	depends on MODEL_GPT2
 
 config ENABLE_RA_MLA
 	bool "Enable Reciprocal Attention + MLA (EXPERIMENTAL)"
