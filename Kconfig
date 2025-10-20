@@ -69,6 +69,20 @@ config PYTORCH_CUDA_ALLOC_CONF
 
 	  This is set as an environment variable BEFORE importing torch.
 
+config TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL
+	bool "Enable AOTriton experimental features for ROCm"
+	default y
+	depends on DEVICE = "cuda"
+	help
+	  Enable experimental AOTriton features for ROCm/HIP backend.
+	  Required for flash attention support on AMD GPUs.
+
+	  When enabled, sets TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+	  before importing torch.
+
+	  This enables memory efficient attention (flash attention) which
+	  provides 2-4x memory reduction for attention layers.
+
 config DATA_DIR
 	string "Data directory path"
 	default "data"

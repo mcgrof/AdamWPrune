@@ -78,3 +78,4 @@ CONFIG_CHECKPOINT_INTERVAL=1000
 
 # Memory Optimizations - CRITICAL for preventing fragmentation
 CONFIG_PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+CONFIG_TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=y
