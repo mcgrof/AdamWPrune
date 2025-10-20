@@ -499,6 +499,7 @@ def main():
     # Optimizer setup
 
     print(f"Setting up {args.optimizer} optimizer...", flush=True)
+    print(f"Weight decay: {args.weight_decay}", flush=True)
 
     # Enable state pruning for AdamWPrune when requested
     if args.optimizer == "adamwprune" and args.pruning_method == "state":
