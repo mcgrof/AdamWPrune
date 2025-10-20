@@ -155,6 +155,53 @@ config GPT2_MIN_LR
 	  Minimum learning rate for cosine decay.
 	  Typically 1/10th of max learning rate.
 
+config GPT2_MAX_ITERS
+	int "Maximum training iterations"
+	default 10000
+	range 100 1000000
+	help
+	  Maximum number of training iterations.
+	  For FineWebEdu: 50000 iterations is typical for baseline.
+	  For Shakespeare: 5000-10000 iterations is sufficient.
+
+config GPT2_LOG_INTERVAL
+	int "Logging interval (steps)"
+	default 10
+	range 1 1000
+	help
+	  Print training metrics every N steps.
+	  Default is 10 steps.
+
+# Performance optimizations
+config GPT2_CUDNN_BENCHMARK
+	bool "Enable cuDNN benchmark mode"
+	default y
+	depends on DEVICE = "cuda"
+	help
+	  Enable cuDNN autotuner for faster convolution operations.
+	  Should be enabled for fixed-size inputs.
+
+config GPT2_TF32_ALLOWED
+	bool "Allow TensorFloat-32 for matmul operations"
+	default y
+	depends on DEVICE = "cuda"
+	help
+	  Allow TensorFloat-32 (TF32) for matrix multiplications.
+	  Provides speedup on Ampere+ GPUs with minimal accuracy impact.
+
+config GPT2_AMP_DTYPE
+	string "Automatic Mixed Precision dtype"
+	default "bfloat16"
+	depends on MIXED_PRECISION
+	help
+	  Data type for automatic mixed precision training.
+
+	  Options:
+	    bfloat16 - Brain Float16 (recommended for AMD/NVIDIA)
+	    float16  - Half precision (older GPUs)
+
+	  bfloat16 has better numerical stability than float16.
+
 # Generation settings
 config GPT2_GENERATION_TEMPERATURE
 	string "Generation temperature"
