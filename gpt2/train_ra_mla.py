@@ -39,7 +39,10 @@ try:
 
     config = Config()
     if hasattr(config, "PYTORCH_CUDA_ALLOC_CONF"):
-        os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", config.PYTORCH_CUDA_ALLOC_CONF)
+        # Set both old and new variable names for compatibility
+        alloc_conf = config.PYTORCH_CUDA_ALLOC_CONF
+        os.environ.setdefault("PYTORCH_ALLOC_CONF", alloc_conf)
+        os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", alloc_conf)
     if (
         hasattr(config, "TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL")
         and config.TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL
@@ -47,6 +50,7 @@ try:
         os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
 except (ImportError, AttributeError):
     # Fallback to safe defaults if config.py doesn't exist or doesn't have the settings
+    os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
 
