@@ -1,6 +1,6 @@
-# GPT-2 Vanilla Baseline (No MLA, No RA)
-# Matches gpt2-finewebedu-w7900 baseline for fair comparison
-# This is the control experiment to compare against MLA compression
+# GPT-2 Baseline with AdamWSPAM (No Pruning, No MLA, No RA)
+# Uses AdamWSPAM to match historical test_matrix_results_20250923_010926
+# This is the control experiment to compare against MLA compression and pruning variants
 CONFIG_MODEL_MODE_SINGLE=y
 CONFIG_MODEL_SELECT_GPT2=y
 CONFIG_MODEL_GPT2=y
@@ -41,11 +41,19 @@ CONFIG_PIN_MEMORY=y
 CONFIG_PERSISTENT_WORKERS=y
 CONFIG_PREFETCH_FACTOR=4
 
-# Optimizer - AdamW with GPT-2 weight decay
+# Optimizer - AdamWSPAM (matching historical runs)
 CONFIG_OPTIMIZER_MODE_SINGLE=y
-CONFIG_OPTIMIZER_SELECT_ADAMW=y
-CONFIG_OPTIMIZER="adamw"
-CONFIG_ADAMW_WEIGHT_DECAY="0.1"
+CONFIG_OPTIMIZER_SELECT_ADAMWSPAM=y
+CONFIG_OPTIMIZER="adamwspam"
+
+# SPAM Configuration - from test_matrix_results_20250923_010926
+CONFIG_SPAM_THETA="50.0"
+CONFIG_SPAM_ENABLE_CLIP=y
+CONFIG_SPAM_SPIKE_THRESHOLD="2.0"
+CONFIG_SPAM_PERIODIC_RESET=y
+CONFIG_SPAM_INTERVAL=1000
+CONFIG_SPAM_WARMUP=y
+CONFIG_SPAM_WARMUP_STEPS=1000
 
 # Pruning - Disabled
 CONFIG_PRUNING_MODE_NONE=y
