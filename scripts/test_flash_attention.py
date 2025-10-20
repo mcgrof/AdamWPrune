@@ -14,14 +14,37 @@ Exit codes:
     1: Flash attention test failed or warnings detected
 """
 
+import os
 import sys
 import warnings
+
+# CRITICAL: Set environment variables before importing torch
+# Read from config.py if available, otherwise use defaults
+try:
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, parent_dir)
+    from config import Config
+
+    config = Config()
+    if (
+        hasattr(config, "TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL")
+        and config.TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL
+    ):
+        os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
+except (ImportError, AttributeError):
+    # Fallback to safe default if config.py doesn't exist or doesn't have the setting
+    os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
 
 
 def test_flash_attention():
     """Test if flash attention is available and working."""
     print("Testing flash attention support...")
     print("-" * 60)
+
+    # Show environment variables
+    aotriton_enabled = os.environ.get("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "0")
+    print(f"TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL: {aotriton_enabled}")
+    print()
 
     try:
         import torch
