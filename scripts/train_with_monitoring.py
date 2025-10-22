@@ -97,7 +97,9 @@ def build_config_name(model: str, training_args: List[str]) -> str:
     return "_".join(config_parts)
 
 
-def extract_training_metadata(model: str, training_args: List[str], use_ra_mla: bool = False) -> Dict[str, Any]:
+def extract_training_metadata(
+    model: str, training_args: List[str], use_ra_mla: bool = False
+) -> Dict[str, Any]:
     """Extract training metadata from arguments."""
     script_name = "train_ra_mla.py" if use_ra_mla else "train.py"
     metadata = {
@@ -152,13 +154,16 @@ def run_training_with_monitoring(
             config_path = parent_dir / "config.py"
             if config_path.exists():
                 import importlib.util
+
                 spec = importlib.util.spec_from_file_location("config", config_path)
                 config_module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(config_module)
 
-                if hasattr(config_module, 'config'):
-                    enable_ra_mla = getattr(config_module.config, 'ENABLE_RA_MLA', False)
-                    use_ra_mla = enable_ra_mla is True or enable_ra_mla == 'y'
+                if hasattr(config_module, "config"):
+                    enable_ra_mla = getattr(
+                        config_module.config, "ENABLE_RA_MLA", False
+                    )
+                    use_ra_mla = enable_ra_mla is True or enable_ra_mla == "y"
                     if use_ra_mla:
                         train_script = model_dir / "train_ra_mla.py"
                         logger.info("RA+MLA enabled - using train_ra_mla.py")
@@ -176,36 +181,33 @@ def run_training_with_monitoring(
     # Extract training metadata
     training_metadata = extract_training_metadata(model, training_args, use_ra_mla)
 
-    # Check if DDP is enabled for GPT-2
+    # Auto-detect GPUs for automatic DDP support (vendor-agnostic)
     use_ddp = False
     num_gpus = 1
-    if model == "gpt2":
-        try:
-            # Check if config.py exists and has DDP enabled
-            config_path = parent_dir / "config.py"
-            if config_path.exists():
-                import importlib.util
-                spec = importlib.util.spec_from_file_location("config", config_path)
-                config_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(config_module)
+    try:
+        # Use detect_gpus.sh for vendor-agnostic GPU detection
+        detect_script = parent_dir / "scripts" / "detect_gpus.sh"
+        if detect_script.exists():
+            result = subprocess.run(
+                [str(detect_script), "count"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            num_gpus = int(result.stdout.strip())
+            use_ddp = num_gpus > 1
+            if use_ddp:
+                logger.info(f"Auto-detected {num_gpus} GPUs - enabling DDP")
+        else:
+            # Fallback to PyTorch detection
+            import torch
 
-                if hasattr(config_module, 'config'):
-                    use_ddp = getattr(config_module.config, 'GPT2_USE_DDP', 'n') == 'y'
-                    # Check for number of GPUs from GPT2_DDP_NUM_GPUS or PARALLEL_JOBS
-                    num_gpus = int(getattr(config_module.config, 'GPT2_DDP_NUM_GPUS',
-                                         getattr(config_module.config, 'PARALLEL_JOBS', '1')))
-
-                    # If DDP is enabled, use the configured number of GPUs
-                    if use_ddp and num_gpus > 1:
-                        import torch
-                        available_gpus = torch.cuda.device_count()
-                        if available_gpus > 0:
-                            num_gpus = min(num_gpus, available_gpus)
-                        else:
-                            use_ddp = False  # No GPUs available
-
-        except Exception as e:
-            logger.debug(f"Could not determine DDP settings: {e}")
+            num_gpus = torch.cuda.device_count()
+            use_ddp = num_gpus > 1
+            if use_ddp:
+                logger.info(f"Detected {num_gpus} GPUs via PyTorch - enabling DDP")
+    except Exception as e:
+        logger.debug(f"GPU auto-detection failed, using single-GPU mode: {e}")
 
     # Start GPU monitoring
     logger.info(f"Starting training with GPU monitoring: {config_name}")
@@ -221,8 +223,9 @@ def run_training_with_monitoring(
                 cmd = [
                     "torchrun",
                     "--standalone",
-                    "--nproc_per_node", str(num_gpus),
-                    str(train_script)
+                    "--nproc_per_node",
+                    str(num_gpus),
+                    str(train_script),
                 ] + training_args
                 logger.info(f"DDP Command: {' '.join(cmd)}")
             else:
@@ -233,7 +236,7 @@ def run_training_with_monitoring(
             # Change to model directory for training
             # Set environment to disable Python buffering
             env = os.environ.copy()
-            env['PYTHONUNBUFFERED'] = '1'
+            env["PYTHONUNBUFFERED"] = "1"
 
             result = subprocess.run(
                 cmd,
