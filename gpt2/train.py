@@ -447,7 +447,7 @@ def main():
             ddp_backend = "nccl"
             ddp_find_unused = True
     except ImportError:
-        use_ddp = False
+        use_ddp = True
         ddp_backend = "nccl"
         ddp_find_unused = True
 
