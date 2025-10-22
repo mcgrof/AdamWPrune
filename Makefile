@@ -161,9 +161,10 @@ prepare-gpt2-datasets:
 	fi
 
 # Train with current configuration (using test matrix framework for consistency)
+# Automatically detects and uses multiple GPUs with DDP when available
 train: check-config generate-config prepare-datasets
 	@echo "Training with configuration from .config..."
-	@echo "Using test matrix framework for consistent logging and monitoring"
+	@echo "Using test matrix framework with automatic multi-GPU support"
 	@if [ -n "$(EPOCHS)" ]; then \
 		echo "Overriding epochs to $(EPOCHS) for testing..."; \
 		YES=$(YES) python3 scripts/run_test_matrix.py --config .config --override-epochs $(EPOCHS); \
@@ -549,11 +550,16 @@ help:
 	@echo "  kconfig-help      - Show all Kconfig targets"
 	@echo ""
 	@echo "Training targets:"
-	@echo "  train             - Train with current configuration"
+	@echo "  train             - Train with current configuration (auto multi-GPU)"
 	@echo "  all               - Run memory comparison and update graphs (default)"
 	@echo "  memory-comparison - Run all optimizer experiments with memory tracking"
 	@echo "  update-graphs     - Update visualization graphs with latest results"
 	@echo "  analyze-gpu       - Analyze GPU memory usage from battle results"
+	@echo ""
+	@echo "Multi-GPU training:"
+	@echo "  The 'train' target automatically detects available GPUs and uses"
+	@echo "  torchrun for distributed training when multiple GPUs are present."
+	@echo "  Supports NVIDIA, AMD, and other GPU vendors transparently."
 	@echo ""
 	@echo "RA+MLA (Reciprocal Attention) targets:"
 	@echo "  train-ra-mla      - Train GPT-2 with RA+MLA (requires RA+MLA defconfig)"
