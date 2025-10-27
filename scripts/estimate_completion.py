@@ -421,15 +421,20 @@ def estimate_completion_time(analysis):
 
     # Get average time per test
     avg_time = analysis["average_time"]
+    has_completed_tests = avg_time > 0
     if avg_time == 0:
         # No completed tests to base estimate on - use a default estimate
         # Typical test takes around 30-60 minutes for ResNet50 on CIFAR100
-        avg_time = 45 * 60  # 45 minutes as default
+        # GPT-2 training typically takes 20-30 hours
+        avg_time = 45 * 60  # 45 minutes as default for CNN models
 
     # Estimate for in-progress tests
     for test in analysis["in_progress_tests"]:
         # Use iterations if available (more accurate for GPT-2), otherwise epochs
-        if test.get("total_iters", 0) > 0 and test.get("current_iter", 0) > 0:
+        using_iterations = (
+            test.get("total_iters", 0) > 0 and test.get("current_iter", 0) > 0
+        )
+        if using_iterations:
             progress = test["current_iter"] / test["total_iters"]
         elif test["total_epochs"] > 0:
             progress = test["current_epoch"] / test["total_epochs"]
@@ -438,19 +443,27 @@ def estimate_completion_time(analysis):
 
         elapsed = datetime.now().timestamp() - test["start_time"]
 
-        # For early epochs (< 5%), use average time instead of extrapolation
-        # which can be wildly inaccurate
-        if progress < 0.05 and avg_time > 0:
+        # For early progress (< 5%), use average time instead of extrapolation
+        # which can be wildly inaccurate - BUT only if we have completed tests
+        if progress < 0.05 and has_completed_tests:
             # Use historical average, adjusted for progress already made
             remaining = avg_time * (1 - progress)
         elif progress > 0:
-            # For later epochs, use actual progress-based estimation
+            # For later progress, use actual progress-based estimation
             total_expected = elapsed / progress
             remaining = total_expected - elapsed
 
             # Sanity check: if estimated total time is way off from average,
             # blend the estimates (this handles variations in early epochs)
-            if avg_time > 0 and total_expected > avg_time * 2:
+            # SKIP blending for iteration-based training (GPT-2) when no completed tests,
+            # as the default avg_time is for CNN models and will be completely wrong
+            should_blend = (
+                has_completed_tests  # Only blend if we have real historical data
+                and not using_iterations  # Don't blend for iteration-based (more accurate)
+                and total_expected > avg_time * 2
+            )
+
+            if should_blend:
                 # Blend with historical average if estimate seems too high
                 weight = min(
                     progress * 2, 1.0
