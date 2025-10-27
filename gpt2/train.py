@@ -82,6 +82,49 @@ except ImportError:
     from lib.movement_pruning import MovementPruning
     from lib.magnitude_pruning import MagnitudePruning
 
+
+# -----------------------------------------------------------------------------
+# Helper functions
+def supports_tensorcore_fp32():
+    """
+    Detect if the current device supports tensor cores (NVIDIA) or WMMA (AMD).
+    Works on both CUDA and ROCm backends.
+    """
+    if not torch.cuda.is_available():
+        return False
+
+    try:
+        # Check device capability for NVIDIA GPUs
+        cap = torch.cuda.get_device_capability(0)
+        # Tensor cores require SM >= 7.0 (Volta and newer)
+        if cap and cap[0] >= 7:
+            return True
+    except Exception:
+        pass
+
+    # ROCm heuristic: look for RDNA3 / gfx11+ which have WMMA ISA
+    if torch.version.hip:
+        try:
+            arch = torch.cuda.get_device_name(0).lower()
+            # Check for RDNA3 (gfx110x, Navi3x, W7900) or MI series
+            return any(
+                x in arch
+                for x in [
+                    "gfx110",
+                    "navi31",
+                    "navi32",
+                    "navi33",
+                    "w7900",
+                    "mi300",
+                    "mi250",
+                ]
+            )
+        except Exception:
+            pass
+
+    return False
+
+
 # -----------------------------------------------------------------------------
 # Argument parsing
 parser = argparse.ArgumentParser(description="GPT-2 training with AdamWPrune")
@@ -370,6 +413,14 @@ def main():
         device = "cpu"
     else:
         device = args.device
+
+    # Enable TensorFloat32 for matmul operations if supported
+    # WMMA on AMD RDNA3+, Tensor Cores on NVIDIA Volta+
+    if device == "cuda" and supports_tensorcore_fp32():
+        torch.set_float32_matmul_precision("high")
+        print("Enabled TensorFloat32 matmul precision (WMMA/Tensor Cores)", flush=True)
+    elif device == "cuda":
+        print("Tensor cores/WMMA not detected, using default precision", flush=True)
 
     dtype = {
         "float32": torch.float32,

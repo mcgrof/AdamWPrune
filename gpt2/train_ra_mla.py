@@ -86,6 +86,48 @@ except ImportError:
     from lib.optimizers import create_optimizer
 
 
+# -----------------------------------------------------------------------------
+# Helper functions
+def supports_tensorcore_fp32():
+    """
+    Detect if the current device supports tensor cores (NVIDIA) or WMMA (AMD).
+    Works on both CUDA and ROCm backends.
+    """
+    if not torch.cuda.is_available():
+        return False
+
+    try:
+        # Check device capability for NVIDIA GPUs
+        cap = torch.cuda.get_device_capability(0)
+        # Tensor cores require SM >= 7.0 (Volta and newer)
+        if cap and cap[0] >= 7:
+            return True
+    except Exception:
+        pass
+
+    # ROCm heuristic: look for RDNA3 / gfx11+ which have WMMA ISA
+    if torch.version.hip:
+        try:
+            arch = torch.cuda.get_device_name(0).lower()
+            # Check for RDNA3 (gfx110x, Navi3x, W7900) or MI series
+            return any(
+                x in arch
+                for x in [
+                    "gfx110",
+                    "navi31",
+                    "navi32",
+                    "navi33",
+                    "w7900",
+                    "mi300",
+                    "mi250",
+                ]
+            )
+        except Exception:
+            pass
+
+    return False
+
+
 # ============================================================================
 # Argument Parsing
 # ============================================================================
@@ -434,9 +476,12 @@ def main():
         else:
             print(f"Using device: {device} ({torch.cuda.get_device_name(0)})")
 
-            # Enable TensorFloat32 for faster matrix multiplication (PyTorch 2.9+ API)
-            torch.set_float32_matmul_precision("high")
-            print("  TF32 enabled for matrix operations")
+            # Enable TensorFloat32 for matmul if supported (WMMA on AMD, Tensor Cores on NVIDIA)
+            if supports_tensorcore_fp32():
+                torch.set_float32_matmul_precision("high")
+                print("  Enabled TensorFloat32 matmul precision (WMMA/Tensor Cores)")
+            else:
+                print("  Tensor cores/WMMA not detected, using default precision")
     else:
         print(f"Using device: {device}")
 
