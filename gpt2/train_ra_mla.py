@@ -214,6 +214,18 @@ parser.add_argument("--min-lr", type=float, default=6e-5, help="Minimum learning
 # Optimizer
 parser.add_argument("--optimizer", type=str, default="adamw", help="Optimizer to use")
 
+# SPAM configuration (for AdamWSPAM optimizer)
+parser.add_argument("--spam-theta", type=float, default=50.0, help="SPAM theta")
+parser.add_argument(
+    "--spam-interval", type=int, default=1000, help="SPAM reset interval"
+)
+parser.add_argument(
+    "--spam-warmup-steps", type=int, default=100, help="SPAM warmup steps"
+)
+parser.add_argument(
+    "--spam-enable-clip", action="store_true", help="Enable SPAM clipping"
+)
+
 # Test matrix compatibility arguments (accepted but ignored for RA+MLA)
 parser.add_argument(
     "--decay-lr",
