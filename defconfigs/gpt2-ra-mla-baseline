@@ -1,4 +1,4 @@
-# GPT-2 with RA+MLA Baseline (Pure MLA, alpha=0.0)
+# GPT-2 with MLA Baseline (Pure MLA, alpha=0.0)
 # Matches gpt2-finewebedu-w7900 baseline for fair comparison to 42.82 perplexity
 # This configuration tests latent compression only, without reciprocal attention
 CONFIG_MODEL_MODE_SINGLE=y
@@ -29,7 +29,6 @@ CONFIG_GPT2_CUDNN_BENCHMARK=y
 CONFIG_GPT2_TF32_ALLOWED=y
 CONFIG_GPT2_AMP_DTYPE="bfloat16"
 
-# Training parameters - Use batch_size=32 (actual working value from test runs)
 CONFIG_BATCH_SIZE=16
 CONFIG_NUM_EPOCHS=10
 CONFIG_LEARNING_RATE="6e-4"
@@ -55,7 +54,7 @@ CONFIG_SPAM_INTERVAL=1000
 CONFIG_SPAM_WARMUP=y
 CONFIG_SPAM_WARMUP_STEPS=1000
 
-# Pruning - Disabled for RA+MLA experiments
+# Pruning - Disabled
 CONFIG_PRUNING_MODE_NONE=y
 CONFIG_PRUNING_METHOD="none"
 
