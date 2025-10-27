@@ -43,16 +43,41 @@ try:
         alloc_conf = config.PYTORCH_CUDA_ALLOC_CONF
         os.environ.setdefault("PYTORCH_ALLOC_CONF", alloc_conf)
         os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", alloc_conf)
-    if (
-        hasattr(config, "TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL")
-        and config.TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL
-    ):
-        os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
+
+    # Enable experimental flash attention for Navi31/32/33 when explicitly requested
+    # Only set environment variable if CONFIG_GPT2_FLASH_ATTENTION=y AND we detect Navi3x
+    flash_attention_enabled = (
+        hasattr(config, "GPT2_FLASH_ATTENTION")
+        and config.GPT2_FLASH_ATTENTION
+        and config.GPT2_FLASH_ATTENTION != "n"
+    )
+
+    if flash_attention_enabled:
+        # Detect Navi31/32/33 before importing torch using rocm-smi
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["rocm-smi", "--showproductname"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if result.returncode == 0:
+                gpu_name = result.stdout.lower()
+                is_navi3x = any(
+                    x in gpu_name for x in ["navi31", "navi32", "navi33", "w7900"]
+                )
+                if is_navi3x:
+                    os.environ.setdefault(
+                        "TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1"
+                    )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass  # rocm-smi not available or timed out
 except (ImportError, AttributeError):
     # Fallback to safe defaults if config.py doesn't exist or doesn't have the settings
     os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-    os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
 
 import time
 import math
