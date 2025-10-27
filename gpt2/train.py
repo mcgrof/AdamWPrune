@@ -415,7 +415,6 @@ def main():
                 project=args.tracker_project,
                 config=vars(args),
                 name=run_name,
-                log_gpu=True,
             )
             trackers.add("trackio")
             print(

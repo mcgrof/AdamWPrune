@@ -622,7 +622,7 @@ def main():
                 import trackio
 
                 trackio.init(
-                    project=project_name, config=vars(args), name=run_name, log_gpu=True
+                    project=project_name, config=vars(args), name=run_name
                 )
                 print("  ✓ Trackio initialized")
             except ImportError:
