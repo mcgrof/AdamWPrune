@@ -31,8 +31,8 @@ CONFIG_GPT2_CUDNN_BENCHMARK=y
 CONFIG_GPT2_TF32_ALLOWED=y
 CONFIG_GPT2_AMP_DTYPE="bfloat16"
 
-# Training parameters - Use batch_size=32 (actual working value from test runs)
-CONFIG_BATCH_SIZE=32
+# Training parameters - Use batch_size=16 (reduced from 32 due to OOM)
+CONFIG_BATCH_SIZE=16
 CONFIG_NUM_EPOCHS=10
 CONFIG_LEARNING_RATE="6e-4"
 CONFIG_WEIGHT_DECAY="0.1"
