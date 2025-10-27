@@ -181,33 +181,58 @@ def run_training_with_monitoring(
     # Extract training metadata
     training_metadata = extract_training_metadata(model, training_args, use_ra_mla)
 
-    # Auto-detect GPUs for automatic DDP support (vendor-agnostic)
+    # Check if DDP is enabled in kconfig (respect configuration, don't auto-detect)
     use_ddp = False
     num_gpus = 1
-    try:
-        # Use detect_gpus.sh for vendor-agnostic GPU detection
-        detect_script = parent_dir / "scripts" / "detect_gpus.sh"
-        if detect_script.exists():
-            result = subprocess.run(
-                [str(detect_script), "count"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            num_gpus = int(result.stdout.strip())
-            use_ddp = num_gpus > 1
-            if use_ddp:
-                logger.info(f"Auto-detected {num_gpus} GPUs - enabling DDP")
-        else:
-            # Fallback to PyTorch detection
-            import torch
 
-            num_gpus = torch.cuda.device_count()
-            use_ddp = num_gpus > 1
-            if use_ddp:
-                logger.info(f"Detected {num_gpus} GPUs via PyTorch - enabling DDP")
-    except Exception as e:
-        logger.debug(f"GPU auto-detection failed, using single-GPU mode: {e}")
+    # For GPT-2, check if DDP is enabled in config
+    if model == "gpt2":
+        try:
+            config_path = parent_dir / "config.py"
+            if config_path.exists():
+                import importlib.util
+
+                spec = importlib.util.spec_from_file_location("config", config_path)
+                config_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(config_module)
+
+                if hasattr(config_module, "config"):
+                    gpt2_use_ddp = getattr(config_module.config, "GPT2_USE_DDP", False)
+                    use_ddp = gpt2_use_ddp is True or gpt2_use_ddp == "y"
+
+                    # Only detect GPU count if DDP is enabled in config
+                    if use_ddp:
+                        try:
+                            # Use detect_gpus.sh for vendor-agnostic GPU detection
+                            detect_script = parent_dir / "scripts" / "detect_gpus.sh"
+                            if detect_script.exists():
+                                result = subprocess.run(
+                                    [str(detect_script), "count"],
+                                    capture_output=True,
+                                    text=True,
+                                    check=True,
+                                )
+                                num_gpus = int(result.stdout.strip())
+                                logger.info(
+                                    f"DDP enabled in config - detected {num_gpus} GPUs"
+                                )
+                            else:
+                                # Fallback to PyTorch detection
+                                import torch
+
+                                num_gpus = torch.cuda.device_count()
+                                logger.info(
+                                    f"DDP enabled in config - detected {num_gpus} GPUs via PyTorch"
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                f"GPU detection failed, defaulting to 1 GPU: {e}"
+                            )
+                            num_gpus = 1
+                    else:
+                        logger.info("DDP not enabled in config - using single-GPU mode")
+        except Exception as e:
+            logger.warning(f"Could not check DDP config, using single-GPU mode: {e}")
 
     # Start GPU monitoring
     logger.info(f"Starting training with GPU monitoring: {config_name}")
