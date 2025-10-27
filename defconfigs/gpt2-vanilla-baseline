@@ -1,7 +1,7 @@
 # GPT-2 Baseline with AdamWSPAM (No Pruning, No MLA, No RA)
 # Uses AdamWSPAM to match historical test_matrix_results_20250923_010926
-# Learning rate reduced to 3e-4 (from 6e-4) for PyTorch 2.10/TheRock stability
-# Historical 6e-4 causes divergence on new PyTorch/ROCm stack (both AdamW and AdamWSPAM)
+# Learning rate restored to 6e-4 to match A10 NVIDIA configuration
+# This matches the A10 config which did NOT show divergence
 # This is the control experiment to compare against MLA compression and pruning variants
 CONFIG_MODEL_MODE_SINGLE=y
 CONFIG_MODEL_SELECT_GPT2=y
@@ -21,7 +21,7 @@ CONFIG_GPT2_EVAL_SAMPLES=200
 CONFIG_GPT2_LOG_INTERVAL=10
 CONFIG_GPT2_WARMUP_STEPS=2000
 CONFIG_GPT2_DECAY_LR=y
-CONFIG_GPT2_MIN_LR="3e-5"
+CONFIG_GPT2_MIN_LR="6e-5"
 CONFIG_GPT2_DROPOUT="0.1"
 CONFIG_GPT2_FLASH_ATTENTION=n
 CONFIG_GPT2_COMPILE=y
@@ -34,7 +34,7 @@ CONFIG_GPT2_AMP_DTYPE="bfloat16"
 # Training parameters - Use batch_size=32 (actual working value from test runs)
 CONFIG_BATCH_SIZE=32
 CONFIG_NUM_EPOCHS=10
-CONFIG_LEARNING_RATE="3e-4"
+CONFIG_LEARNING_RATE="6e-4"
 CONFIG_WEIGHT_DECAY="0.1"
 CONFIG_NUM_WORKERS=16
 CONFIG_DEVICE="cuda"
