@@ -17,7 +17,8 @@ detect_gpu_count() {
 
     # Try AMD ROCm
     if command -v rocm-smi &> /dev/null; then
-        gpu_count=$(rocm-smi --showproductname 2>/dev/null | grep -c "^GPU")
+        # Count unique GPU device IDs (e.g., GPU[0], GPU[1])
+        gpu_count=$(rocm-smi --showproductname 2>/dev/null | grep -oP '^GPU\[\K\d+' | sort -u | wc -l)
         if [ "$gpu_count" -gt 0 ]; then
             echo "$gpu_count"
             return 0
