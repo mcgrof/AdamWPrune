@@ -1883,8 +1883,12 @@ def main():
                 tests_by_optimizer[opt] = []
 
             variant_str = f"{combo.get('variant', '')} " if combo.get("variant") else ""
+            ablation_step = combo.get("ra_mla_ablation_step")
             if combo["pruning"] == "none":
-                test_desc = f"  - {variant_str}{combo['pruning']} (no sparsity)"
+                if ablation_step is not None:
+                    test_desc = f"  - {variant_str}RA+MLA ablation step {ablation_step}"
+                else:
+                    test_desc = f"  - {variant_str}{combo['pruning']} (no sparsity)"
             else:
                 sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
                 test_desc = (
