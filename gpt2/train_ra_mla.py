@@ -371,6 +371,10 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+# Override max_iters from environment if set (takes precedence over config and command-line)
+if os.environ.get("GPT2_MAX_ITERS"):
+    args.max_iters = int(os.environ.get("GPT2_MAX_ITERS"))
+
 # Handle ablation study step if specified
 # This overrides the mechanism flags to enable specific combinations for ablation study
 if args.ra_mla_ablation_step is not None:
@@ -445,8 +449,9 @@ try:
                 args.log_metrics = (
                     cfg.RA_MLA_LOG_METRICS == "y" or cfg.RA_MLA_LOG_METRICS is True
                 )
-            # Override training parameters
-            if hasattr(cfg, "GPT2_MAX_ITERS"):
+            # Override training parameters only if not set via environment variable
+            # (test matrix passes GPT2_MAX_ITERS via environment which overrides config)
+            if hasattr(cfg, "GPT2_MAX_ITERS") and not os.environ.get("GPT2_MAX_ITERS"):
                 args.max_iters = int(cfg.GPT2_MAX_ITERS)
 except Exception as e:
     # If config.py doesn't exist or can't be loaded, just use command line args
