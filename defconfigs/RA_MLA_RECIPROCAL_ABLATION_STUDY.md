@@ -76,7 +76,29 @@ The ablation study progressively enables reciprocal MLP mechanisms to isolate th
 
 ## Running the Ablation Study
 
-### Sequential Execution (Recommended)
+### Multi-Run Mode (Easiest - Recommended)
+```bash
+# Run ALL 6 configurations in one command
+make KCONFIG_CONFIG=defconfigs/gpt2-ra-mla-reciprocal-ablation-all
+```
+
+This single defconfig enables `RA_MLA_ABLATION_MODE` which automatically runs all 6 ablation steps sequentially:
+- Step 0: Baseline (MLA-only)
+- Step 1: Mechanism 1 only
+- Step 2: Mechanisms 1+2
+- Step 3: Mechanisms 1+2+3
+- Step 4: Mechanisms 1+2 (AdamWSPAM check)
+- Step 5: Full solution (AdamWSPAM)
+
+Results are saved separately for each step in the output directory.
+
+**Advantages**:
+- One command runs entire ablation study
+- Consistent baseline settings across all runs
+- Automatic result tracking and comparison
+- Uses same tracker project: `gpt2-mla-ra-mlp`
+
+### Sequential Execution (Manual Control)
 ```bash
 # Step 0: Baseline (already exists)
 make KCONFIG_CONFIG=defconfigs/gpt2-ra-mla-baseline

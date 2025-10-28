@@ -85,7 +85,7 @@ CONFIG_RA_MLA_MLP_LATENT_DIM=128
 # Experiment Tracking
 CONFIG_ENABLE_TRACKIO=y
 CONFIG_ENABLE_WANDB=n
-CONFIG_TRACKER_PROJECT="gpt2-mla-reciprocal-ablation"
+CONFIG_TRACKER_PROJECT="gpt2-mla-ra-mlp"
 
 # Advanced options
 CONFIG_COMPILE_MODEL=n
