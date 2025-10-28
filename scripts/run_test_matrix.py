@@ -543,6 +543,32 @@ def get_test_matrix(config):
         adamwprune_variants if adamwprune_variants else ["bitter0"]
     )
 
+    # Check for RA_MLA ablation mode
+    ra_mla_ablation_steps = []
+    if config.get("RA_MLA_ABLATION_MODE") == "y" and config.get("ENABLE_RA_MLA") == "y":
+        # Parse the ablation steps string (e.g., "0,1,2,3,4,5")
+        ablation_steps_str = config.get("RA_MLA_ABLATION_STEPS", "").strip('"')
+        if ablation_steps_str:
+            ra_mla_ablation_steps = [s.strip() for s in ablation_steps_str.split(",")]
+        else:
+            # If ablation mode is enabled but no steps specified, check individual flags
+            if config.get("RA_MLA_ABLATION_BASELINE") == "y":
+                ra_mla_ablation_steps.append("0")
+            if config.get("RA_MLA_ABLATION_STEP1") == "y":
+                ra_mla_ablation_steps.append("1")
+            if config.get("RA_MLA_ABLATION_STEP2") == "y":
+                ra_mla_ablation_steps.append("2")
+            if config.get("RA_MLA_ABLATION_STEP3") == "y":
+                ra_mla_ablation_steps.append("3")
+            if config.get("RA_MLA_ABLATION_STEP4") == "y":
+                ra_mla_ablation_steps.append("4")
+            if config.get("RA_MLA_ABLATION_STEP5") == "y":
+                ra_mla_ablation_steps.append("5")
+
+    matrix["ra_mla_ablation_steps"] = (
+        ra_mla_ablation_steps if ra_mla_ablation_steps else None
+    )
+
     # Get sparsity levels from individual TEST_SPARSITY_* configs
     matrix["sparsity_levels"] = []
 
@@ -588,6 +614,9 @@ def generate_combinations(matrix):
     # Get AdamWPrune variants
     adamwprune_variants = matrix.get("adamwprune_variants", ["bitter0"])
 
+    # Get RA_MLA ablation steps
+    ra_mla_ablation_steps = matrix.get("ra_mla_ablation_steps", None)
+
     for model, optimizer, pruning in itertools.product(
         matrix["models"], matrix["optimizers"], matrix["pruning_methods"]
     ):
@@ -599,8 +628,27 @@ def generate_combinations(matrix):
 
         # For no pruning, sparsity is always 0
         if pruning == "none":
-            # For AdamWPrune, generate combinations for each variant
-            if optimizer == "adamwprune":
+            # Check if we should generate RA_MLA ablation steps
+            if ra_mla_ablation_steps and model == "gpt2":
+                # Generate one combination for each ablation step
+                for ablation_step in ra_mla_ablation_steps:
+                    combo = {
+                        "model": model,
+                        "optimizer": optimizer,
+                        "pruning": pruning,
+                        "sparsity": "0.0",
+                        "ra_mla_ablation_step": ablation_step,
+                    }
+                    # Include AdamWPrune variant if applicable
+                    if optimizer == "adamwprune":
+                        for variant in adamwprune_variants:
+                            combo_with_variant = combo.copy()
+                            combo_with_variant["variant"] = variant
+                            combinations.append(combo_with_variant)
+                    else:
+                        combinations.append(combo)
+            # For AdamWPrune without RA_MLA ablation, generate combinations for each variant
+            elif optimizer == "adamwprune":
                 for variant in adamwprune_variants:
                     combinations.append(
                         {
@@ -666,10 +714,18 @@ def run_single_test(
     pruning = combination["pruning"]
     sparsity = combination.get("sparsity", "0.0")
     variant = combination.get("variant", None)
+    ra_mla_ablation_step = combination.get("ra_mla_ablation_step", None)
 
-    # Create test identifier including sparsity level and variant if applicable
+    # Create test identifier including sparsity level, variant, and ablation step if applicable
     if pruning == "none":
-        if variant:
+        if ra_mla_ablation_step:
+            # Include RA_MLA ablation step in test ID (e.g., gpt2_adamwspam_ramla_step2)
+            test_id = f"{model}_{optimizer}_ramla_step{ra_mla_ablation_step}"
+            if variant:
+                test_id = (
+                    f"{model}_{optimizer}_{variant}_ramla_step{ra_mla_ablation_step}"
+                )
+        elif variant:
             test_id = f"{model}_{optimizer}_{variant}_{pruning}"
         else:
             test_id = f"{model}_{optimizer}_{pruning}"
@@ -693,6 +749,8 @@ def run_single_test(
         print(f"Optimizer: {optimizer}")
         if variant:
             print(f"Variant: {variant}")
+        if ra_mla_ablation_step:
+            print(f"RA_MLA Ablation Step: {ra_mla_ablation_step}")
         print(f"Pruning: {pruning}")
         if pruning != "none":
             print(f"Sparsity: {float(sparsity)*100:.0f}%")
@@ -821,6 +879,10 @@ def run_single_test(
         # Add variant parameter if specified
         if variant:
             cmd.extend(["--adamwprune-variant", variant])
+
+    # Add RA_MLA ablation step parameter if specified
+    if ra_mla_ablation_step:
+        cmd.extend(["--ra-mla-ablation-step", ra_mla_ablation_step])
 
     # Note: batch size is configured via config.py, not command line arguments
 
