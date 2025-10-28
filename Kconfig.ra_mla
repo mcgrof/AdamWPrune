@@ -177,6 +177,171 @@ config RA_MLA_USE_ROPE
 
 	  Recommended: Disable (GPT-2 standard)
 
+menu "Reciprocal MLP Mechanisms (Experimental)"
+	depends on ENABLE_RA_MLA
+
+comment "Reciprocal MLP extends RA+MLA by enabling bidirectional"
+comment "information flow between attention and MLP layers."
+comment "Based on scaling-inference.txt: shift compute from attention to MLP"
+
+config RA_MLA_MLP_ATTN_GATE
+	bool "Enable Mechanism 1: MLP-to-Attention Gating"
+	default n
+	help
+	  MLP activations modulate attention head weights in the next layer.
+
+	  How it works:
+	    - MLP hidden states generate per-head gating weights
+	    - These gates modulate attention output in the next layer
+	    - Creates feedback loop where MLP influences attention focus
+
+	  Benefits:
+	    - MLP can guide attention based on learned features
+	    - Enables cross-layer communication
+	    - Low computational cost (small gating network)
+
+	  Cost: +0.1-0.2% slowdown, minimal parameter increase
+
+	  Ablation: Disable to test pure MLA+RA baseline
+	  Recommended: Enable for full reciprocal MLP
+
+config RA_MLA_MLP_GATE_ALPHA
+	string "MLP gating mixing weight (alpha)"
+	default "0.1"
+	depends on RA_MLA_MLP_ATTN_GATE
+	help
+	  Weight for mixing gated attention: (1-α)*attn + α*(attn*gate)
+
+	  α=0.0: No gating (disabled)
+	  α=0.1: Light gating (recommended)
+	  α=0.3: Moderate gating
+	  α=0.5: Strong gating
+
+	  Recommended: 0.1 for initial experiments
+
+config RA_MLA_MLP_CROSS_TOKEN
+	bool "Enable Mechanism 2: Cross-Token MLP Aggregation"
+	default n
+	help
+	  MLP receives weighted sum of other tokens' activations using
+	  attention weights for routing.
+
+	  How it works:
+	    - Reuses attention weights from attention layer
+	    - Aggregates MLP hidden states across tokens
+	    - Enables "attention mass" in MLP space at linear cost
+
+	  Benefits:
+	    - MLP gains cross-token context without O(n²) cost
+	    - Complements attention's global view
+	    - Improves long-range dependencies
+
+	  Cost: +1-2% slowdown, one bmm per MLP layer
+
+	  Ablation: Disable to test MLP without cross-token context
+	  Recommended: Enable for full reciprocal MLP
+
+config RA_MLA_MLP_CROSS_ALPHA
+	string "Cross-token MLP mixing weight (alpha)"
+	default "0.3"
+	depends on RA_MLA_MLP_CROSS_TOKEN
+	help
+	  Weight for mixing cross-token context into MLP hidden state.
+
+	  α=0.0: No cross-token aggregation (disabled)
+	  α=0.3: Moderate aggregation (recommended)
+	  α=0.5: Strong aggregation
+	  α=0.7: Very strong aggregation
+
+	  Recommended: 0.3 for initial experiments
+
+config RA_MLA_MLP_LATENT_RECIP
+	bool "Enable Mechanism 3: MLP Latent Space Reciprocity"
+	default n
+	help
+	  Bidirectional information exchange between attention and MLP
+	  latent spaces.
+
+	  How it works:
+	    - MLP projects to latent space (similar to attention)
+	    - Attention latent → MLP (forward path)
+	    - MLP latent → Attention (reciprocal path)
+	    - Creates symmetric information flow
+
+	  Benefits:
+	    - Attention and MLP share latent representations
+	    - Enables deeper architectural reciprocity
+	    - Aligns with multi-latent compression principles
+
+	  Cost: +2-3% slowdown, small latent projections
+
+	  Ablation: Disable to test without latent-space coupling
+	  Recommended: Enable for full reciprocal MLP
+
+config RA_MLA_MLP_RECIP_ALPHA
+	string "MLP latent reciprocity mixing weight (alpha)"
+	default "0.2"
+	depends on RA_MLA_MLP_LATENT_RECIP
+	help
+	  Weight for mixing latent contributions.
+
+	  α=0.0: No latent reciprocity (disabled)
+	  α=0.2: Light reciprocity (recommended)
+	  α=0.4: Moderate reciprocity
+	  α=0.6: Strong reciprocity
+
+	  Recommended: 0.2 for initial experiments
+
+config RA_MLA_MLP_LATENT_DIM
+	int "MLP latent dimension"
+	default 128
+	range 64 256
+	depends on RA_MLA_MLP_LATENT_RECIP
+	help
+	  Dimension of MLP latent space for mechanism 3.
+
+	  Should be comparable to or larger than RA_MLA_LATENT_DIM
+	  to avoid information bottleneck.
+
+	  Values:
+	    64: Minimal (matches typical RA_MLA_LATENT_DIM)
+	    128: Recommended (2× attention latent)
+	    256: Large (4× attention latent, more capacity)
+
+	  Recommended: 128 (2× typical attention latent_dim=64)
+
+config RA_MLA_MLP_GATE_DIM
+	int "Gate context vector dimension"
+	default 64
+	range 32 128
+	depends on RA_MLA_MLP_ATTN_GATE
+	help
+	  Dimension of intermediate context vector for gating network.
+
+	  Smaller = fewer parameters, less expressive
+	  Larger = more parameters, more expressive
+
+	  Values:
+	    32: Minimal gating capacity
+	    64: Recommended
+	    128: High gating capacity
+
+	  Recommended: 64 for balanced performance
+
+comment "Ablation Study Guidelines:"
+comment "  Baseline (no reciprocal MLP): Disable all three mechanisms"
+comment "  Test Mechanism 1 only: Enable MLP_ATTN_GATE"
+comment "  Test Mechanisms 1+2: Enable MLP_ATTN_GATE + MLP_CROSS_TOKEN"
+comment "  Full reciprocal MLP: Enable all three mechanisms"
+comment ""
+comment "Expected improvements (vs MLA-only baseline):"
+comment "  Mechanism 1: -0.05 to -0.08 val_loss"
+comment "  Mechanism 2: -0.10 to -0.15 val_loss (strongest)"
+comment "  Mechanism 3: -0.05 to -0.10 val_loss"
+comment "  All three: -0.20 to -0.30 val_loss (cumulative)"
+
+endmenu # Reciprocal MLP Mechanisms
+
 endif # ENABLE_RA_MLA
 
 endmenu

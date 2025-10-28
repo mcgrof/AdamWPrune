@@ -196,6 +196,74 @@ parser.add_argument(
     help="Use FlashAttention if available",
 )
 
+# Reciprocal MLP configuration
+parser.add_argument(
+    "--mlp-attn-gate",
+    action="store_true",
+    default=False,
+    help="Enable mechanism 1: MLP gates attention heads",
+)
+parser.add_argument(
+    "--no-mlp-attn-gate",
+    dest="mlp_attn_gate",
+    action="store_false",
+    help="Disable MLP attention gating",
+)
+parser.add_argument(
+    "--mlp-cross-token",
+    action="store_true",
+    default=False,
+    help="Enable mechanism 2: Cross-token MLP aggregation",
+)
+parser.add_argument(
+    "--no-mlp-cross-token",
+    dest="mlp_cross_token",
+    action="store_false",
+    help="Disable cross-token MLP",
+)
+parser.add_argument(
+    "--mlp-latent-recip",
+    action="store_true",
+    default=False,
+    help="Enable mechanism 3: MLP-attention latent reciprocity",
+)
+parser.add_argument(
+    "--no-mlp-latent-recip",
+    dest="mlp_latent_recip",
+    action="store_false",
+    help="Disable MLP latent reciprocity",
+)
+parser.add_argument(
+    "--mlp-gate-alpha",
+    type=float,
+    default=0.1,
+    help="Mixing weight for MLP attention gating",
+)
+parser.add_argument(
+    "--mlp-cross-alpha",
+    type=float,
+    default=0.3,
+    help="Mixing weight for cross-token MLP",
+)
+parser.add_argument(
+    "--mlp-recip-alpha",
+    type=float,
+    default=0.2,
+    help="Mixing weight for MLP latent reciprocity",
+)
+parser.add_argument(
+    "--mlp-gate-dim",
+    type=int,
+    default=64,
+    help="Context vector dimension for gating",
+)
+parser.add_argument(
+    "--mlp-latent-dim",
+    type=int,
+    default=128,
+    help="Dimension for MLP latent space",
+)
+
 # Dataset
 parser.add_argument("--dataset", type=str, default="shakespeare", help="Dataset to use")
 parser.add_argument("--data-dir", type=str, default="data", help="Data directory")
@@ -552,8 +620,16 @@ def main():
     print(
         f"  per_head_q_latent={args.per_head_q_latent}, per_head_v_up={args.per_head_v_up}"
     )
+    if args.mlp_attn_gate or args.mlp_cross_token or args.mlp_latent_recip:
+        print("Reciprocal MLP mechanisms:")
+        if args.mlp_attn_gate:
+            print(f"  [1] MLP-to-Attention Gating: α={args.mlp_gate_alpha}")
+        if args.mlp_cross_token:
+            print(f"  [2] Cross-Token MLP Aggregation: α={args.mlp_cross_alpha}")
+        if args.mlp_latent_recip:
+            print(f"  [3] MLP Latent Reciprocity: α={args.mlp_recip_alpha}")
 
-    model = patch_gpt2_with_ra_mla(
+    model, ra_cfg = patch_gpt2_with_ra_mla(
         model,
         latent_dim=args.latent_dim,
         ra_window=args.ra_window,
@@ -562,6 +638,15 @@ def main():
         per_head_v_up=args.per_head_v_up,
         use_flash=args.use_flash,
         log_metrics=args.log_metrics,
+        # Reciprocal MLP parameters
+        mlp_attn_gate=args.mlp_attn_gate,
+        mlp_cross_token=args.mlp_cross_token,
+        mlp_latent_recip=args.mlp_latent_recip,
+        mlp_gate_alpha=args.mlp_gate_alpha,
+        mlp_cross_alpha=args.mlp_cross_alpha,
+        mlp_recip_alpha=args.mlp_recip_alpha,
+        mlp_gate_dim=args.mlp_gate_dim,
+        mlp_latent_dim=args.mlp_latent_dim,
     )
 
     model = model.to(device)
@@ -621,9 +706,7 @@ def main():
             try:
                 import trackio
 
-                trackio.init(
-                    project=project_name, config=vars(args), name=run_name
-                )
+                trackio.init(project=project_name, config=vars(args), name=run_name)
                 print("  ✓ Trackio initialized")
             except ImportError:
                 print("  ✗ Trackio not available (install with: pip install trackio)")
