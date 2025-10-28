@@ -329,16 +329,16 @@ config RA_MLA_MLP_GATE_DIM
 	  Recommended: 64 for balanced performance
 
 comment "Ablation Study Guidelines:"
-comment "  Baseline (no reciprocal MLP): Disable all three mechanisms"
-comment "  Test Mechanism 1 only: Enable MLP_ATTN_GATE"
-comment "  Test Mechanisms 1+2: Enable MLP_ATTN_GATE + MLP_CROSS_TOKEN"
-comment "  Full reciprocal MLP: Enable all three mechanisms"
+comment "Baseline (no reciprocal MLP): Disable all three mechanisms"
+comment "Test Mechanism 1 only: Enable MLP_ATTN_GATE"
+comment "Test Mechanisms 1+2: Enable MLP_ATTN_GATE + MLP_CROSS_TOKEN"
+comment "Full reciprocal MLP: Enable all three mechanisms"
 comment ""
 comment "Expected improvements (vs MLA-only baseline):"
-comment "  Mechanism 1: -0.05 to -0.08 val_loss"
-comment "  Mechanism 2: -0.10 to -0.15 val_loss (strongest)"
-comment "  Mechanism 3: -0.05 to -0.10 val_loss"
-comment "  All three: -0.20 to -0.30 val_loss (cumulative)"
+comment "Mechanism 1: -0.05 to -0.08 val_loss"
+comment "Mechanism 2: -0.10 to -0.15 val_loss (strongest)"
+comment "Mechanism 3: -0.05 to -0.10 val_loss"
+comment "All three: -0.20 to -0.30 val_loss (cumulative)"
 
 endmenu # Reciprocal MLP Mechanisms
 
@@ -519,15 +519,15 @@ config RA_MLA_BITTER_EMA_BETA
 	  Recommended: 0.99 (very smooth, stable pruning decisions)
 
 comment "Integration with Reciprocal MLP:"
-comment "  Bitter-scale and reciprocal MLP share the same principle:"
-comment "  Compress attention aggressively, expand MLP capacity"
+comment "Bitter-scale and reciprocal MLP share the same principle:"
+comment "Compress attention aggressively, expand MLP capacity"
 comment ""
 comment "Expected combined effect:"
-comment "  MLA latent compression: 6× KV reduction"
-comment "  Bitter-scale head pruning: 1.5× KV reduction (12→8 heads)"
-comment "  Combined: 9× smaller KV cache"
-comment "  MLP expansion: 3072 → 4096-5120 hidden"
-comment "  Result: Faster inference + better accuracy"
+comment "MLA latent compression: 6× KV reduction"
+comment "Bitter-scale head pruning: 1.5× KV reduction (12→8 heads)"
+comment "Combined: 9× smaller KV cache"
+comment "MLP expansion: 3072 → 4096-5120 hidden"
+comment "Result: Faster inference + better accuracy"
 
 endmenu # Bitter-Scale Pruning
 
