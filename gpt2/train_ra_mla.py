@@ -263,6 +263,12 @@ parser.add_argument(
     default=128,
     help="Dimension for MLP latent space",
 )
+parser.add_argument(
+    "--ra-mla-ablation-step",
+    type=str,
+    default=None,
+    help="Ablation study step (0-5). Overrides mechanism flags to enable specific combinations.",
+)
 
 # Dataset
 parser.add_argument("--dataset", type=str, default="shakespeare", help="Dataset to use")
@@ -364,6 +370,43 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+# Handle ablation study step if specified
+# This overrides the mechanism flags to enable specific combinations for ablation study
+if args.ra_mla_ablation_step is not None:
+    step = args.ra_mla_ablation_step
+    if step == "0":
+        # Baseline: MLA only, no reciprocal MLP mechanisms
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+    elif step == "1":
+        # Step 1: Mechanism 1 only (MLP-to-Attention Gating)
+        args.mlp_attn_gate = True
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+    elif step == "2":
+        # Step 2: Mechanisms 1+2 (+ Cross-Token MLP Aggregation)
+        args.mlp_attn_gate = True
+        args.mlp_cross_token = True
+        args.mlp_latent_recip = False
+    elif step == "3":
+        # Step 3: All three mechanisms
+        args.mlp_attn_gate = True
+        args.mlp_cross_token = True
+        args.mlp_latent_recip = True
+    elif step == "4":
+        # Step 4: Mechanisms 1+2 (AdamWSPAM sanity check)
+        args.mlp_attn_gate = True
+        args.mlp_cross_token = True
+        args.mlp_latent_recip = False
+    elif step == "5":
+        # Step 5: Full solution (all three mechanisms with AdamWSPAM)
+        args.mlp_attn_gate = True
+        args.mlp_cross_token = True
+        args.mlp_latent_recip = True
+    else:
+        raise ValueError(f"Invalid ablation step: {step}. Must be 0-5.")
 
 # Override RA+MLA config from config.py if available (for test matrix integration)
 try:
