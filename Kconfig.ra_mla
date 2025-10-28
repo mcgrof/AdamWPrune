@@ -531,6 +531,104 @@ comment "  Result: Faster inference + better accuracy"
 
 endmenu # Bitter-Scale Pruning
 
+menu "Reciprocal MLP Ablation Study (Multi-Run)"
+	depends on ENABLE_RA_MLA
+
+comment "Test multiple reciprocal MLP configurations in one run"
+comment "Enables systematic ablation study of mechanisms 1, 2, and 3"
+
+config RA_MLA_ABLATION_MODE
+	bool "Enable Ablation Study Mode"
+	default n
+	help
+	  Enable ablation study mode to run multiple reciprocal MLP
+	  configurations in a single training session.
+
+	  When enabled, runs 6 configurations:
+	    0. Baseline: MLA-only (no RA, no reciprocal MLP)
+	    1. Mechanism 1 only: MLP-to-Attention Gating
+	    2. Mechanisms 1+2: + Cross-Token MLP Aggregation
+	    3. Mechanisms 1+2+3: Full Reciprocal MLP
+	    4. Mechanisms 1+2 (AdamWSPAM verification)
+	    5. Full solution (all 3 mechanisms + AdamWSPAM)
+
+	  Each configuration runs with the same baseline settings
+	  (latent_dim=128, RA alpha=0.0) for fair comparison.
+
+	  Results are saved separately for each configuration.
+
+	  See: defconfigs/RA_MLA_RECIPROCAL_ABLATION_STUDY.md
+
+config RA_MLA_ABLATION_BASELINE
+	bool "Include baseline (MLA-only)"
+	default y
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run baseline configuration (MLA-only, no reciprocal MLP).
+	  Expected: val_loss ~3.61, ppl ~37.2
+
+config RA_MLA_ABLATION_STEP1
+	bool "Include step 1 (Mechanism 1 only)"
+	default y
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run mechanism 1 only: MLP-to-Attention Gating.
+	  Expected: -0.02 to -0.05 improvement over baseline.
+
+config RA_MLA_ABLATION_STEP2
+	bool "Include step 2 (Mechanisms 1+2)"
+	default y
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run mechanisms 1+2: MLP gates + Cross-token MLP.
+	  Expected: -0.05 to -0.10 improvement over baseline.
+	  Predicted strongest contributor.
+
+config RA_MLA_ABLATION_STEP3
+	bool "Include step 3 (All mechanisms)"
+	default y
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run all three mechanisms: Full reciprocal MLP.
+	  Expected: -0.10 to -0.15 improvement over baseline.
+
+config RA_MLA_ABLATION_STEP4
+	bool "Include step 4 (Mechanisms 1+2, AdamWSPAM check)"
+	default y
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run mechanisms 1+2 with AdamWSPAM (sanity check).
+	  Expected: Should match step 2 results.
+
+config RA_MLA_ABLATION_STEP5
+	bool "Include step 5 (Full solution)"
+	default y
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run full solution: All 3 mechanisms + AdamWSPAM.
+	  Target: val_loss ~3.40-3.50 (45-48% better than vanilla).
+
+config RA_MLA_ABLATION_STEPS
+	string "Ablation steps to run"
+	default "0,1,2,3,4,5" if RA_MLA_ABLATION_BASELINE && RA_MLA_ABLATION_STEP1 && RA_MLA_ABLATION_STEP2 && RA_MLA_ABLATION_STEP3 && RA_MLA_ABLATION_STEP4 && RA_MLA_ABLATION_STEP5
+	default "1,2,3,4,5" if !RA_MLA_ABLATION_BASELINE && RA_MLA_ABLATION_STEP1 && RA_MLA_ABLATION_STEP2 && RA_MLA_ABLATION_STEP3 && RA_MLA_ABLATION_STEP4 && RA_MLA_ABLATION_STEP5
+	default "0,1,2,3" if RA_MLA_ABLATION_BASELINE && RA_MLA_ABLATION_STEP1 && RA_MLA_ABLATION_STEP2 && RA_MLA_ABLATION_STEP3 && !RA_MLA_ABLATION_STEP4 && !RA_MLA_ABLATION_STEP5
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Comma-separated list of ablation steps to run.
+	  Format: "0,1,2,3,4,5"
+
+	  0 = Baseline (MLA-only)
+	  1 = Mechanism 1 only
+	  2 = Mechanisms 1+2
+	  3 = Mechanisms 1+2+3
+	  4 = Mechanisms 1+2 (AdamWSPAM)
+	  5 = Full solution (AdamWSPAM)
+
+	  You can manually override this to run a subset, e.g., "0,2,5"
+
+endmenu # Reciprocal MLP Ablation Study
+
 endif # ENABLE_RA_MLA
 
 endmenu
