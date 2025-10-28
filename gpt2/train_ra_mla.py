@@ -751,6 +751,23 @@ def main():
 
                 trackio.init(project=project_name, config=vars(args), name=run_name)
                 print("  ✓ Trackio initialized")
+
+                # Upload .config file if it exists
+                config_file = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    ".config",
+                )
+                if os.path.exists(config_file):
+                    try:
+                        # Trackio may have a save method, but if not, we'll just log the path
+                        if hasattr(trackio, "save"):
+                            trackio.save(config_file)
+                            print(f"  ✓ Uploaded .config to Trackio")
+                        else:
+                            trackio.log({"config_file": config_file})
+                            print(f"  ✓ Logged .config path to Trackio")
+                    except Exception as e:
+                        print(f"  ⚠ Could not upload .config to Trackio: {e}")
             except ImportError:
                 print("  ✗ Trackio not available (install with: pip install trackio)")
                 tracker_names.remove("trackio")
@@ -765,16 +782,77 @@ def main():
                     name=run_name,
                 )
                 print("  ✓ WandB initialized")
+
+                # Upload .config file if it exists
+                config_file = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    ".config",
+                )
+                if os.path.exists(config_file):
+                    wandb.save(config_file, base_path=os.path.dirname(config_file))
+                    print(f"  ✓ Uploaded .config to WandB")
             except ImportError:
                 print("  ✗ WandB not available (install with: pip install wandb)")
                 tracker_names.remove("wandb")
 
-    # Training loop
+    # Training loop - Print detailed configuration
     print(f"\nStarting training for {args.max_iters} iterations...")
+    print("\n" + "=" * 60)
+    print("TRAINING CONFIGURATION")
+    print("=" * 60)
     print(
         f"Batch size: {args.batch_size}, gradient accumulation: {args.gradient_accumulation}"
     )
     print(f"Effective batch size: {args.batch_size * args.gradient_accumulation}")
+    print(f"Optimizer: {args.optimizer}")
+
+    # Show pruning configuration
+    if (
+        hasattr(args, "pruning_method")
+        and args.pruning_method
+        and args.pruning_method != "none"
+    ):
+        print(
+            f"Pruning: {args.pruning_method} @ {float(args.target_sparsity)*100:.0f}% target sparsity"
+        )
+    else:
+        print("Pruning: None")
+
+    # Show AdamWPrune variant if applicable
+    if args.optimizer == "adamwprune" and hasattr(args, "adamwprune_variant"):
+        variant = getattr(args, "adamwprune_variant", "bitter0")
+        print(f"AdamWPrune variant: {variant}")
+        if hasattr(args, "adamwprune_base_optimizer_name"):
+            base_opt = getattr(args, "adamwprune_base_optimizer_name", "adamw")
+            print(f"Base optimizer: {base_opt}")
+
+    # Show RA+MLA ablation step if specified
+    if args.ra_mla_ablation_step is not None:
+        step_names = {
+            "0": "Baseline (MLA only, no reciprocal MLP)",
+            "1": "Mechanism 1 (MLP-to-Attention Gating)",
+            "2": "Mechanisms 1+2 (+ Cross-Token Aggregation)",
+            "3": "All three mechanisms",
+            "4": "Mechanisms 1+2 (AdamWSPAM check)",
+            "5": "Full solution (all three + AdamWSPAM)",
+        }
+        step_desc = step_names.get(
+            args.ra_mla_ablation_step, f"Step {args.ra_mla_ablation_step}"
+        )
+        print(f"RA+MLA Ablation: Step {args.ra_mla_ablation_step} - {step_desc}")
+
+    # Show reciprocal MLP mechanisms
+    if args.mlp_attn_gate or args.mlp_cross_token or args.mlp_latent_recip:
+        mechanisms = []
+        if args.mlp_attn_gate:
+            mechanisms.append("MLP-Attn-Gate")
+        if args.mlp_cross_token:
+            mechanisms.append("Cross-Token")
+        if args.mlp_latent_recip:
+            mechanisms.append("Latent-Recip")
+        print(f"Reciprocal MLP: {', '.join(mechanisms)}")
+
+    print("=" * 60 + "\n")
 
     model.train()
     iter_num = 0
