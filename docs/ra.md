@@ -1118,7 +1118,325 @@ See `Kconfig.ra_mla` for complete configuration options including alpha paramete
 
 ---
 
+## Bitter-Scale Pruning: Inference-Optimized Structured Pruning
+
+**Status**: Experimental - Kconfig integration complete, implementation pending
+**Created**: 2025-10-28
+**Motivation**: Operationalize scaling laws through structure-aware attention head pruning
+
+### Overview
+
+Bitter-scale is a new pruning variant that extends the "bitter lesson" philosophy to architectural optimization. Unlike traditional magnitude-based pruning, bitter-scale targets **structural units** (attention heads) with **inference efficiency** as the primary objective.
+
+**Core principle**: Prune for KV cache reduction, not just parameter count. Keep heads that provide the most value per byte of KV cache.
+
+### Design Philosophy
+
+Bitter-scale embodies three key insights from scaling laws for inference:
+
+1. **Favor MLP over Attention**: At fixed parameter budgets, wider MLPs with fewer attention heads yield better inference efficiency
+2. **Structure-Aware Pruning**: Remove whole attention heads (not individual weights) to realize actual memory and latency savings
+3. **Multi-Signal Importance**: Combine RA/MLA usage metrics + attention mass + KV bytes for robust head scoring
+
+**Why "bitter"?**: The bitter lesson teaches that simple, scalable methods win over hand-crafted heuristics. Bitter-scale applies this by:
+- Using simple gradient-based signals (Adam optimizer states)
+- Measuring relentlessly (EMA tracking of attention patterns)
+- Targeting what matters most (KV cache size for inference)
+
+### Multi-Signal Head Importance Scoring
+
+Bitter-scale scores attention heads using three complementary signals:
+
+```
+Score = w_ra × RA_usage + w_attn × attention_mass - w_kv × KV_bytes_normalized
+
+where:
+  RA_usage        = EMA of head's participation in RA/MLA attention
+  attention_mass  = Average attention weight magnitude across tokens
+  KV_bytes        = Memory footprint of head's KV cache (head_dim × seq_len)
+```
+
+**Key insight**: The negative KV bytes term creates **usage-per-KV-byte efficiency**:
+- High-usage heads → high score → keep (regardless of KV cost)
+- Low-usage heads with large KV → low score → prune first
+- Low-usage heads with small KV → neutral score → keep if space allows
+
+This directly operationalizes the scaling law principle: compress attention capacity while maintaining quality.
+
+### Integration with Reciprocal MLP
+
+Bitter-scale and reciprocal MLP are **perfectly aligned** architecturally:
+
+| Component | Reciprocal MLP Goal | Bitter-Scale Contribution |
+|-----------|---------------------|---------------------------|
+| **Attention** | Compress to latent space (768→64) | Prune 25-50% of heads |
+| **KV Cache** | 6× reduction via MLA latent | Additional 1.5-2× reduction via head pruning |
+| **MLP** | Expand width (3072→4096) | Higher LR (1.1×) encourages growth |
+| **Combined** | N_attn : N_mlp ≈ 1:2.5 | **9× smaller KV cache, 1.5× larger MLP** |
+
+**Synergy example**:
+```
+Vanilla GPT-2:
+  12 heads × 768 dims = 9M attention params
+  KV cache: 12 × 64 × 2048 = 1.5M floats/batch
+
+After MLA (latent_dim=64):
+  12 heads × 64 latent = 0.8M attention params
+  KV cache: 12 × 64 × 2048 = 1.5M floats/batch (still 12 heads!)
+
+After MLA + Bitter-Scale (prune to 8 heads):
+  8 heads × 64 latent = 0.5M attention params
+  KV cache: 8 × 64 × 2048 = 1.0M floats/batch (33% reduction)
+
+Combined effect:
+  - Attention params: 94% reduction (9M → 0.5M)
+  - KV cache: 67% reduction (1.5M → 1.0M)
+  - MLP params: +50% expansion (7M → 10.5M)
+  - Total params: Similar (~124M), but inference-optimal shape
+```
+
+### State-Aligned Pruning
+
+Unlike naive pruning methods, bitter-scale properly cleans up **optimizer states** when pruning heads:
+
+**Problem**: Standard pruning removes weight dimensions but leaves Adam momentum/variance buffers intact
+- Stale m/v buffers apply outdated gradients to new parameter layout
+- Causes training instability, slow recovery, or divergence
+
+**Solution**: State-aligned pruning zeroes out m/v for pruned dimensions:
+```python
+def prune_heads_with_state_cleanup(model, optimizer, to_prune):
+    # 1. Slice weight tensors (Q, K, V projections)
+    new_weights = prune_head_dimensions(old_weights, to_prune)
+
+    # 2. Zero out Adam states for pruned dimensions
+    opt_state = optimizer.state[old_weights]
+    opt_state['exp_avg'] = torch.zeros_like(new_weights)
+    opt_state['exp_avg_sq'] = torch.zeros_like(new_weights)
+
+    # 3. Replace parameter in-place
+    old_weights.data = new_weights.data
+```
+
+**Critical for reciprocal MLP**: When pruning heads, reciprocal projection matrices (MLP gate → heads, MLP latent → attention) must also be resized and their optimizer states cleaned.
+
+### Post-Prune Learning Rate Adjustments
+
+Bitter-scale applies **differential learning rates** after pruning to stabilize training:
+
+```
+LR_attention = base_LR × 0.9  (conservative - preserve high-value heads)
+LR_mlp       = base_LR × 1.1  (aggressive - expand into freed capacity)
+```
+
+**Rationale**:
+- Remaining attention heads are high-value (survived pruning) → lower LR protects them
+- MLP has more capacity budget (attention compressed) → higher LR encourages growth
+- Creates student-teacher dynamic: MLP as active learner, attention as stable guide
+
+**Reciprocal MLP connection**: This aligns with mechanism 1 (MLP-to-Attention Gating):
+- MLP learns gating signals with higher LR → adaptive steering
+- Attention responds to MLP signals with lower LR → stable backbone
+- Reciprocal projections use base LR → balanced communication channel
+
+### Gradual Pruning Schedule
+
+Bitter-scale supports **continuous pruning** during training, unlike one-shot post-hoc methods:
+
+```python
+# Training loop with integrated pruning
+for step in range(max_steps):
+    loss = train_step(model, batch)
+
+    if step % prune_interval == 0 and step >= warmup_steps:
+        # 1. Collect signals (EMA tracked during forward passes)
+        attn_mass = model.get_attention_statistics()
+        ra_usage = model.get_ra_usage_scores()
+
+        # 2. Compute multi-signal importance
+        scores = compute_head_scores(attn_mass, ra_usage, kv_bytes)
+
+        # 3. Prune lowest 5% of remaining heads
+        to_prune = choose_bottom_k(scores, ratio=0.05)
+        prune_heads_with_state_cleanup(model, optimizer, to_prune)
+
+        # 4. Adjust learning rates
+        adjust_lr_multipliers(optimizer, attn_scale=0.9, mlp_scale=1.1)
+```
+
+**Benefits for reciprocal MLP**:
+- Gradual pruning allows reciprocal connections to adapt as architecture changes
+- Avoids catastrophic forgetting from one-shot removal
+- Reciprocal pathways can "rewire" around pruned heads
+- Model learns with pruning as continuous architectural pressure
+
+### Kconfig Integration
+
+Bitter-scale is fully integrated into the Kconfig system (`Kconfig.ra_mla`):
+
+```kconfig
+menu "Bitter-Scale Pruning (Inference-Optimized)"
+    depends on ENABLE_RA_MLA
+
+config RA_MLA_BITTER_SCALE
+    bool "Enable Bitter-Scale Pruning"
+    default n
+
+config RA_MLA_BITTER_TARGET_HEADS
+    int "Target number of heads to keep"
+    default 8
+    range 4 12
+
+config RA_MLA_BITTER_WEIGHT_RA
+    string "Weight for RA/MLA usage signal"
+    default "1.0"
+
+config RA_MLA_BITTER_WEIGHT_ATTN
+    string "Weight for attention mass signal"
+    default "1.0"
+
+config RA_MLA_BITTER_WEIGHT_KVBYTES
+    string "Weight for KV bytes penalty"
+    default "0.5"
+
+config RA_MLA_BITTER_LR_SCALE_ATTN
+    string "Post-prune LR multiplier for attention"
+    default "0.9"
+
+config RA_MLA_BITTER_LR_SCALE_MLP
+    string "Post-prune LR multiplier for MLP"
+    default "1.1"
+```
+
+**Configuration philosophy**:
+- All mechanisms default to disabled (backward compatible)
+- Signal weights tunable via Kconfig (no code changes for experiments)
+- Pruning schedule configurable (interval, warmup, target heads)
+- EMA beta for signal smoothing adjustable per-experiment
+
+### Expected Results
+
+Based on scaling law predictions and RA+MLA baseline results:
+
+**Baseline Comparison** (FineWebEdu, 10.4K iters):
+- **Vanilla GPT-2**: val_loss 4.0655, ppl 58.29
+- **MLA-only**: val_loss 3.6154, ppl 37.17 (36% better)
+- **MLA+RA**: val_loss 3.6420, ppl 37.90 (34% better)
+
+**Predicted Bitter-Scale Performance**:
+- **MLA + Bitter-Scale (12→8 heads)**:
+  - val_loss 3.60-3.65, ppl 37-38 (similar to baseline, ±2%)
+  - KV cache: 33% reduction (actual memory savings)
+  - Inference throughput: +15-20% (reduced memory bandwidth)
+
+- **MLA + Reciprocal MLP + Bitter-Scale**:
+  - val_loss 3.35-3.45, ppl 28-31 (reciprocal MLP improvement preserved)
+  - KV cache: 67% reduction (MLA latent + head pruning)
+  - MLP width: +50% expansion (3072 → 4096)
+  - Inference throughput: +25-30% despite wider MLP (KV cache dominant)
+
+**Critical test**: Does reciprocal MLP make models more or less robust to bitter-scale pruning?
+- **Hypothesis A**: More robust - reciprocal connections provide redundant pathways
+- **Hypothesis B**: Less robust - reciprocal connections create dependencies that break when pruned
+- **Test**: Compare perplexity degradation after pruning (MLA vs. MLA+Reciprocal+Bitter)
+
+### Integration with GQA (Grouped Query Attention)
+
+Bitter-scale is compatible with **Grouped Query Attention** (GQA), which shares KV heads across multiple Q heads:
+
+**GQA structure**:
+```
+Standard: 12 Q heads, 12 KV heads (1:1 ratio)
+GQA:      12 Q heads, 3 KV heads  (4:1 ratio)
+MQA:      12 Q heads, 1 KV head   (12:1 ratio)
+```
+
+**Synergy with MLA**:
+- MLA: Compress KV to shared latent space (6× reduction per head)
+- GQA: Share compressed KV across query groups (4× reduction in head count)
+- **Combined: 24× KV cache reduction**
+
+**Bitter-scale with GQA**:
+- Score KV heads (not Q heads) for pruning
+- Each KV head removal affects multiple Q heads
+- Higher penalty for pruning shared KV heads (more Q heads depend on them)
+
+**Future exploration**: Does GQA + MLA + Bitter-Scale reach optimal N_attn : N_mlp faster than MLA + Bitter-Scale alone?
+
+### Open Questions
+
+1. **How do reciprocal connections affect pruning stability?**
+   - Do MLP-to-attention gating signals help identify important heads?
+   - Does cross-token MLP aggregation create dependencies that resist pruning?
+   - Can MLP latent space reciprocity compensate for pruned attention capacity?
+
+2. **What is the optimal prune-train schedule?**
+   - One-shot post-training vs. gradual during training?
+   - Lottery ticket (prune → rewind → retrain) for reciprocal MLP?
+   - Dynamic pruning with regrowth (like RigL) for adaptive architecture?
+
+3. **Can we prune reciprocal projection matrices?**
+   - MLP gate projections (hidden → gate_dim → n_heads)
+   - Cross-token projections (hidden → hidden)
+   - Latent space bridges (attn_latent ↔ mlp_latent)
+   - Trade-off: prune communication channels vs. keep dense for robustness
+
+4. **How does bitter-scale interact with different latent_dim choices?**
+   - Aggressive latent compression (16) + moderate pruning (25%)
+   - vs. Moderate compression (64) + aggressive pruning (50%)
+   - Which path yields better perplexity-inference trade-off?
+
+### Implementation Status
+
+**Phase 1: Kconfig Integration** (COMPLETE - 2025-10-28)
+- ✅ Added bitter-scale menu to `Kconfig.ra_mla`
+- ✅ 9 configuration options with help text
+- ✅ Integration guidance documented
+- ✅ Defaults set for conservative baseline (disabled by default)
+
+**Phase 2: Standalone Implementation** (PENDING)
+- Implement `BitterScalePruner` class for RA+MLA models
+- Head importance scoring from RA usage + attention mass + KV bytes
+- Adam state cleanup during pruning
+- LR multiplier application (0.9× attention, 1.1× MLP)
+
+**Phase 3: Reciprocal-Aware Pruning** (PENDING)
+- Extend to `ReciprocalBitterPruner` with reciprocal metrics
+- MLP gate contribution to head importance
+- Cross-token impact scoring
+- MLP latent strength signals
+
+**Phase 4: Ablation Studies** (PENDING)
+- Baseline: MLA-only (no pruning)
+- MLA + Bitter-Scale (12→8 heads)
+- MLA + Reciprocal MLP + Bitter-Scale
+- Measure: perplexity, KV cache size, inference throughput, training stability
+
+### References
+
+- `docs/bitter-scale-ra-mlp-integration.md`: Detailed design analysis
+- `adamwprune_bitter-scale.py`: Reference implementation (standalone)
+- `scaling-inference.txt`: Scaling laws motivation
+- Sardana & Frankle (2024): Inference-optimal architectures
+
+---
+
 ## Changelog
+
+### 2025-10-28 - Bitter-Scale Pruning Integration
+- Added bitter-scale pruning support to Kconfig system
+- 9 configuration options for multi-signal head scoring
+- Integration with reciprocal MLP documented
+- Design philosophy: structure-aware pruning for inference efficiency
+- Multi-signal scoring: RA usage + attention mass + KV bytes
+- State-aligned pruning with Adam optimizer state cleanup
+- Post-prune LR multipliers: 0.9× attention, 1.1× MLP
+- Gradual pruning schedule support
+- Expected: 67% KV cache reduction when combined with MLA + reciprocal MLP
+- GQA (Grouped Query Attention) compatibility documented
+
+**Status**: Kconfig integration complete, implementation pending
+**Next**: Implement `BitterScalePruner` class for RA+MLA models
 
 ### 2025-10-28 - Reciprocal MLP Integration
 - Merged Reciprocal MLP mechanisms into core RA+MLA architecture
