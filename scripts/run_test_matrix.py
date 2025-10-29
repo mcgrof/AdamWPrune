@@ -949,6 +949,10 @@ def run_single_test(
         if "GPT2_MAX_ITERS" in os.environ:
             env["GPT2_MAX_ITERS"] = os.environ["GPT2_MAX_ITERS"]
 
+        # Set PyTorch memory allocator configuration for better memory management
+        # This helps prevent OOM errors by allowing expandable memory segments
+        env["PYTORCH_HIP_ALLOC_CONF"] = "expandable_segments:True"
+
         # Run with real-time output to console AND capture to file
         with open(log_file, "w") as f_log:
             # Use Popen for real-time output
@@ -2049,23 +2053,48 @@ def main():
                 results.append(result)
 
                 # Clear GPU memory between tests to prevent OOM errors
+                print("\n  Cleaning up GPU memory...")
+
+                # Step 1: Python-based cleanup (most effective for PyTorch)
+                cleanup_script = Path(__file__).parent / "cleanup_gpu.py"
                 try:
-                    result = subprocess.run(
+                    cleanup_result = subprocess.run(
+                        [sys.executable, str(cleanup_script)],
+                        capture_output=True,
+                        timeout=30,
+                        text=True,
+                    )
+                    if cleanup_result.returncode == 0:
+                        print(f"  {cleanup_result.stdout.strip()}")
+                    else:
+                        print(
+                            f"  Warning: Python GPU cleanup had issues: {cleanup_result.stderr}"
+                        )
+                except Exception as e:
+                    print(f"  Warning: Could not run Python GPU cleanup: {e}")
+
+                # Step 2: ROCm GPU reset (hardware-level cleanup)
+                try:
+                    reset_result = subprocess.run(
                         ["rocm-smi", "--gpureset", "--device", "0"],
                         capture_output=True,
                         timeout=10,
                         text=True,
                     )
-                    if result.returncode == 0:
-                        print("  GPU memory cleared")
+                    if reset_result.returncode == 0:
+                        print("  ROCm GPU reset successful")
                     else:
-                        print(f"  Warning: GPU reset failed: {result.stderr}")
+                        print(
+                            f"  Warning: ROCm GPU reset failed: {reset_result.stderr}"
+                        )
                 except Exception as e:
-                    print(f"  Warning: Could not reset GPU: {e}")
-                    # Fallback: just wait a moment for cleanup
-                    import time
+                    print(f"  Warning: Could not reset GPU via ROCm: {e}")
 
-                    time.sleep(2)
+                # Step 3: Wait for cleanup to complete
+                import time
+
+                time.sleep(3)
+                print("  GPU cleanup complete\n")
 
                 # Stop on failure if requested
                 if args.stop_on_failure and not result.get("success", False):
