@@ -2048,6 +2048,20 @@ def main():
             if result:
                 results.append(result)
 
+                # Clear GPU memory between tests to prevent OOM errors
+                try:
+                    subprocess.run(
+                        ["rocm-smi", "--gpureset"],
+                        capture_output=True,
+                        timeout=10,
+                    )
+                    print("  GPU memory cleared")
+                except Exception:
+                    # Fallback: just wait a moment for cleanup
+                    import time
+
+                    time.sleep(2)
+
                 # Stop on failure if requested
                 if args.stop_on_failure and not result.get("success", False):
                     print(f"\n{'='*60}")
