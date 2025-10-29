@@ -96,28 +96,27 @@ def plot_ascii_u_curve(
         cur_row = max(0, min(height - 1, cur_row))
         grid[cur_row][cur_col] = "●"
 
-    # Add y-axis with fixed-width label (8 chars for alignment)
-    # Truncate or pad y_label to fit
-    y_label_short = y_label[:6] if len(y_label) > 6 else y_label
+    # Add y-axis with fixed-width label (10 chars for alignment)
+    # Pad y_label to fit
+    label_width = 10
 
     for i, row in enumerate(grid):
         if i == 0:
-            label = f"{y_label_short:>6s} │"
+            label = f"{y_label:>{label_width}s} │"
         elif i == height - 1:
-            label = "(good) │"
-        elif i == height // 2:
-            label = "       │"
+            label = f"{'(good)':>{label_width}s} │"
         else:
-            label = "       │"
+            label = " " * label_width + " │"
         lines.append(label + "".join(row))
 
     # Add x-axis
-    lines.append("       └" + "─" * width)
+    lines.append(" " * label_width + " └" + "─" * width)
 
-    # Add x-axis labels
-    lines.append(f"        {x_label}")
+    # Add x-axis labels (aligned with the left margin)
+    lines.append(" " * (label_width + 2) + f"{x_label}")
     lines.append(
-        f"       {x_min:.1f}"
+        " " * (label_width + 1)
+        + f"{x_min:.1f}"
         + " " * (width - 20)
         + f"{x_opt:.1f}★"
         + " " * 8
