@@ -376,6 +376,7 @@ args = parser.parse_args()
 # Override max_iters from environment if set (takes precedence over config and command-line)
 if os.environ.get("GPT2_MAX_ITERS"):
     args.max_iters = int(os.environ.get("GPT2_MAX_ITERS"))
+    print(f"DEBUG: Set max_iters from GPT2_MAX_ITERS environment variable: {args.max_iters}")
 
 # Handle ablation study step if specified
 # This overrides the mechanism flags to enable specific combinations for ablation study
