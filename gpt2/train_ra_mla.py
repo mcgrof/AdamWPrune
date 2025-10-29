@@ -104,11 +104,13 @@ from ra_mla_gpt2 import patch_gpt2_with_ra_mla, score_heads_for_prune_gpt2
 # Import training utilities from base train.py
 try:
     from lib.optimizers import create_optimizer
+    from lib.scaling_curves import show_scaling_curves
 except ImportError:
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
     from lib.optimizers import create_optimizer
+    from lib.scaling_curves import show_scaling_curves
 
 
 # -----------------------------------------------------------------------------
@@ -858,6 +860,25 @@ def main():
         print(f"Reciprocal MLP: {', '.join(mechanisms)}")
 
     print("=" * 60 + "\n")
+
+    # Show inference scaling law U-curves
+    try:
+        # Get model configuration parameters
+        n_layers = model_args.get("n_layer", 12)
+        n_embd = model_args.get("n_embd", 768)
+
+        # Calculate MLP dimension
+        # Standard GPT-2 uses 4x expansion (n_embd -> 4*n_embd)
+        mlp_dim = 4 * n_embd
+
+        # Count total parameters
+        param_count = sum(p.numel() for p in model.parameters())
+
+        # Display the U-curves
+        print(show_scaling_curves(n_layers, n_embd, mlp_dim, param_count))
+    except Exception as e:
+        # If scaling curves fail, just continue - this is informational only
+        print(f"Note: Could not display scaling curves: {e}\n")
 
     model.train()
     iter_num = 0
