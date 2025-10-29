@@ -944,6 +944,11 @@ def run_single_test(
     log_file = os.path.join(test_output_dir, "output.log")
 
     try:
+        # Prepare environment - copy current env and ensure GPT2_MAX_ITERS is propagated
+        env = os.environ.copy()
+        if "GPT2_MAX_ITERS" in os.environ:
+            env["GPT2_MAX_ITERS"] = os.environ["GPT2_MAX_ITERS"]
+
         # Run with real-time output to console AND capture to file
         with open(log_file, "w") as f_log:
             # Use Popen for real-time output
@@ -955,6 +960,7 @@ def run_single_test(
                 bufsize=1,  # Line buffered
                 universal_newlines=True,
                 cwd=working_dir,  # Run from the model directory
+                env=env,  # Pass environment variables including GPT2_MAX_ITERS
             )
 
             # Stream output line by line (suppress in parallel mode)
