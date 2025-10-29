@@ -1886,7 +1886,19 @@ def main():
             ablation_step = combo.get("ra_mla_ablation_step")
             if combo["pruning"] == "none":
                 if ablation_step is not None:
-                    test_desc = f"  - {variant_str}RA+MLA ablation step {ablation_step}"
+                    # Detailed ablation step descriptions
+                    step_descriptions = {
+                        "0": "Baseline (MLA only, no reciprocal MLP)",
+                        "1": "Mechanism 1 (MLP-to-Attention Gating)",
+                        "2": "Mechanisms 1+2 (MLP-to-Attn + Cross-Token)",
+                        "3": "Mechanisms 1+2+3 (Full reciprocal MLP)",
+                        "4": "AdamWSPAM sanity check (Mech 1+2)",
+                        "5": "Full RA-MLP solution (all mechanisms)",
+                    }
+                    step_desc = step_descriptions.get(
+                        ablation_step, f"Step {ablation_step}"
+                    )
+                    test_desc = f"  - {variant_str}RA+MLA ablation step {ablation_step} - {step_desc}"
                 else:
                     test_desc = f"  - {variant_str}{combo['pruning']} (no sparsity)"
             else:
