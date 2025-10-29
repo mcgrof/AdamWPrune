@@ -165,11 +165,14 @@ prepare-gpt2-datasets:
 train: check-config generate-config prepare-datasets
 	@echo "Training with configuration from .config..."
 	@echo "Using test matrix framework with automatic multi-GPU support"
+	@if [ -n "$(MAX_ITERS)" ]; then \
+		echo "Setting MAX_ITERS to $(MAX_ITERS) for GPT-2 testing..."; \
+	fi
 	@if [ -n "$(EPOCHS)" ]; then \
 		echo "Overriding epochs to $(EPOCHS) for testing..."; \
-		YES=$(YES) python3 scripts/run_test_matrix.py --config .config --override-epochs $(EPOCHS); \
+		GPT2_MAX_ITERS=$(MAX_ITERS) YES=$(YES) python3 scripts/run_test_matrix.py --config .config --override-epochs $(EPOCHS); \
 	else \
-		YES=$(YES) python3 scripts/run_test_matrix.py --config .config; \
+		GPT2_MAX_ITERS=$(MAX_ITERS) YES=$(YES) python3 scripts/run_test_matrix.py --config .config; \
 	fi
 
 # RA+MLA training targets
