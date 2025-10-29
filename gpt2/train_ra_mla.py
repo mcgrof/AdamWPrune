@@ -863,9 +863,9 @@ def main():
 
     # Show inference scaling law U-curves
     try:
-        # Get model configuration parameters
-        n_layers = model_args.get("n_layer", 12)
-        n_embd = model_args.get("n_embd", 768)
+        # Get model configuration parameters from model_config
+        n_layers = model_config.n_layer
+        n_embd = model_config.n_embd
 
         # Calculate MLP dimension
         # Standard GPT-2 uses 4x expansion (n_embd -> 4*n_embd)
