@@ -2050,13 +2050,18 @@ def main():
 
                 # Clear GPU memory between tests to prevent OOM errors
                 try:
-                    subprocess.run(
-                        ["rocm-smi", "--gpureset"],
+                    result = subprocess.run(
+                        ["rocm-smi", "--gpureset", "--device", "0"],
                         capture_output=True,
                         timeout=10,
+                        text=True,
                     )
-                    print("  GPU memory cleared")
-                except Exception:
+                    if result.returncode == 0:
+                        print("  GPU memory cleared")
+                    else:
+                        print(f"  Warning: GPU reset failed: {result.stderr}")
+                except Exception as e:
+                    print(f"  Warning: Could not reset GPU: {e}")
                     # Fallback: just wait a moment for cleanup
                     import time
 
