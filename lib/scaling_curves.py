@@ -112,16 +112,29 @@ def plot_ascii_u_curve(
     # Add x-axis
     lines.append(" " * label_width + " └" + "─" * width)
 
-    # Add x-axis labels (aligned with the left margin)
+    # Add x-axis labels (aligned with the curve)
     lines.append(" " * (label_width + 2) + f"{x_label}")
-    lines.append(
-        " " * (label_width + 1)
-        + f"{x_min:.1f}"
-        + " " * (width - 20)
-        + f"{x_opt:.1f}★"
-        + " " * 8
-        + f"{x_max:.1f}"
-    )
+
+    # Calculate positions for x-axis tick labels
+    # Position them at the start, optimal point, and end of the curve
+    x_min_str = f"{x_min:.1f}"
+    x_opt_str = f"{x_opt:.1f}★"
+    x_max_str = f"{x_max:.1f}"
+
+    # Build the x-axis tick line
+    tick_line = " " * (label_width + 2)  # Align with curve start
+    tick_line += x_min_str
+
+    # Calculate spacing to center optimal marker
+    opt_pos = width // 2 - len(x_opt_str) // 2
+    spacing_to_opt = opt_pos - len(x_min_str)
+    tick_line += " " * max(1, spacing_to_opt) + x_opt_str
+
+    # Calculate spacing to right edge
+    spacing_to_max = width - opt_pos - len(x_opt_str) - len(x_max_str)
+    tick_line += " " * max(1, spacing_to_max) + x_max_str
+
+    lines.append(tick_line)
 
     # Add legend
     lines.append("")
