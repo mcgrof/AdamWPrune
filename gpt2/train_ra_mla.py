@@ -87,6 +87,8 @@ from typing import Dict, List, Optional
 
 import torch
 import torch.nn.functional as F
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
 import numpy as np
 
 # Suppress wandb weave warning
@@ -640,6 +642,59 @@ def main():
     else:
         print(f"Using device: {device}")
 
+    # -------------------------------------------------------------------------
+    # DDP setup (if enabled)
+    ddp = False
+    ddp_rank = 0
+    ddp_local_rank = 0
+    ddp_world_size = 1
+    master_process = True
+    seed_offset = 0
+
+    # Check if DDP is enabled via config
+    try:
+        import config as cfg
+
+        if hasattr(cfg, "config") and hasattr(cfg.config, "GPT2_USE_DDP"):
+            use_ddp = cfg.config.GPT2_USE_DDP == "y"
+            ddp_backend = getattr(cfg.config, "GPT2_DDP_BACKEND", "nccl")
+            ddp_find_unused = (
+                getattr(cfg.config, "GPT2_DDP_FIND_UNUSED_PARAMS", "y") == "y"
+            )
+        else:
+            use_ddp = False
+            ddp_backend = "nccl"
+            ddp_find_unused = True
+    except (ImportError, AttributeError):
+        use_ddp = False
+        ddp_backend = "nccl"
+        ddp_find_unused = True
+
+    # Initialize DDP if enabled and environment variables are set
+    if use_ddp and "RANK" in os.environ:
+        ddp = True
+        init_process_group(backend=ddp_backend)
+        ddp_rank = int(os.environ["RANK"])
+        ddp_local_rank = int(os.environ["LOCAL_RANK"])
+        ddp_world_size = int(os.environ["WORLD_SIZE"])
+        device = f"cuda:{ddp_local_rank}"
+        torch.cuda.set_device(device)
+        master_process = ddp_rank == 0
+        seed_offset = ddp_rank
+        print(
+            f"DDP initialized: rank {ddp_rank}/{ddp_world_size}, local rank {ddp_local_rank}, device {device}",
+            flush=True,
+        )
+    else:
+        master_process = True
+        seed_offset = 0
+        if use_ddp:
+            print(
+                "DDP enabled in config but RANK environment variable not set. Running in single GPU mode.",
+                flush=True,
+            )
+
+    # -------------------------------------------------------------------------
     # Configure torch.compile() for better performance
     if args.compile:
         # Allow .item() calls in compiled graphs (for metrics logging)
@@ -701,9 +756,15 @@ def main():
 
     model = model.to(device)
 
-    # Compile if requested
-    if args.compile:
-        print("Compiling model with torch.compile...")
+    # Wrap model in DDP if enabled
+    if ddp:
+        model = DDP(
+            model, device_ids=[ddp_local_rank], find_unused_parameters=ddp_find_unused
+        )
+
+    # Compile model if requested (only compile the base model, not DDP wrapper)
+    if args.compile and hasattr(torch, "compile") and not ddp:
+        print("Compiling model with torch.compile()...", flush=True)
         model = torch.compile(model)
 
     # Count parameters
@@ -922,18 +983,19 @@ def main():
 
             if losses["val"] < best_val_loss:
                 best_val_loss = losses["val"]
-                checkpoint_path = os.path.join(args.checkpoint_dir, "best_model.pt")
-                torch.save(
-                    {
-                        "iteration": iter_num,
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "val_loss": best_val_loss,
-                        "config": vars(args),
-                    },
-                    checkpoint_path,
-                )
-                print(f"Saved best checkpoint (val_loss={best_val_loss:.4f})")
+                if master_process:
+                    checkpoint_path = os.path.join(args.checkpoint_dir, "best_model.pt")
+                    torch.save(
+                        {
+                            "iteration": iter_num,
+                            "model_state_dict": model.state_dict(),
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "val_loss": best_val_loss,
+                            "config": vars(args),
+                        },
+                        checkpoint_path,
+                    )
+                    print(f"Saved best checkpoint (val_loss={best_val_loss:.4f})")
 
         # Forward-backward
         t0 = time.time()
@@ -1006,25 +1068,26 @@ def main():
 
         iter_num += 1
 
-    # Save final checkpoint
-    final_checkpoint_path = os.path.join(args.checkpoint_dir, "final_model.pt")
-    torch.save(
-        {
-            "iteration": iter_num,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "config": vars(args),
-        },
-        final_checkpoint_path,
-    )
-    print(f"\nSaved final checkpoint to {final_checkpoint_path}")
+    # Save final checkpoint (only master process in DDP mode)
+    if master_process:
+        final_checkpoint_path = os.path.join(args.checkpoint_dir, "final_model.pt")
+        torch.save(
+            {
+                "iteration": iter_num,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "config": vars(args),
+            },
+            final_checkpoint_path,
+        )
+        print(f"\nSaved final checkpoint to {final_checkpoint_path}")
 
-    # Save metrics
-    if args.json_output:
-        metrics.save(args.json_output)
-    else:
-        default_metrics_path = os.path.join(args.checkpoint_dir, "metrics.json")
-        metrics.save(default_metrics_path)
+        # Save metrics
+        if args.json_output:
+            metrics.save(args.json_output)
+        else:
+            default_metrics_path = os.path.join(args.checkpoint_dir, "metrics.json")
+            metrics.save(default_metrics_path)
 
     # Final evaluation
     print("\nFinal evaluation:")
@@ -1086,6 +1149,10 @@ def main():
 
             wandb.log(final_summary)
             wandb.finish()
+
+    # Cleanup DDP
+    if ddp:
+        destroy_process_group()
 
 
 if __name__ == "__main__":
