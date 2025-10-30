@@ -15,6 +15,7 @@ trackio>=0.1.0
 
 # Data Processing
 tokenizers
+tiktoken
 safetensors
 
 # Visualization & Monitoring
