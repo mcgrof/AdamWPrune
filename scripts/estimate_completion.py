@@ -136,6 +136,20 @@ def generate_expected_tests(config):
             optimizers.append("adamwspam")
         if config.get("OPTIMIZER_ENABLE_ADAMWPRUNE") == "y":
             optimizers.append("adamwprune")
+    elif config.get("OPTIMIZER_MODE_SINGLE") == "y":
+        # Single optimizer mode - check which one is selected
+        if config.get("OPTIMIZER_SELECT_SGD") == "y":
+            optimizers.append("sgd")
+        if config.get("OPTIMIZER_SELECT_ADAM") == "y":
+            optimizers.append("adam")
+        if config.get("OPTIMIZER_SELECT_ADAMW") == "y":
+            optimizers.append("adamw")
+        if config.get("OPTIMIZER_SELECT_ADAMWADV") == "y":
+            optimizers.append("adamwadv")
+        if config.get("OPTIMIZER_SELECT_ADAMWSPAM") == "y":
+            optimizers.append("adamwspam")
+        if config.get("OPTIMIZER_SELECT_ADAMWPRUNE") == "y":
+            optimizers.append("adamwprune")
 
     # Determine pruning methods
     pruning_methods = []
@@ -146,6 +160,9 @@ def generate_expected_tests(config):
             pruning_methods.append("state")
         if config.get("PRUNING_ENABLE_MAGNITUDE") == "y":
             pruning_methods.append("magnitude")
+    elif config.get("PRUNING_MODE_NONE") == "y":
+        # No pruning mode
+        pruning_methods.append("none")
 
     # Determine sparsity levels
     sparsity_levels = []
@@ -173,6 +190,28 @@ def generate_expected_tests(config):
         if not adamwprune_variants:
             adamwprune_variants = ["bitter0"]
 
+    # Check for RA+MLA ablation steps
+    ra_mla_ablation_steps = []
+    if config.get("RA_MLA_ABLATION_MODE") == "y" and config.get("ENABLE_RA_MLA") == "y":
+        # Parse ablation steps from config (e.g., "0,1,2,3,4,5")
+        ablation_steps_str = config.get("RA_MLA_ABLATION_STEPS", "").strip('"')
+        if ablation_steps_str:
+            ra_mla_ablation_steps = [s.strip() for s in ablation_steps_str.split(",")]
+        else:
+            # If ablation mode is on but no steps string, check individual flags
+            if config.get("RA_MLA_ABLATION_BASELINE") == "y":
+                ra_mla_ablation_steps.append("0")
+            if config.get("RA_MLA_ABLATION_STEP1") == "y":
+                ra_mla_ablation_steps.append("1")
+            if config.get("RA_MLA_ABLATION_STEP2") == "y":
+                ra_mla_ablation_steps.append("2")
+            if config.get("RA_MLA_ABLATION_STEP3") == "y":
+                ra_mla_ablation_steps.append("3")
+            if config.get("RA_MLA_ABLATION_STEP4") == "y":
+                ra_mla_ablation_steps.append("4")
+            if config.get("RA_MLA_ABLATION_STEP5") == "y":
+                ra_mla_ablation_steps.append("5")
+
     # Generate all valid combinations
     for model, optimizer, pruning in itertools.product(
         models, optimizers, pruning_methods
@@ -185,7 +224,18 @@ def generate_expected_tests(config):
 
         # For no pruning, sparsity is always 0
         if pruning == "none":
-            if optimizer == "adamwprune":
+            # Check if RA+MLA ablation is enabled for GPT-2
+            if model == "gpt2" and ra_mla_ablation_steps:
+                # Generate a test for each ablation step
+                for ablation_step in ra_mla_ablation_steps:
+                    if optimizer == "adamwprune":
+                        for variant in adamwprune_variants:
+                            test_name = f"{model}_{optimizer}_{variant}_ramla_step{ablation_step}"
+                            combinations.append(test_name)
+                    else:
+                        test_name = f"{model}_{optimizer}_ramla_step{ablation_step}"
+                        combinations.append(test_name)
+            elif optimizer == "adamwprune":
                 # Generate a test for each variant
                 for variant in adamwprune_variants:
                     test_name = f"{model}_{optimizer}_{variant}_none"
