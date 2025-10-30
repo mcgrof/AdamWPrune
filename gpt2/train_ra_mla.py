@@ -797,14 +797,14 @@ def main():
     # Metrics tracking
     metrics = RAMLAMetrics()
 
-    # Initialize experiment tracking
+    # Initialize experiment tracking (only on master process for DDP)
     tracker_names = [
         t.strip()
         for t in args.tracker.split(",")
         if t.strip() and t.strip().lower() != "none"
     ]
 
-    if tracker_names:
+    if tracker_names and master_process:
         # Generate run name if not provided
         run_name = args.tracker_run_name
         if not run_name:
@@ -969,8 +969,8 @@ def main():
                 f"Iter {iter_num:6d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | lr {lr:.2e}"
             )
 
-            # Log evaluation metrics to trackers
-            if tracker_names:
+            # Log evaluation metrics to trackers (only master process)
+            if tracker_names and master_process:
                 eval_metrics = {
                     "iteration": iter_num,
                     "train_loss": losses["train"],
@@ -1039,8 +1039,8 @@ def main():
         if args.log_metrics and iter_num % args.log_interval == 0:
             metrics.log(iter_num, model, dt)
 
-            # Log RA-specific metrics to trackers
-            if tracker_names and len(metrics.attention_entropy) > 0:
+            # Log RA-specific metrics to trackers (only master process)
+            if tracker_names and master_process and len(metrics.attention_entropy) > 0:
                 ra_metrics = {
                     "iteration": iter_num,
                     "train_loss_step": total_loss,
@@ -1118,8 +1118,8 @@ def main():
     if metrics.forward_time:
         print(f"  Avg iteration time: {np.mean(metrics.forward_time):.1f}ms")
 
-    # Log final summary to trackers
-    if tracker_names:
+    # Log final summary to trackers (only master process)
+    if tracker_names and master_process:
         final_summary = {
             "final_train_loss": final_losses["train"],
             "final_val_loss": final_losses["val"],
