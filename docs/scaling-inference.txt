@@ -1,0 +1,47 @@
+Title: Scaling Laws Meet Model Architecture: Toward Inference-Efficient LLMs
+
+Summary:
+This paper extends classical scaling laws by integrating inference-time efficiency as a first-class optimization target. Traditional scaling laws describe how model loss scales with compute during pretraining, but they ignore the cost of running large models at inference. The authors propose a modified objective that balances accuracy, compute, and inference latency, showing that architectural choices—not just parameter counts—strongly affect scaling behavior.
+
+Key Ideas:
+1. Extended Scaling Law Objective:
+   • Introduces a new loss formulation including inference FLOPs and memory footprint.
+   • Defines an explicit trade-off between training compute and inference cost:
+       Loss ∝ (Compute)^-α + λ·InferenceCost
+   • Enables “architecture-aware scaling,” where model shape (attention vs. MLP width) is optimized jointly with size.
+
+2. Attention vs. MLP Rebalancing:
+   • In large LLMs, most inference FLOPs come from the MLP stack, not attention.
+   • Shifting 20–30% of compute from attention into MLP width maintains perplexity but reduces inference time.
+   • Inference-optimal models use fewer attention heads and proportionally wider MLPs.
+
+3. Architectural Efficiency Law:
+   • Defines an efficiency exponent η linking parameters to inference cost:
+       Performance ∼ N_params^α / (InferenceCost)^η
+   • The best architectures maximize α/η (accuracy per unit inference cost).
+
+4. Scaling Regimes:
+   • <1B params: attention dominates compute.
+   • 10–70B params: MLP dominates inference FLOPs.
+   • >100B params: KV cache and memory bandwidth dominate; multi-query or grouped-query attention become essential.
+
+5. KV Cache and Sequence Length Scaling:
+   • KV memory grows linearly with heads × head_dim × sequence_length.
+   • Reducing KV dimensionality (via grouped heads or projection) and using deeper MLPs yields better throughput with little loss.
+
+Design Implications:
+• MLP expansion is relatively cheap in inference cost.
+• Reducing attention heads or KV cache size gives the largest memory/latency wins.
+• Optimal architectural ratio tends toward:
+    N_attention : N_mlp ≈ 1 : 2.5
+• Hybrid scaling laws (balancing accuracy vs. inference cost) outperform naive parameter scaling.
+
+Relation to Reciprocal / Multi-Latent Attention:
+• Reciprocal Attention (RA) and Multi-Latent Attention (MLA) naturally align with inference-efficient scaling by replacing quadratic attention cost with latent-space routing.
+• Shifting computation into linear-scaling MLP or latent projections preserves mutual information flow while shrinking KV cache size.
+• Thus RA can be viewed as a scaling-law-compliant mechanism: efficient, reciprocal, and inference-aware.
+
+TL;DR:
+Scaling laws must include inference cost. 
+Inference-efficient LLMs shift compute from attention to MLPs and compress KV caches, maintaining performance while greatly improving throughput.
+

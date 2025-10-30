@@ -176,4 +176,4 @@ Reciprocal MLP mechanisms offer:
 
 - [Scaling laws meet model architecture: Toward inference-efficient LLMs](https://arxiv.org/pdf/2510.18245) - Sardana & Frankle (2024)
 - DeepSeek (2024): Multi-head Latent Attention (MLA)
-- `scaling-inference.txt`: Detailed scaling law analysis
+- [scaling-inference.txt](scaling-inference.txt): Detailed scaling law analysis
