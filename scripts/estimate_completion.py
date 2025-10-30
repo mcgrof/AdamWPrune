@@ -472,11 +472,36 @@ def estimate_completion_time(analysis):
     # Get average time per test
     avg_time = analysis["average_time"]
     has_completed_tests = avg_time > 0
+
+    # If no completed tests, try to estimate from in-progress tests
+    if avg_time == 0 and analysis["in_progress_tests"]:
+        # Calculate projected total time from in-progress tests with sufficient progress
+        projected_times = []
+        for test in analysis["in_progress_tests"]:
+            using_iterations = (
+                test.get("total_iters", 0) > 0 and test.get("current_iter", 0) > 0
+            )
+            if using_iterations:
+                progress = test["current_iter"] / test["total_iters"]
+            elif test["total_epochs"] > 0:
+                progress = test["current_epoch"] / test["total_epochs"]
+            else:
+                progress = 0
+
+            # Only use tests with >5% progress for estimation
+            if progress > 0.05:
+                elapsed = datetime.now().timestamp() - test["start_time"]
+                projected_total = elapsed / progress
+                projected_times.append(projected_total)
+
+        if projected_times:
+            avg_time = sum(projected_times) / len(projected_times)
+
     if avg_time == 0:
-        # No completed tests to base estimate on - use a default estimate
-        # Typical test takes around 30-60 minutes for ResNet50 on CIFAR100
-        # GPT-2 training typically takes 20-30 hours
-        avg_time = 45 * 60  # 45 minutes as default for CNN models
+        # No completed or in-progress tests to base estimate on
+        # Use model-appropriate defaults
+        # GPT-2 training typically takes 4-6 hours per test on A10G
+        avg_time = 4.5 * 3600  # 4.5 hours as default for GPT-2 models
 
     # Estimate for in-progress tests
     for test in analysis["in_progress_tests"]:
