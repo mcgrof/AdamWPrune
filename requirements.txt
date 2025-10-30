@@ -11,6 +11,7 @@ accelerate
 
 # Experiment Tracking
 wandb>=0.15.0
+weave
 trackio>=0.1.0
 
 # Data Processing
