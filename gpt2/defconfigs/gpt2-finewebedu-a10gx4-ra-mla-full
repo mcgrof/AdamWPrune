@@ -78,7 +78,7 @@ CONFIG_RA_MLA_ABLATION_STEPS="0,1,2,3,4,5"
 # Multi-GPU Configuration for 4x A10G
 # Note: For initial testing, may want single-GPU mode
 # To enable DDP: uncomment CONFIG_GPT2_USE_DDP=y
-# CONFIG_GPT2_USE_DDP is not set
+CONFIG_GPT2_USE_DDP=y
 CONFIG_GPT2_DDP_NUM_GPUS=4
 CONFIG_GPT2_DDP_BACKEND="nccl"
 CONFIG_GPT2_DDP_FIND_UNUSED_PARAMS=n
