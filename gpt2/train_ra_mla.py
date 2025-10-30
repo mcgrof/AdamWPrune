@@ -656,10 +656,14 @@ def main():
         import config as cfg
 
         if hasattr(cfg, "config") and hasattr(cfg.config, "GPT2_USE_DDP"):
-            use_ddp = cfg.config.GPT2_USE_DDP == "y"
+            gpt2_use_ddp = getattr(cfg.config, "GPT2_USE_DDP", False)
+            use_ddp = gpt2_use_ddp is True or gpt2_use_ddp == "y"
             ddp_backend = getattr(cfg.config, "GPT2_DDP_BACKEND", "nccl")
+            ddp_find_unused_param = getattr(
+                cfg.config, "GPT2_DDP_FIND_UNUSED_PARAMS", "y"
+            )
             ddp_find_unused = (
-                getattr(cfg.config, "GPT2_DDP_FIND_UNUSED_PARAMS", "y") == "y"
+                ddp_find_unused_param is True or ddp_find_unused_param == "y"
             )
         else:
             use_ddp = False
