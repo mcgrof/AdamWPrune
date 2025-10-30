@@ -965,9 +965,10 @@ def main():
             losses = estimate_loss(
                 model, args.eval_samples, args.batch_size, args.block_size, device
             )
-            print(
-                f"Iter {iter_num:6d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | lr {lr:.2e}"
-            )
+            if master_process:
+                print(
+                    f"Iter {iter_num:6d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | lr {lr:.2e}"
+                )
 
             # Log evaluation metrics to trackers (only master process)
             if tracker_names and master_process:
@@ -1067,8 +1068,8 @@ def main():
 
                     wandb.log(ra_metrics)
 
-        # Print progress
-        if iter_num % args.log_interval == 0:
+        # Print progress (only master process)
+        if master_process and iter_num % args.log_interval == 0:
             print(
                 f"Iter {iter_num:6d} | loss {total_loss:.4f} | time {dt:.1f}ms | lr {lr:.2e}"
             )
@@ -1096,27 +1097,29 @@ def main():
             default_metrics_path = os.path.join(args.checkpoint_dir, "metrics.json")
             metrics.save(default_metrics_path)
 
-    # Final evaluation
-    print("\nFinal evaluation:")
+    # Final evaluation (only master process prints)
+    if master_process:
+        print("\nFinal evaluation:")
     final_losses = estimate_loss(
         model, args.eval_samples, args.batch_size, args.block_size, device
     )
-    print(f"Train loss: {final_losses['train']:.4f}")
-    print(f"Val loss: {final_losses['val']:.4f}")
-    print(f"Best val loss: {best_val_loss:.4f}")
+    if master_process:
+        print(f"Train loss: {final_losses['train']:.4f}")
+        print(f"Val loss: {final_losses['val']:.4f}")
+        print(f"Best val loss: {best_val_loss:.4f}")
 
-    # Print metrics summary
-    if metrics.attention_entropy:
-        print(f"\nAttention Metrics:")
-        print(
-            f"  Entropy: {np.mean(metrics.attention_entropy):.3f} ± {np.std(metrics.attention_entropy):.3f}"
-        )
-    if metrics.reciprocity_score:
-        print(
-            f"  Reciprocity: {np.mean(metrics.reciprocity_score):.3f} ± {np.std(metrics.reciprocity_score):.3f}"
-        )
-    if metrics.forward_time:
-        print(f"  Avg iteration time: {np.mean(metrics.forward_time):.1f}ms")
+        # Print metrics summary
+        if metrics.attention_entropy:
+            print(f"\nAttention Metrics:")
+            print(
+                f"  Entropy: {np.mean(metrics.attention_entropy):.3f} ± {np.std(metrics.attention_entropy):.3f}"
+            )
+        if metrics.reciprocity_score:
+            print(
+                f"  Reciprocity: {np.mean(metrics.reciprocity_score):.3f} ± {np.std(metrics.reciprocity_score):.3f}"
+            )
+        if metrics.forward_time:
+            print(f"  Avg iteration time: {np.mean(metrics.forward_time):.1f}ms")
 
     # Log final summary to trackers (only master process)
     if tracker_names and master_process:
