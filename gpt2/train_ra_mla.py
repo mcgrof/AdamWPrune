@@ -532,7 +532,10 @@ class RAMLAMetrics:
         entropy_vals = []
         reciprocity_vals = []
 
-        for block in model.transformer.h:
+        # Unwrap DDP model if necessary
+        actual_model = model.module if hasattr(model, "module") else model
+
+        for block in actual_model.transformer.h:
             if hasattr(block.attn, "core"):  # RA_MLA_Attention
                 attn = block.attn.core
                 if attn.attention_entropy is not None:
