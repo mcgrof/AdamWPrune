@@ -23,6 +23,116 @@ import threading
 # Global lock for thread-safe printing and result handling
 print_lock = threading.Lock()
 
+# Import GPU monitoring for memory polling
+try:
+    # Import GPUMonitor from gputop for portable GPU memory monitoring
+    sys.path.insert(0, str(Path(__file__).parent))
+    from gputop import GPUMonitor
+
+    GPU_MONITOR_AVAILABLE = True
+except ImportError:
+    GPU_MONITOR_AVAILABLE = False
+    GPUMonitor = None
+
+
+def wait_for_gpu_memory(
+    required_gb,
+    gpu_index=0,
+    timeout_seconds=300,
+    poll_interval=2,
+    verbose=True,
+):
+    """
+    Wait until GPU has enough free memory, or timeout.
+
+    Uses GPUMonitor class for portable memory checking across AMD and NVIDIA GPUs.
+
+    Args:
+        required_gb: Minimum free memory required in GiB
+        gpu_index: GPU device index to monitor (default: 0)
+        timeout_seconds: Max time to wait before giving up (default: 300 = 5 minutes)
+        poll_interval: Seconds between memory checks (default: 2)
+        verbose: Print status messages (default: True)
+
+    Returns:
+        True if sufficient memory became available, False if timeout
+    """
+    if not GPU_MONITOR_AVAILABLE:
+        if verbose:
+            print("  Warning: GPU monitoring not available, skipping memory wait check")
+        return True
+
+    try:
+        monitor = GPUMonitor()
+        if not monitor.initialized:
+            if verbose:
+                print(
+                    "  Warning: Could not initialize GPU monitor, skipping memory wait"
+                )
+            return True
+
+        if gpu_index >= monitor.gpu_count:
+            if verbose:
+                print(f"  Warning: GPU {gpu_index} not found, skipping memory wait")
+            return True
+
+        start_time = time.time()
+        required_mb = required_gb * 1024
+
+        if verbose:
+            gpu_name = monitor.gpus[gpu_index]["name"]
+            print(
+                f"\n  Waiting for {required_gb:.1f} GiB free GPU memory on {gpu_name} (GPU {gpu_index})..."
+            )
+
+        first_check = True
+        while (time.time() - start_time) < timeout_seconds:
+            try:
+                stats = monitor.get_stats(gpu_index)
+                memory_total = stats.get("memory_total", 0)
+                memory_used = stats.get("memory_used", 0)
+                memory_free = memory_total - memory_used
+
+                if memory_free >= required_mb:
+                    if verbose:
+                        print(
+                            f"  ✓ GPU memory available: {memory_free/1024:.2f} GiB free (need {required_gb:.2f} GiB)"
+                        )
+                    return True
+                else:
+                    if verbose and (
+                        first_check or (time.time() - start_time) % 10 < poll_interval
+                    ):
+                        # Print status on first check and every ~10 seconds
+                        elapsed = int(time.time() - start_time)
+                        print(
+                            f"  [{elapsed}s] Waiting: {memory_free/1024:.2f} GiB free, need {required_gb:.2f} GiB..."
+                        )
+                    first_check = False
+
+            except Exception as e:
+                if verbose:
+                    print(f"  Warning: Could not check GPU memory: {e}")
+
+            time.sleep(poll_interval)
+
+        # Timeout - memory never became available
+        if verbose:
+            stats = monitor.get_stats(gpu_index)
+            memory_total = stats.get("memory_total", 0)
+            memory_used = stats.get("memory_used", 0)
+            memory_free = memory_total - memory_used
+            print(f"\n  ✗ Timeout after {timeout_seconds}s waiting for GPU memory")
+            print(f"    Current: {memory_free/1024:.2f} GiB free")
+            print(f"    Required: {required_gb:.2f} GiB")
+            print(f"    Total: {memory_total/1024:.2f} GiB")
+        return False
+
+    except Exception as e:
+        if verbose:
+            print(f"  Warning: Error in GPU memory wait: {e}")
+        return True  # Don't block on errors
+
 
 def format_time(seconds):
     """Format seconds into a human-readable string."""
@@ -1368,6 +1478,23 @@ def main():
         action="store_true",
         help="Automatically answer yes to all prompts",
     )
+    parser.add_argument(
+        "--wait-for-memory",
+        type=float,
+        default=44.0,
+        help="Wait for this much free GPU memory (GiB) before starting next test (default: 44.0)",
+    )
+    parser.add_argument(
+        "--memory-wait-timeout",
+        type=int,
+        default=300,
+        help="Timeout in seconds when waiting for GPU memory (default: 300 = 5 minutes)",
+    )
+    parser.add_argument(
+        "--ignore-memory-wait",
+        action="store_true",
+        help="Skip GPU memory waiting between tests (for debugging or single-GPU systems)",
+    )
     args = parser.parse_args()
 
     # Handle continuation mode
@@ -2099,6 +2226,39 @@ def main():
 
                 time.sleep(3)
                 print("  GPU cleanup complete\n")
+
+                # Step 4: Wait for sufficient GPU memory before starting next test
+                if not args.ignore_memory_wait and i < total_tests:
+                    memory_available = wait_for_gpu_memory(
+                        required_gb=args.wait_for_memory,
+                        gpu_index=0,
+                        timeout_seconds=args.memory_wait_timeout,
+                        poll_interval=2,
+                        verbose=True,
+                    )
+
+                    if not memory_available:
+                        print(f"\n{'='*60}")
+                        print("ERROR: GPU memory did not free up in time")
+                        print(f"Required: {args.wait_for_memory:.1f} GiB free")
+                        print(f"Waited: {args.memory_wait_timeout} seconds")
+                        print("")
+                        print("This may indicate:")
+                        print("  1. Memory leak from previous test")
+                        print("  2. Model requires more memory than available")
+                        print("  3. Need longer timeout (use --memory-wait-timeout)")
+                        print("")
+                        print("Suggestions:")
+                        print(f"  - Reduce batch size in configuration")
+                        print(f"  - Use --ignore-memory-wait to skip this check")
+                        print(
+                            f"  - Increase timeout with --memory-wait-timeout <seconds>"
+                        )
+                        print(f"{'='*60}")
+
+                        if args.stop_on_failure:
+                            print("Stopping due to memory timeout (--stop-on-failure)")
+                            break
 
                 # Stop on failure if requested
                 if args.stop_on_failure and not result.get("success", False):
