@@ -953,6 +953,12 @@ def run_single_test(
         # This helps prevent OOM errors by allowing expandable memory segments
         env["PYTORCH_HIP_ALLOC_CONF"] = "expandable_segments:True"
 
+        # Disable PyTorch's memory caching to ensure GPU memory is truly released
+        # between sequential test runs. Without this, PyTorch's caching allocator
+        # holds onto freed memory, causing OOM errors in later tests.
+        # See: https://pytorch.org/docs/stable/notes/hip.html
+        env["PYTORCH_NO_HIP_MEMORY_CACHING"] = "1"
+
         # Run with real-time output to console AND capture to file
         with open(log_file, "w") as f_log:
             # Use Popen for real-time output
