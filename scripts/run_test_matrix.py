@@ -1105,7 +1105,14 @@ def run_single_test(
             )
 
             # Create colorized test prefix for output
-            test_prefix = f"{Colors.BOLD}{Colors.BG_CYAN} Test {test_num}/{total_tests} {Colors.RESET} "
+            # Add DDP info if enabled
+            ddp_info = ""
+            if config.get("GPT2_USE_DDP") == "y" or config.get("GPT2_USE_DDP") is True:
+                num_gpus = config.get("GPT2_DDP_NUM_GPUS", 1)
+                ddp_info = (
+                    f" {Colors.BOLD}{Colors.GREEN}[DDP:{num_gpus}x]{Colors.RESET}"
+                )
+            test_prefix = f"{Colors.BOLD}{Colors.BG_CYAN} Test {test_num}/{total_tests} {Colors.RESET}{ddp_info} "
 
             # Stream output line by line (suppress in parallel mode)
             for line in process.stdout:
