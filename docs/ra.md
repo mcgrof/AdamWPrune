@@ -101,7 +101,7 @@ All tests use AdamWSPAM optimizer.
 
 ## Motivation: Inference Scaling Laws
 
-Traditional scaling laws optimize for training compute but ignore inference cost. Key insights from Sardana & Frankle (2024):
+Traditional scaling laws optimize for training compute but ignore inference cost. Key insights from [Scaling laws meet model architecture: Toward inference-efficient LLMs](https://arxiv.org/pdf/2510.18245) (Sardana & Frankle, 2024):
 
 - MLP expansion is cheap: linear inference cost
 - Attention compression gives massive wins: KV cache scales with sequence length
@@ -174,7 +174,7 @@ Reciprocal MLP mechanisms offer:
 
 ## References
 
-- Sardana & Frankle (2024): Inference scaling laws
+- [Scaling laws meet model architecture: Toward inference-efficient LLMs](https://arxiv.org/pdf/2510.18245) - Sardana & Frankle (2024)
 - DeepSeek (2024): Multi-head Latent Attention (MLA)
 - `scaling-inference.txt`: Detailed scaling law analysis
 - Test results: `test_matrix_results_*/summary_report.txt`
