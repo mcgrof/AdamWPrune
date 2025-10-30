@@ -23,6 +23,27 @@ import threading
 # Global lock for thread-safe printing and result handling
 print_lock = threading.Lock()
 
+
+# ANSI color codes for terminal output
+class Colors:
+    """ANSI color codes for colorized terminal output."""
+
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+
+    # Foreground colors
+    CYAN = "\033[96m"
+    BLUE = "\033[94m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    MAGENTA = "\033[95m"
+
+    # Background colors for prefix
+    BG_BLUE = "\033[44m"
+    BG_CYAN = "\033[46m"
+    BG_MAGENTA = "\033[45m"
+
+
 # Import GPU monitoring for memory polling
 try:
     # Import GPUMonitor from gputop for portable GPU memory monitoring
@@ -1083,11 +1104,15 @@ def run_single_test(
                 env=env,  # Pass environment variables including GPT2_MAX_ITERS
             )
 
+            # Create colorized test prefix for output
+            test_prefix = f"{Colors.BOLD}{Colors.BG_CYAN} Test {test_num}/{total_tests} {Colors.RESET} "
+
             # Stream output line by line (suppress in parallel mode)
             for line in process.stdout:
                 if not parallel_mode:
-                    print(line, end="")  # Print to console (only in serial mode)
-                f_log.write(line)  # Write to file
+                    # Add colorized prefix to each line
+                    print(f"{test_prefix}{line}", end="", flush=True)
+                f_log.write(line)  # Write to file without prefix
                 f_log.flush()  # Ensure it's written
 
             # Wait for process to complete
