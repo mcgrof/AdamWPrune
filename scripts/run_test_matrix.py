@@ -1370,8 +1370,6 @@ def main():
         fix_all_results_json(args.continue_dir)
 
     if args.continue_dir:
-        from pathlib import Path
-
         continue_dir = Path(args.continue_dir)
         if not continue_dir.exists():
             print(f"Error: Directory '{continue_dir}' does not exist")
