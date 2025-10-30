@@ -73,6 +73,7 @@ CONFIG_RA_MLA_MLP_LATENT_RECIP=y
 
 # Enable test matrix mode for ablation study
 CONFIG_TEST_MATRIX_MODE=y
+CONFIG_RA_MLA_ABLATION_MODE=y
 CONFIG_RA_MLA_ABLATION_STEPS="0,1,2,3,4,5"
 
 # Multi-GPU Configuration for 4x A10G
