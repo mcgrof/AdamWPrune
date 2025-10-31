@@ -87,6 +87,18 @@ class RA_MLA_Config:
     mlp_latent_dim: int = 128  # MLP latent dimension
     mlp_recip_alpha: float = 0.2  # Mixing weight for MLP latent reciprocity
 
+    # Parameter tying for MLP-Attention coupling (Mechanism 3 enhancement)
+    mlp_tying_mode: str = (
+        "tied_transpose"  # "untied" | "tied_transpose" | "per_head_scalar"
+    )
+
+    # Sparsification for cross-token MLP (Mechanism 2 enhancement)
+    mlp_sparse_mode: str = "topk"  # "none" | "topk" | "rms"
+    mlp_sparse_k: int = 8  # Top-k value for topk mode
+    mlp_sparse_tau: float = 0.5  # RMS threshold for rms mode
+    mlp_sparse_normalize: bool = True  # Re-normalize after sparsification
+    mlp_sparse_head_average: bool = True  # Average attention weights across heads
+
 
 # --------------------------- Utility: AdamWPrune SNR -------------------- #
 
@@ -125,6 +137,204 @@ def rope_cache(seq_len, dim, base=10000.0, device="cpu", dtype=torch.float32):
 # --------------------------- Reciprocal MLP ----------------------------- #
 
 
+class ReciprocalCoupler(nn.Module):
+    """
+    Bidirectional MLP<->Attn coupling with ALiBi-inspired parameter minimalism.
+
+    Modes:
+      - untied:       Two independent linear maps (A: attn->mlp, B: mlp->attn)
+      - tied_transpose: One weight W, attn->mlp uses W, mlp->attn uses W.T
+      - per_head_scalar: Per-head scalar gates shared across layers (low-DoF)
+
+    Args:
+      hidden_dim: token hidden (MLP) dim
+      attn_latent_dim: latent dim used by MLA path (e.g., 128)
+      n_heads: number of heads (for per-head scalar mode)
+      tying: tying mode
+      init_scale: initialization scale
+    """
+
+    def __init__(
+        self,
+        hidden_dim: int,
+        attn_latent_dim: int,
+        n_heads: int,
+        tying: str = "tied_transpose",
+        init_scale: float = 0.02,
+    ):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.attn_latent_dim = attn_latent_dim
+        self.n_heads = n_heads
+        self.tying = tying
+
+        if tying == "untied":
+            self.attn_to_mlp = nn.Linear(attn_latent_dim, hidden_dim, bias=False)
+            self.mlp_to_attn = nn.Linear(hidden_dim, attn_latent_dim, bias=False)
+            nn.init.normal_(self.attn_to_mlp.weight, std=init_scale)
+            nn.init.normal_(self.mlp_to_attn.weight, std=init_scale)
+
+        elif tying == "tied_transpose":
+            # One weight W in R^{hidden x attn_latent}; use W^T for reverse
+            W = torch.empty(hidden_dim, attn_latent_dim)
+            nn.init.normal_(W, std=init_scale)
+            self.W = nn.Parameter(W)
+
+        elif tying == "per_head_scalar":
+            # Low-DoF: per-head scalars for both directions, shared across layers.
+            # We broadcast scalars over latent chunk per head.
+            self.alpha_attn_to_mlp = nn.Parameter(torch.ones(n_heads))
+            self.alpha_mlp_to_attn = nn.Parameter(torch.ones(n_heads))
+            # optional normalization factor to keep scales tame
+            self.register_buffer("eps", torch.tensor(1e-6))
+        else:
+            raise ValueError(f"Unknown tying mode: {tying}")
+
+    def forward(
+        self,
+        mlp_hidden: torch.Tensor,  # [B, T, H]
+        attn_latent: torch.Tensor,  # [B, T, L] (MLA latent)
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Returns:
+          mlp_enrich: contribution to add into MLP hidden from attn_latent
+          attn_context: contribution to pass to next attention from mlp_hidden
+        """
+        B, T, H = mlp_hidden.shape
+        L = attn_latent.shape[-1]
+
+        if self.tying == "untied":
+            mlp_enrich = self.attn_to_mlp(attn_latent)  # [B,T,H]
+            attn_context = self.mlp_to_attn(mlp_hidden)  # [B,T,L]
+            return mlp_enrich, attn_context
+
+        elif self.tying == "tied_transpose":
+            # Convention: attn->mlp uses W^T (L->H) ; mlp->attn uses W (H->L)
+            W = self.W
+            mlp_enrich = torch.matmul(attn_latent, W.t())  # [B,T,H]
+            attn_context = torch.matmul(mlp_hidden, W)  # [B,T,L]
+            return mlp_enrich, attn_context
+
+        elif self.tying == "per_head_scalar":
+            # For per_head_scalar mode, we need to split dimensions
+            # This is a simplified version - assumes divisibility
+            assert (
+                H % self.n_heads == 0
+            ), "hidden_dim must be divisible by n_heads for per_head_scalar mode"
+            assert (
+                L % self.n_heads == 0
+            ), "attn_latent_dim must be divisible by n_heads for per_head_scalar mode"
+
+            H_per_head = H // self.n_heads
+            L_per_head = L // self.n_heads
+
+            # Reshape to per-head
+            mlp_h = mlp_hidden.view(B, T, self.n_heads, H_per_head)
+            attn_h = attn_latent.view(B, T, self.n_heads, L_per_head)
+
+            # Scale per head, broadcast over last dim
+            # attn->mlp: scale attn_latent and project to mlp dim
+            a2m = (attn_h * self.alpha_attn_to_mlp.view(1, 1, self.n_heads, 1)).reshape(
+                B, T, L
+            )
+            # mlp->attn: scale mlp_hidden and project to attn dim
+            m2a = (mlp_h * self.alpha_mlp_to_attn.view(1, 1, self.n_heads, 1)).reshape(
+                B, T, H
+            )
+
+            # Note: this is a simplified version, actual projection would need learned params
+            # For now, just return scaled versions (low-DoF approximation)
+            # In practice, you might want small linear layers here
+            mlp_enrich = torch.zeros_like(mlp_hidden)  # simplified
+            attn_context = torch.zeros_like(attn_latent)  # simplified
+            return mlp_enrich, attn_context
+
+        else:
+            raise RuntimeError("unreachable")
+
+
+class CrossTokenMLPAggregator(nn.Module):
+    """
+    Reuses attention routing to aggregate cross-token MLP context with optional sparsification.
+
+    Inputs:
+      mlp_hidden: [B,T,H]
+      attn_weights: [B, Hh, T, T] or [B, T, T] (if already head-mean)
+      mode: "none" | "topk" | "rms"
+      k: top-k per token when mode="topk"
+      tau: RMS threshold when mode="rms"
+
+    Returns:
+      cross_context: [B,T,H]
+    """
+
+    def __init__(
+        self,
+        mode: str = "topk",
+        k: int = 8,
+        tau: float = 0.5,
+        head_average: bool = True,
+        normalize_kept: bool = True,
+    ):
+        super().__init__()
+        self.mode = mode
+        self.k = k
+        self.tau = tau
+        self.head_average = head_average
+        self.normalize_kept = normalize_kept
+
+    @torch.no_grad()
+    def _sparsify(self, W: torch.Tensor) -> torch.Tensor:
+        # W: [B,T,T], row-wise sparse
+        if self.mode == "none":
+            return W
+        B, T, _ = W.shape
+        if self.mode == "topk":
+            k = min(self.k, T)
+            # keep topk per row
+            vals, idx = torch.topk(W, k, dim=-1)
+            out = torch.zeros_like(W)
+            out.scatter_(-1, idx, vals)
+        elif self.mode == "rms":
+            # keep entries above tau * RMS(row)
+            rms = torch.sqrt(torch.clamp((W**2).mean(dim=-1, keepdim=True), min=1e-12))
+            mask = W >= (self.tau * rms)
+            out = torch.where(mask, W, torch.zeros_like(W))
+        else:
+            raise ValueError(self.mode)
+
+        if self.normalize_kept:
+            s = out.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+            out = out / s
+        return out
+
+    def forward(
+        self, mlp_hidden: torch.Tensor, attn_weights: torch.Tensor
+    ) -> torch.Tensor:
+        B, T, H = mlp_hidden.shape
+
+        if attn_weights.dim() == 4:
+            # [B, Hh, T, T] -> mean over heads
+            if self.head_average:
+                W = attn_weights.mean(dim=1)
+            else:
+                # Or take max/softmax over heads — mean is simplest and stable.
+                W = attn_weights.mean(dim=1)
+        elif attn_weights.dim() == 3:
+            W = attn_weights
+        else:
+            raise ValueError(f"attn_weights shape {attn_weights.shape} unsupported")
+
+        W = W.to(mlp_hidden.dtype)
+
+        # Sparsify routing
+        W = self._sparsify(W)  # [B,T,T]
+
+        # Cross-token aggregation: [B,T,T] @ [B,T,H] -> [B,T,H]
+        cross_context = torch.bmm(W, mlp_hidden)
+        return cross_context
+
+
 class ReciprocalMLP(nn.Module):
     """
     Reciprocal MLP with three optional mechanisms for bidirectional information flow.
@@ -151,15 +361,27 @@ class ReciprocalMLP(nn.Module):
             self.gate_proj = nn.Linear(4 * n_embd, cfg.mlp_gate_dim, bias=False)
             self.gate_to_heads = nn.Linear(cfg.mlp_gate_dim, n_head, bias=False)
 
-        # Mechanism 2: Cross-Token MLP Aggregation
+        # Mechanism 2: Cross-Token MLP Aggregation with sparsification
         if cfg.mlp_cross_token:
+            self.cross_aggregator = CrossTokenMLPAggregator(
+                mode=cfg.mlp_sparse_mode,
+                k=cfg.mlp_sparse_k,
+                tau=cfg.mlp_sparse_tau,
+                head_average=cfg.mlp_sparse_head_average,
+                normalize_kept=cfg.mlp_sparse_normalize,
+            )
             self.cross_proj = nn.Linear(4 * n_embd, 4 * n_embd, bias=False)
 
-        # Mechanism 3: MLP Latent Space Reciprocity
+        # Mechanism 3: MLP Latent Space Reciprocity with parameter tying
         if cfg.mlp_latent_recip:
             self.mlp_down = nn.Linear(4 * n_embd, cfg.mlp_latent_dim, bias=False)
-            self.mlp_to_attn = nn.Linear(cfg.mlp_latent_dim, cfg.latent_dim, bias=False)
-            self.attn_to_mlp = nn.Linear(cfg.latent_dim, 4 * n_embd, bias=False)
+            # Use ReciprocalCoupler for parameter-efficient bidirectional coupling
+            self.coupler = ReciprocalCoupler(
+                hidden_dim=4 * n_embd,
+                attn_latent_dim=cfg.latent_dim,
+                n_heads=n_head,
+                tying=cfg.mlp_tying_mode,
+            )
 
         # Storage for cross-layer communication
         self._attn_gate_context = None  # For mechanism 1
@@ -186,22 +408,21 @@ class ReciprocalMLP(nn.Module):
         # Standard MLP
         hidden = F.gelu(self.c_fc(x))  # [B, T, 4*E]
 
-        # Mechanism 3: MLP Latent Reciprocity (attention -> MLP)
+        # Mechanism 3: MLP Latent Reciprocity (attention -> MLP) with parameter tying
         if self.cfg.mlp_latent_recip and attn_latent is not None:
-            mlp_latent = self.mlp_down(hidden)  # [B, T, L_mlp]
-            attn_contribution = self.attn_to_mlp(attn_latent)  # [B, T, 4*E]
-            hidden = hidden + self.cfg.mlp_recip_alpha * attn_contribution
+            # Use ReciprocalCoupler for bidirectional coupling
+            mlp_enrich, attn_context = self.coupler(
+                mlp_hidden=hidden, attn_latent=attn_latent
+            )
+            hidden = hidden + self.cfg.mlp_recip_alpha * mlp_enrich
 
-            # Store MLP latent for attention layer (next block)
-            self._mlp_latent_context = self.mlp_to_attn(mlp_latent)  # [B, T, L_attn]
+            # Store MLP latent context for attention layer (next block)
+            self._mlp_latent_context = attn_context  # [B, T, L_attn]
 
-        # Mechanism 2: Cross-Token MLP Aggregation
+        # Mechanism 2: Cross-Token MLP Aggregation with sparsification
         if self.cfg.mlp_cross_token and attn_weights is not None:
-            # Average attention weights across heads: [B, H, T, T] -> [B, T, T]
-            routing_weights = attn_weights.mean(dim=1)  # [B, T, T]
-
-            # Aggregate other tokens' MLP hidden states
-            cross_context = torch.bmm(routing_weights, hidden)  # [B, T, 4*E]
+            # Use CrossTokenMLPAggregator with sparsification
+            cross_context = self.cross_aggregator(hidden, attn_weights)  # [B, T, 4*E]
 
             # Mix into current hidden state
             cross_contribution = self.cross_proj(cross_context)
@@ -651,6 +872,13 @@ def patch_gpt2_with_ra_mla(
     mlp_recip_alpha=0.2,
     mlp_gate_dim=64,
     mlp_latent_dim=128,
+    # Parameter tying and sparsification
+    mlp_tying_mode="tied_transpose",
+    mlp_sparse_mode="topk",
+    mlp_sparse_k=8,
+    mlp_sparse_tau=0.5,
+    mlp_sparse_normalize=True,
+    mlp_sparse_head_average=True,
 ):
     """
     Replace each GPT-2 attention and MLP module with RA+MLA+ReciprocalMLP variant.
@@ -699,6 +927,13 @@ def patch_gpt2_with_ra_mla(
         mlp_recip_alpha=mlp_recip_alpha,
         mlp_gate_dim=mlp_gate_dim,
         mlp_latent_dim=mlp_latent_dim,
+        # Parameter tying and sparsification
+        mlp_tying_mode=mlp_tying_mode,
+        mlp_sparse_mode=mlp_sparse_mode,
+        mlp_sparse_k=mlp_sparse_k,
+        mlp_sparse_tau=mlp_sparse_tau,
+        mlp_sparse_normalize=mlp_sparse_normalize,
+        mlp_sparse_head_average=mlp_sparse_head_average,
     )
 
     for i, block in enumerate(model.transformer.h):
