@@ -328,6 +328,161 @@ config RA_MLA_MLP_GATE_DIM
 
 	  Recommended: 64 for balanced performance
 
+comment "Parameter Tying & Sparsification (Memory Optimization):"
+comment "Reduce 34% memory overhead via parameter sharing and sparse aggregation"
+
+choice
+	prompt "Parameter tying mode for MLP-Attention coupling"
+	default RA_MLA_MLP_TYING_TIED_TRANSPOSE
+	depends on RA_MLA_MLP_LATENT_RECIP
+	help
+	  Parameter tying mode for bidirectional MLP<->Attention coupling.
+	  Similar to ALiBi shared slopes, reduces parameters and improves stability.
+
+config RA_MLA_MLP_TYING_UNTIED
+	bool "Untied: Two independent linear maps"
+	help
+	  Two independent linear maps (A: attn->mlp, B: mlp->attn)
+	  Most parameters, most expressive
+	  Memory: 2× projections
+
+config RA_MLA_MLP_TYING_TIED_TRANSPOSE
+	bool "Tied Transpose: One weight W, use W and W^T (RECOMMENDED)"
+	help
+	  One weight W, attn->mlp uses W^T, mlp->attn uses W
+	  Reduces parameters by 50%, improves training stability
+	  Memory: 1× projection (saves 50% vs untied)
+
+	  Recommended for reducing 34% memory overhead
+
+config RA_MLA_MLP_TYING_PER_HEAD_SCALAR
+	bool "Per-Head Scalar: Minimal parameters (experimental)"
+	help
+	  Per-head scalar gates shared across layers
+	  Minimal parameters (low degree of freedom)
+	  Memory: Only n_heads*2 scalars
+
+	  Most aggressive parameter reduction, experimental
+
+endchoice
+
+config RA_MLA_MLP_TYING_MODE
+	string
+	default "untied" if RA_MLA_MLP_TYING_UNTIED
+	default "tied_transpose" if RA_MLA_MLP_TYING_TIED_TRANSPOSE
+	default "per_head_scalar" if RA_MLA_MLP_TYING_PER_HEAD_SCALAR
+
+choice
+	prompt "Sparsification mode for cross-token MLP aggregation"
+	default RA_MLA_MLP_SPARSE_TOPK
+	depends on RA_MLA_MLP_CROSS_TOKEN
+	help
+	  Sparsification strategy for cross-token MLP aggregation.
+	  Reduces MLP token broadcasting overhead significantly.
+
+config RA_MLA_MLP_SPARSE_NONE
+	bool "None: Use full attention weights (no sparsification)"
+	help
+	  Use full attention weights for cross-token aggregation
+	  Most accurate but highest memory bandwidth
+	  No sparsification overhead reduction
+
+config RA_MLA_MLP_SPARSE_TOPK
+	bool "Top-K: Keep only top k tokens per position (RECOMMENDED)"
+	help
+	  Keep only top-k attention weights per token
+	  Reduces broadcasting overhead significantly
+	  Recommended: k=8 provides good accuracy/speed tradeoff
+
+	  Expected: 50-75% reduction in MLP aggregation overhead
+
+config RA_MLA_MLP_SPARSE_RMS
+	bool "RMS Threshold: Keep tokens above RMS threshold"
+	help
+	  Keep attention weights above tau * RMS(row)
+	  Adaptive sparsification based on attention strength
+	  May vary sparsity per token (more flexible than top-k)
+
+endchoice
+
+config RA_MLA_MLP_SPARSE_MODE
+	string
+	default "none" if RA_MLA_MLP_SPARSE_NONE
+	default "topk" if RA_MLA_MLP_SPARSE_TOPK
+	default "rms" if RA_MLA_MLP_SPARSE_RMS
+
+config RA_MLA_MLP_SPARSE_K
+	int "Top-k value for sparse cross-token aggregation"
+	default 8
+	range 4 32
+	depends on RA_MLA_MLP_SPARSE_TOPK
+	help
+	  Number of top tokens to keep per position in cross-token MLP.
+
+	  Lower k = more aggressive sparsification, faster, may lose accuracy
+	  Higher k = less aggressive, more accurate, slower
+
+	  Values:
+	    4: Very aggressive (50% of default)
+	    8: Recommended (good balance)
+	    16: Conservative (less speedup)
+	    32: Minimal sparsification
+
+	  Recommended: 8 tokens
+
+config RA_MLA_MLP_SPARSE_RMS_THRESHOLD
+	string "RMS threshold tau for sparse aggregation"
+	default "0.5"
+	depends on RA_MLA_MLP_SPARSE_RMS
+	help
+	  Threshold multiplier for RMS-based sparsification.
+	  Keep weights where w >= tau * RMS(row)
+
+	  Lower tau = keep more tokens (less sparse)
+	  Higher tau = keep fewer tokens (more sparse)
+
+	  Values:
+	    0.3: Conservative (keep more tokens)
+	    0.5: Recommended (balanced)
+	    0.7: Aggressive (sparser)
+
+	  Recommended: 0.5
+
+config RA_MLA_MLP_SPARSE_NORMALIZE
+	bool "Normalize sparsified weights"
+	default y
+	depends on RA_MLA_MLP_CROSS_TOKEN && !RA_MLA_MLP_SPARSE_NONE
+	help
+	  Re-normalize attention weights after sparsification.
+
+	  Enabled (y): Weights sum to 1.0 after sparsification
+	    - Maintains proper probability distribution
+	    - More numerically stable
+	    - Recommended
+
+	  Disabled (n): Use raw sparsified weights
+	    - May not sum to 1.0
+	    - Faster but less stable
+
+	  Recommended: Enable for stability
+
+config RA_MLA_MLP_SPARSE_HEAD_AVERAGE
+	bool "Average attention weights across heads for cross-token MLP"
+	default y
+	depends on RA_MLA_MLP_CROSS_TOKEN
+	help
+	  Whether to average attention weights across heads before aggregation.
+
+	  Enabled (y): Mean over all heads [B,H,T,T] -> [B,T,T]
+	    - Simpler, more stable
+	    - Recommended
+
+	  Disabled (n): Use alternative aggregation (e.g., max)
+	    - More complex
+	    - May be less stable
+
+	  Recommended: Enable (use mean)
+
 comment "Ablation Study Guidelines:"
 comment "Baseline (no reciprocal MLP): Disable all three mechanisms"
 comment "Test Mechanism 1 only: Enable MLP_ATTN_GATE"
