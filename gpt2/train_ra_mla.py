@@ -268,6 +268,56 @@ parser.add_argument(
     help="Dimension for MLP latent space",
 )
 parser.add_argument(
+    "--mlp-tying-mode",
+    type=str,
+    default="tied_transpose",
+    choices=["untied", "tied_transpose", "per_head_scalar"],
+    help="Parameter tying mode for MLP-Attention coupling",
+)
+parser.add_argument(
+    "--mlp-sparse-mode",
+    type=str,
+    default="topk",
+    choices=["none", "topk", "rms"],
+    help="Sparsification mode for cross-token MLP aggregation",
+)
+parser.add_argument(
+    "--mlp-sparse-k",
+    type=int,
+    default=8,
+    help="Top-k value for sparse cross-token aggregation",
+)
+parser.add_argument(
+    "--mlp-sparse-tau",
+    type=float,
+    default=0.5,
+    help="RMS threshold for sparse aggregation",
+)
+parser.add_argument(
+    "--mlp-sparse-normalize",
+    action="store_true",
+    default=True,
+    help="Normalize sparsified weights",
+)
+parser.add_argument(
+    "--no-mlp-sparse-normalize",
+    dest="mlp_sparse_normalize",
+    action="store_false",
+    help="Disable weight normalization after sparsification",
+)
+parser.add_argument(
+    "--mlp-sparse-head-average",
+    action="store_true",
+    default=True,
+    help="Average attention weights across heads",
+)
+parser.add_argument(
+    "--no-mlp-sparse-head-average",
+    dest="mlp_sparse_head_average",
+    action="store_false",
+    help="Disable head averaging for cross-token MLP",
+)
+parser.add_argument(
     "--ra-mla-ablation-step",
     type=str,
     default=None,
@@ -759,6 +809,13 @@ def main():
         mlp_recip_alpha=args.mlp_recip_alpha,
         mlp_gate_dim=args.mlp_gate_dim,
         mlp_latent_dim=args.mlp_latent_dim,
+        # Parameter tying and sparsification
+        mlp_tying_mode=args.mlp_tying_mode,
+        mlp_sparse_mode=args.mlp_sparse_mode,
+        mlp_sparse_k=args.mlp_sparse_k,
+        mlp_sparse_tau=args.mlp_sparse_tau,
+        mlp_sparse_normalize=args.mlp_sparse_normalize,
+        mlp_sparse_head_average=args.mlp_sparse_head_average,
     )
 
     model = model.to(device)
