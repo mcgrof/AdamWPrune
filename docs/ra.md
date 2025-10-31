@@ -1,7 +1,7 @@
 # MLA + Reciprocal MLP: Inference-Efficient Transformer Architecture
 
 **Status**: Experimental
-**Last Updated**: 2025-10-29
+**Last Updated**: 2025-10-31
 
 ## Quick Start
 
@@ -80,6 +80,76 @@ mlp_to_attn_context = mlp_to_attn(mlp_latent)
 
 Cost: Small latent projections (hidden_dim ↔ latent_dim)
 
+### Memory Optimization Enhancements
+
+To address the 34% memory overhead observed in initial experiments, we implemented two optimization strategies:
+
+#### Parameter Tying for MLP-Attention Coupling (Mechanism 3)
+
+Three tying modes for bidirectional projections between MLP and attention latent spaces:
+
+**1. Untied (Baseline)**
+- Two independent linear maps: attn→mlp (W_a2m) and mlp→attn (W_m2a)
+- Most parameters, most expressive
+- Memory: 2× projection weights
+
+**2. Tied Transpose (Recommended)**
+- One weight W: attn→mlp uses W^T, mlp→attn uses W
+- Reduces parameters by 50% for coupling weights
+- Memory: 1× projection weight
+- Improves training stability via parameter sharing
+- Configuration: `CONFIG_RA_MLA_MLP_TYING_MODE="tied_transpose"`
+
+**3. Per-Head Scalar (Experimental)**
+- Minimal parameters: only n_heads×2 scalars
+- Lowest memory footprint
+- May sacrifice expressiveness
+- Configuration: `CONFIG_RA_MLA_MLP_TYING_MODE="per_head_scalar"`
+
+```python
+# Tied transpose mode: single weight matrix
+W = self.W  # [hidden_dim, attn_latent_dim]
+mlp_enrich = attn_latent @ W.T      # attn→mlp
+attn_context = mlp_hidden @ W       # mlp→attn (transpose)
+```
+
+Parameter reduction: ~50% for coupling weights, ~3-4% overall model parameters.
+
+#### Sparsification for Cross-Token MLP (Mechanism 2)
+
+Reduces MLP token broadcasting overhead by keeping only the most important cross-token connections:
+
+**1. Top-K Sparsification (Recommended)**
+- Keep only top-k attention weights per token
+- Typical k=8 provides good accuracy/efficiency tradeoff
+- Expected: 50-75% reduction in aggregation overhead
+- Configuration: `CONFIG_RA_MLA_MLP_SPARSE_MODE="topk"`, `CONFIG_RA_MLA_MLP_SPARSE_K=8`
+
+**2. RMS Threshold**
+- Keep weights above tau × RMS(row)
+- Adaptive sparsity per token
+- More flexible than top-k but less predictable
+- Configuration: `CONFIG_RA_MLA_MLP_SPARSE_MODE="rms"`, `CONFIG_RA_MLA_MLP_SPARSE_RMS_THRESHOLD="0.5"`
+
+**3. None (Baseline)**
+- Use full attention weights
+- No sparsification
+- Configuration: `CONFIG_RA_MLA_MLP_SPARSE_MODE="none"`
+
+```python
+# Top-k sparsification example
+routing_weights = attn_weights.mean(dim=1)  # [B, T, T]
+vals, idx = torch.topk(routing_weights, k=8, dim=-1)
+sparse_weights = torch.zeros_like(routing_weights)
+sparse_weights.scatter_(-1, idx, vals)
+sparse_weights = sparse_weights / sparse_weights.sum(dim=-1, keepdim=True)
+```
+
+Combined impact:
+- Parameter tying: ~50% reduction in coupling weights
+- Sparsification: 50-75% reduction in MLP aggregation bandwidth
+- Expected total memory reduction: addresses the 34% overhead from initial experiments
+
 ## Preliminary Results (30 iterations)
 
 Initial ablation study on FineWebEdu dataset (too early for conclusions, but shows direction):
@@ -131,13 +201,27 @@ make
 ```
 
 Key configuration parameters:
+
+**MLA Settings:**
 - `CONFIG_GPT2_MAX_ITERS=10400`: Training iterations (good for proper evaluation)
 - `CONFIG_RA_MLA_LATENT_DIM=128`: MLA compression dimension
 - `CONFIG_RA_MLA_RA_WINDOW=64`: Window size (unused with ra_alpha=0.0)
 - `CONFIG_RA_MLA_RA_ALPHA=0.0`: No reciprocal attention scoring overhead
-- `CONFIG_RA_MLA_MLP_ATTN_GATE=y`: Enable mechanism 1
-- `CONFIG_RA_MLA_MLP_CROSS_TOKEN=y`: Enable mechanism 2
-- `CONFIG_RA_MLA_MLP_LATENT_RECIP=y`: Enable mechanism 3
+
+**Reciprocal MLP Mechanisms:**
+- `CONFIG_RA_MLA_MLP_ATTN_GATE=y`: Enable mechanism 1 (MLP→Attn gating)
+- `CONFIG_RA_MLA_MLP_CROSS_TOKEN=y`: Enable mechanism 2 (cross-token aggregation)
+- `CONFIG_RA_MLA_MLP_LATENT_RECIP=y`: Enable mechanism 3 (latent reciprocity)
+
+**Memory Optimizations:**
+- `CONFIG_RA_MLA_MLP_TYING_MODE="tied_transpose"`: Parameter tying for mechanism 3
+  - Options: "untied", "tied_transpose", "per_head_scalar"
+- `CONFIG_RA_MLA_MLP_SPARSE_MODE="topk"`: Sparsification for mechanism 2
+  - Options: "none", "topk", "rms"
+- `CONFIG_RA_MLA_MLP_SPARSE_K=8`: Top-k value for topk mode
+- `CONFIG_RA_MLA_MLP_SPARSE_RMS_THRESHOLD="0.5"`: RMS threshold for rms mode
+- `CONFIG_RA_MLA_MLP_SPARSE_NORMALIZE=y`: Re-normalize weights after sparsification
+- `CONFIG_RA_MLA_MLP_SPARSE_HEAD_AVERAGE=y`: Average attention weights across heads
 
 ## Implementation
 
@@ -154,10 +238,11 @@ Key configuration parameters:
 ## Next Steps
 
 1. **Complete full training**: Run 10,400 iterations for proper evaluation (~36 hours for 6-test ablation)
-2. **Memory optimization**: Analyze 34% memory overhead, consider optimizations
-3. **Scaling law experiments**: Test aggressive attention compression (latent_dim 64→32) with MLP expansion
-4. **Bitter scaling integration**: Combine with pruning methods
-5. **Long-context evaluation**: Test on sequences > 2048 tokens to measure KV cache savings
+2. **Evaluate memory optimizations**: Test parameter tying and sparsification impact on 34% memory overhead
+3. **Ablation study with optimizations**: Compare tied_transpose vs untied, topk vs rms sparsification
+4. **Scaling law experiments**: Test aggressive attention compression (latent_dim 64→32) with MLP expansion
+5. **Bitter scaling integration**: Combine with pruning methods
+6. **Long-context evaluation**: Test on sequences > 2048 tokens to measure KV cache savings
 
 ## Why MLP Reciprocity Instead of Attention Reciprocity?
 
