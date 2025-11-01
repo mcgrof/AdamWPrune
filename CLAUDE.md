@@ -24,6 +24,7 @@
 - **CRITICAL**: Never use "🤖 Generated with [Claude Code]" or "Co-Authored-By: Claude"
 - **REQUIRED**: Every commit MUST have both "Generated-by: Claude AI" and "Signed-off-by: Luis Chamberlain <mcgrof@kernel.org>"
 - **NO EXCEPTIONS**: This format is mandatory for ALL commits, no matter how small
+- **STYLE**: Be terse and to the point. NO shopping-list style bullet points. Write in paragraphs explaining the change, rationale, and technical details concisely. Avoid verbose enumeration unless absolutely necessary for clarity.
 
 ### Development Workflow
 1. Make a single focused change

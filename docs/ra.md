@@ -236,12 +236,20 @@ Key configuration parameters:
 - `gpt2/ra_mla_gpt2.py`: Architecture implementation with MLA + reciprocal feed-forward
 
 **Ablation control**: Use `--ra-mla-ablation-step N`:
-- Step 0: Baseline (MLA only, no reciprocal mechanisms)
-- Step 1: Mechanism 1 only (Feed-Forward→Attn Gating)
-- Step 2: Mechanisms 1+2 (Gating + Cross-Token Aggregation)
-- Step 3: All three mechanisms (Full Reciprocal Feed-Forward)
-- Step 4: Mechanisms 1+2 (reproducibility check, identical to step 2)
-- Step 5: All three mechanisms (reproducibility check, identical to step 3)
+- **Step 0**: Baseline (MLA only, no reciprocal mechanisms)
+- **Step 1**: Mechanism 1 only (Feed-Forward→Attn Gating)
+- **Step 2**: Mechanisms 1+2 (Gating + Cross-Token Aggregation)
+  - Feed-forward gates attention heads
+  - Feed-forward aggregates cross-token context via attention routing (topk=8)
+  - No latent space coupling yet
+- **Step 3**: All three mechanisms (adds Latent Reciprocity to step 2)
+  - Everything from step 2, PLUS
+  - Bidirectional latent pathways: attention latents ↔ feed-forward latents
+  - Uses tied_transpose parameter tying (50% coupling weight reduction)
+- **Step 4**: Mechanisms 1+2 (reproducibility check, identical to step 2)
+- **Step 5**: All three mechanisms (reproducibility check, identical to step 3)
+
+**Key difference between steps 2 and 3**: Step 2 enables cross-token aggregation in the feed-forward layer but lacks direct latent-space coupling. Step 3 adds mechanism 3, creating bidirectional projections between attention and feed-forward latent spaces with parameter-tied weights.
 
 **Note on steps 4-5**: These are reproducibility checks that run the same configurations as steps 2-3. They were originally intended to compare different optimizers (AdamW vs AdamWSPAM), but the default configuration uses AdamWSPAM for all steps, making them pure reproducibility runs. To test unique configurations only, use `CONFIG_RA_MLA_ABLATION_STEPS="0,1,2,3"`.
 
