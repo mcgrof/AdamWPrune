@@ -699,20 +699,24 @@ config RA_MLA_ABLATION_MODE
 	  Enable ablation study mode to run multiple reciprocal MLP
 	  configurations in a single training session.
 
-	  When enabled, runs 6 configurations:
+	  When enabled, runs 6 steps (4 unique + 2 reproducibility checks):
 	    0. Baseline: MLA-only (no RA, no reciprocal MLP)
 	    1. Mechanism 1 only: MLP-to-Attention Gating
 	    2. Mechanisms 1+2: + Cross-Token MLP Aggregation
-	    3. Mechanisms 1+2+3: Full Reciprocal MLP
-	    4. Mechanisms 1+2 (AdamWSPAM verification)
-	    5. Full solution (all 3 mechanisms + AdamWSPAM)
+	    3. All mechanisms: Full Reciprocal MLP
+	    4. Reproducibility check (identical to step 2)
+	    5. Reproducibility check (identical to step 3)
+
+	  Steps 4-5 were originally intended for optimizer comparison
+	  (AdamW vs AdamWSPAM), but the default config uses AdamWSPAM
+	  for all steps, making them pure reproducibility runs.
 
 	  Each configuration runs with the same baseline settings
 	  (latent_dim=128, RA alpha=0.0) for fair comparison.
 
-	  Results are saved separately for each configuration.
+	  Results are saved separately for each step.
 
-	  See: defconfigs/RA_MLA_RECIPROCAL_ABLATION_STUDY.md
+	  To run only unique configurations: set ABLATION_STEPS="0,1,2,3"
 
 config RA_MLA_ABLATION_BASELINE
 	bool "Include baseline (MLA-only)"
@@ -748,19 +752,32 @@ config RA_MLA_ABLATION_STEP3
 	  Expected: -0.10 to -0.15 improvement over baseline.
 
 config RA_MLA_ABLATION_STEP4
-	bool "Include step 4 (Mechanisms 1+2, AdamWSPAM check)"
+	bool "Include step 4 (Mechanisms 1+2, reproducibility check)"
 	default y
 	depends on RA_MLA_ABLATION_MODE
 	help
-	  Run mechanisms 1+2 with AdamWSPAM (sanity check).
-	  Expected: Should match step 2 results.
+	  Run mechanisms 1+2 (reproducibility check for step 2).
+
+	  This step is identical to step 2. It was originally intended
+	  for comparing optimizers (AdamW vs AdamWSPAM), but since the
+	  default config uses AdamWSPAM for all steps, this serves as
+	  a reproducibility verification.
+
+	  Expected: Should match step 2 results exactly.
 
 config RA_MLA_ABLATION_STEP5
-	bool "Include step 5 (Full solution)"
+	bool "Include step 5 (All mechanisms, reproducibility check)"
 	default y
 	depends on RA_MLA_ABLATION_MODE
 	help
-	  Run full solution: All 3 mechanisms + AdamWSPAM.
+	  Run all 3 mechanisms (reproducibility check for step 3).
+
+	  This step is identical to step 3. It was originally intended
+	  for comparing optimizers (AdamW vs AdamWSPAM), but since the
+	  default config uses AdamWSPAM for all steps, this serves as
+	  a reproducibility verification.
+
+	  Expected: Should match step 3 results exactly.
 	  Target: val_loss ~3.40-3.50 (45-48% better than vanilla).
 
 config RA_MLA_ABLATION_STEPS

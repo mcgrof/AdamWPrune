@@ -10,7 +10,11 @@ make defconfig-gpt2-ra-mla-full
 make
 ```
 
-This runs MLA (Multi-head Latent Attention) with reciprocal MLP mechanisms enabled.
+This runs an ablation study with 6 steps:
+- 4 unique configurations testing different reciprocal MLP mechanism combinations
+- 2 reproducibility checks (steps 4-5 duplicate steps 2-3 for verification)
+
+All tests use MLA (Multi-head Latent Attention) with memory optimizations (parameter tying and topk sparsification) enabled.
 
 ## Overview
 
@@ -233,11 +237,15 @@ Key configuration parameters:
 - Step 0: Baseline (MLA only, no reciprocal mechanisms)
 - Step 1: Mechanism 1 only (MLP→Attn Gate)
 - Step 2: Mechanisms 1+2 (Gate + Cross-Token)
-- Step 3: All three mechanisms (full solution)
+- Step 3: All three mechanisms
+- Step 4: Mechanisms 1+2 (reproducibility check, identical to step 2)
+- Step 5: All three mechanisms (reproducibility check, identical to step 3)
+
+**Note on steps 4-5**: These are reproducibility checks that run the same configurations as steps 2-3. They were originally intended to compare different optimizers (AdamW vs AdamWSPAM), but the default configuration uses AdamWSPAM for all steps, making them pure reproducibility runs. To test unique configurations only, use `CONFIG_RA_MLA_ABLATION_STEPS="0,1,2,3"`.
 
 ## Next Steps
 
-1. **Complete full training**: Run 10,400 iterations for proper evaluation (~36 hours for 6-test ablation)
+1. **Complete full training**: Run 10,400 iterations for proper evaluation (4 unique configurations + 2 reproducibility checks)
 2. **Evaluate memory optimizations**: Test parameter tying and sparsification impact on 34% memory overhead
 3. **Ablation study with optimizations**: Compare tied_transpose vs untied, topk vs rms sparsification
 4. **Scaling law experiments**: Test aggressive attention compression (latent_dim 64→32) with MLP expansion
