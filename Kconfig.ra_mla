@@ -693,30 +693,33 @@ comment "Test multiple reciprocal MLP configurations in one run"
 comment "Enables systematic ablation study of mechanisms 1, 2, and 3"
 
 config RA_MLA_ABLATION_MODE
-	bool "Enable Ablation Study Mode"
+	bool "Enable RATIO Ablation Study Mode"
 	default n
 	help
-	  Enable ablation study mode to run multiple reciprocal MLP
-	  configurations in a single training session.
+	  Enable RATIO ablation study mode with 15 steps testing golden ratio
+	  (1:2.5), MLP mechanisms, RA, MLA, and structure-aware optimization.
 
-	  When enabled, runs 6 steps (4 unique + 2 reproducibility checks):
-	    0. Baseline: MLA-only (no RA, no reciprocal MLP)
-	    1. Mechanism 1 only: MLP-to-Attention Gating
-	    2. Mechanisms 1+2: + Cross-Token MLP Aggregation
-	    3. All mechanisms: Full Reciprocal MLP
-	    4. Reproducibility check (identical to step 2)
-	    5. Reproducibility check (identical to step 3)
+	  Steps 0-14 test isolated variables:
+	    0. Baseline GPT-2 (ratio 1:2.0, standard attention)
+	    1. Baseline + SPAM pruning 50% (pruning baseline)
+	    2. Golden ratio 1:2.5 via MLP resize (tests ratio alone)
+	    3. Step 2 + MLP gating 15%
+	    4. Step 3 + cross-token 10%
+	    5. Baseline + RA (ra_alpha=0.3, ratio 1:2.0)
+	    6. RA + golden ratio 1:2.5
+	    7. Step 6 + mechanisms
+	    8. Baseline + MLA (latent_dim=128, ratio 1:3.0)
+	    9. MLA + golden ratio 1:2.5
+	   10. Step 9 + mechanisms
+	   11. RA + MLA + golden ratio 1:2.5
+	   12. Step 11 + mechanisms
+	   13. Step 10 + AdamWStructure
+	   14. Step 13 + ratio-preserving pruning 50%
 
-	  Steps 4-5 were originally intended for optimizer comparison
-	  (AdamW vs AdamWSPAM), but the default config uses AdamWSPAM
-	  for all steps, making them pure reproducibility runs.
+	  Victory condition: Step 14 > Step 1 (RATIO beats SPAM pruning)
 
-	  Each configuration runs with the same baseline settings
-	  (latent_dim=128, RA alpha=0.0) for fair comparison.
-
-	  Results are saved separately for each step.
-
-	  To run only unique configurations: set ABLATION_STEPS="0,1,2,3"
+	  To run all steps: set ABLATION_STEPS="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14"
+	  To run subset: set ABLATION_STEPS="0,1,2,8,9,14"
 
 config RA_MLA_ABLATION_BASELINE
 	bool "Include baseline (MLA-only)"
@@ -766,38 +769,113 @@ config RA_MLA_ABLATION_STEP4
 	  Expected: Should match step 2 results exactly.
 
 config RA_MLA_ABLATION_STEP5
-	bool "Include step 5 (All mechanisms, reproducibility check)"
-	default y
+	bool "Include step 5 (Baseline + RA)"
+	default n
 	depends on RA_MLA_ABLATION_MODE
 	help
-	  Run all 3 mechanisms (reproducibility check for step 3).
+	  Run baseline with reciprocal attention (ra_alpha=0.3, ratio 1:2.0).
+	  Tests reciprocal attention scoring without golden ratio or MLA.
 
-	  This step is identical to step 3. It was originally intended
-	  for comparing optimizers (AdamW vs AdamWSPAM), but since the
-	  default config uses AdamWSPAM for all steps, this serves as
-	  a reproducibility verification.
+config RA_MLA_ABLATION_STEP6
+	bool "Include step 6 (RA + golden ratio)"
+	default n
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run RA with golden ratio (ra_alpha=0.3, mlp_dim=3840, ratio 1:2.5).
+	  Tests if golden ratio helps reciprocal attention.
 
-	  Expected: Should match step 3 results exactly.
-	  Target: val_loss ~3.40-3.50 (45-48% better than vanilla).
+config RA_MLA_ABLATION_STEP7
+	bool "Include step 7 (RA + ratio + mechanisms)"
+	default n
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run RA + golden ratio + MLP mechanisms (gating + cross-token).
+	  Tests if RA enhances mechanisms vs standard attention (step 4).
+
+config RA_MLA_ABLATION_STEP8
+	bool "Include step 8 (Baseline + MLA)"
+	default n
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run baseline with MLA (latent_dim=128, ratio 1:3.0).
+	  Tests MLA alone without golden ratio adjustment.
+
+config RA_MLA_ABLATION_STEP9
+	bool "Include step 9 (MLA + golden ratio)"
+	default n
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run MLA with golden ratio (latent_dim=128, mlp_dim=2560, ratio 1:2.5).
+	  Tests if adding golden ratio to MLA helps.
+
+config RA_MLA_ABLATION_STEP10
+	bool "Include step 10 (MLA + ratio + mechanisms)"
+	default n
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run MLA + golden ratio + MLP mechanisms.
+	  Tests if mechanisms add value on top of MLA + ratio.
+
+config RA_MLA_ABLATION_STEP11
+	bool "Include step 11 (RA + MLA + golden ratio)"
+	default n
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run RA + MLA + golden ratio (ra_alpha=0.3, latent_dim=128, ratio 1:2.5).
+	  Tests combining all attention strategies with golden ratio.
+
+config RA_MLA_ABLATION_STEP12
+	bool "Include step 12 (RA + MLA + ratio + mechanisms)"
+	default n
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run RA + MLA + golden ratio + MLP mechanisms (full combination).
+	  Tests best combination of all innovations.
+
+config RA_MLA_ABLATION_STEP13
+	bool "Include step 13 (Step 10 + AdamWStructure)"
+	default n
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run MLA + ratio + mechanisms with AdamWStructure optimizer.
+	  Tests structure-aware optimization with role-specific learning rates.
+
+config RA_MLA_ABLATION_STEP14
+	bool "Include step 14 (Full RATIO framework)"
+	default n
+	depends on RA_MLA_ABLATION_MODE
+	help
+	  Run step 13 + ratio-preserving pruning (50% sparsity).
+	  Full RATIO framework: MLA + ratio + mechanisms + structure-aware + pruning.
+	  Victory condition: Should beat step 1 (SPAM pruning baseline).
 
 config RA_MLA_ABLATION_STEPS
 	string "Ablation steps to run"
-	default "0,1,2,3,4,5" if RA_MLA_ABLATION_BASELINE && RA_MLA_ABLATION_STEP1 && RA_MLA_ABLATION_STEP2 && RA_MLA_ABLATION_STEP3 && RA_MLA_ABLATION_STEP4 && RA_MLA_ABLATION_STEP5
-	default "1,2,3,4,5" if !RA_MLA_ABLATION_BASELINE && RA_MLA_ABLATION_STEP1 && RA_MLA_ABLATION_STEP2 && RA_MLA_ABLATION_STEP3 && RA_MLA_ABLATION_STEP4 && RA_MLA_ABLATION_STEP5
-	default "0,1,2,3" if RA_MLA_ABLATION_BASELINE && RA_MLA_ABLATION_STEP1 && RA_MLA_ABLATION_STEP2 && RA_MLA_ABLATION_STEP3 && !RA_MLA_ABLATION_STEP4 && !RA_MLA_ABLATION_STEP5
+	default "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14"
 	depends on RA_MLA_ABLATION_MODE
 	help
 	  Comma-separated list of ablation steps to run.
-	  Format: "0,1,2,3,4,5"
+	  Format: "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14"
 
-	  0 = Baseline (MLA-only)
-	  1 = Mechanism 1 only
-	  2 = Mechanisms 1+2
-	  3 = Mechanisms 1+2+3
-	  4 = Mechanisms 1+2 (AdamWSPAM)
-	  5 = Full solution (AdamWSPAM)
+	  0 = Baseline GPT-2 (ratio 1:2.0)
+	  1 = Baseline + SPAM pruning 50%
+	  2 = Golden ratio 1:2.5 via MLP resize
+	  3 = Step 2 + MLP gating 15%
+	  4 = Step 3 + cross-token 10%
+	  5 = Baseline + RA (ra_alpha=0.3)
+	  6 = RA + golden ratio 1:2.5
+	  7 = Step 6 + mechanisms
+	  8 = Baseline + MLA (ratio 1:3.0)
+	  9 = MLA + golden ratio 1:2.5
+	  10 = Step 9 + mechanisms
+	  11 = RA + MLA + golden ratio
+	  12 = Step 11 + mechanisms
+	  13 = Step 10 + AdamWStructure
+	  14 = Step 13 + ratio-preserving pruning
 
-	  You can manually override this to run a subset, e.g., "0,2,5"
+	  You can manually override to run a subset, e.g.:
+	  "0,1,2,8,9,14" - Test baseline, golden ratio, MLA, and full RATIO
+	  "0,2,4,10,14" - Quick test of key milestones
 
 endmenu # Reciprocal MLP Ablation Study
 

@@ -695,6 +695,24 @@ def get_test_matrix(config):
                 ra_mla_ablation_steps.append("4")
             if config.get("RA_MLA_ABLATION_STEP5") == "y":
                 ra_mla_ablation_steps.append("5")
+            if config.get("RA_MLA_ABLATION_STEP6") == "y":
+                ra_mla_ablation_steps.append("6")
+            if config.get("RA_MLA_ABLATION_STEP7") == "y":
+                ra_mla_ablation_steps.append("7")
+            if config.get("RA_MLA_ABLATION_STEP8") == "y":
+                ra_mla_ablation_steps.append("8")
+            if config.get("RA_MLA_ABLATION_STEP9") == "y":
+                ra_mla_ablation_steps.append("9")
+            if config.get("RA_MLA_ABLATION_STEP10") == "y":
+                ra_mla_ablation_steps.append("10")
+            if config.get("RA_MLA_ABLATION_STEP11") == "y":
+                ra_mla_ablation_steps.append("11")
+            if config.get("RA_MLA_ABLATION_STEP12") == "y":
+                ra_mla_ablation_steps.append("12")
+            if config.get("RA_MLA_ABLATION_STEP13") == "y":
+                ra_mla_ablation_steps.append("13")
+            if config.get("RA_MLA_ABLATION_STEP14") == "y":
+                ra_mla_ablation_steps.append("14")
 
     matrix["ra_mla_ablation_steps"] = (
         ra_mla_ablation_steps if ra_mla_ablation_steps else None
