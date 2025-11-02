@@ -788,68 +788,103 @@ for tier, params in tier_plan.items():
 
 ## Experimental Results
 
-### Ablation Study: Full Training (10,400 iterations)
+### Previous Ablation: Lessons Learned
+
+**Initial approach (confounded variables)**:
+- Step 0: MLA baseline (115M params, ratio 1:3.0)
+- Step 1: MLA + gating (117M, -0.63% improvement ✓)
+- Step 2: MLA + gating + cross-token (230M, parameter explosion ✗)
+- Step 3: All mechanisms (240M, regression ✗)
+
+**Root cause**: Cross-token used 3072→3072 projection (9.4M params/layer),
+creating ratio 1:9.14 (286% MLP-heavy). Also confounded MLA with mechanisms.
+
+### New Ablation Plan: Isolated Variables
+
+**Strategy**: Test one variable per step, maintain golden ratio throughout.
 
 **Setup**:
 - Dataset: FineWebEdu
 - Model: GPT-2 124M base
 - Hardware: 4× NVIDIA A10G (DDP)
-- Optimizer: AdamWSPAM
+- Golden ratio: 1:2.5 (enforced from step 2 onwards)
 
-**Results**:
-
-| Step | Configuration | Params | Val Loss | vs Baseline | Status |
-|------|---------------|--------|----------|-------------|--------|
-| 0 | MLA only (baseline) | 115.0M | 3.6773 | - | - |
-| 1 | + Mechanism 1 (gating) | 117.4M | 3.6542 | -0.63% | ✓ Works |
-| 2 | + Mech 1+2 (cross-token) | 230.6M | 3.6561 | -0.58% | ⚠ Worse than step 1 |
-| 3 | + All three mechanisms | 240.1M | 3.6840 | +0.18% | ✗ Regression |
-
-**Key findings**:
-
-1. **Step 1 works** (-0.63% improvement, only +2.4M params)
-2. **Step 2 fails** (113M param explosion, no gain over step 1)
-3. **Step 3 regresses** (adds mechanism 3, makes it worse)
-
-**Root cause**: Cross-token mechanism uses full 3072→3072 projection (9.4M
-params/layer), violating golden ratio:
+**Ablation steps**:
 
 ```
-Step 0:  Ratio 1:3.0 (already 20% MLP-heavy)
-Step 2:  Ratio 1:9.14 (265% MLP-heavy!) ✗
-Step 3:  Ratio 1:9.64 (286% MLP-heavy!) ✗
+Step 0: Baseline GPT-2
+  Purpose: Reference point
+  Attention: 2.36M/layer (standard multi-head)
+  MLP: 4.72M/layer (mlp_dim=3072)
+  Ratio: 1:2.0
+  Optimizer: AdamW
+  Total: ~124M params
+
+Step 1: Baseline + AdamWPrune (SPAM 50%)
+  Purpose: Pruning baseline (current project SOTA)
+  Config: Same architecture as step 0
+  Optimizer: AdamWSPAM with 50% target sparsity
+  Total: ~62M params (50% pruned)
+  Test: Does structure-blind pruning work?
+
+Step 2: Golden ratio via MLP resize
+  Purpose: Test if ratio alone improves
+  Attention: 2.36M/layer (standard, unchanged)
+  MLP: 5.90M/layer (2.36M × 2.5, mlp_dim=3840)
+  Ratio: 1:2.5 ✓
+  Optimizer: AdamW
+  Total: ~148M params
+  Test: Does golden ratio improve quality/efficiency?
+
+Step 3: Golden ratio + MLP gating
+  Purpose: Test selective activation
+  Attention: 2.36M/layer
+  MLP: 5.02M/layer (85% of 5.90M, mlp_dim=3264)
+  Gating: 0.88M/layer (15% budget)
+  Ratio: 1:2.5 ✓
+  Optimizer: AdamW
+  Total: ~148M params
+  Test: Does gating beat raw parameters?
+
+Step 4: Golden ratio + gating + cross-token
+  Purpose: Test information discovery
+  Attention: 2.36M/layer
+  MLP: 4.73M/layer (80% of 5.90M, mlp_dim=3072)
+  Gating: 0.59M/layer (10% budget)
+  Cross-token: 0.59M/layer (10% budget, latent bottleneck!)
+  Ratio: 1:2.5 ✓
+  Optimizer: AdamW
+  Total: ~148M params
+  Test: Does cross-token aggregation help?
+
+Step 5: Step 4 + MLA
+  Purpose: Test KV cache compression impact
+  MLA attention: 1.57M/layer (latent_dim=128, 6× KV reduction)
+  MLP: 3.14M/layer (rescaled: 1.57M × 2.5 × 0.8)
+  Gating: 0.39M/layer (10% budget)
+  Cross-token: 0.39M/layer (10% budget, cross_latent_dim=110)
+  Ratio: 1:2.5 ✓
+  Optimizer: AdamW
+  Total: ~98M params
+  Test: Does MLA enhance or break mechanisms?
+
+Step 6: Step 5 + AdamWStructure + ratio-preserving pruning
+  Purpose: Full RATIO framework
+  Architecture: Same as step 5
+  Optimizer: AdamWStructure (role-specific learning rates)
+  Pruning: Ratio-preserving (maintains 1:2.5 at 50% sparsity)
+  Total: ~49M params (50% pruned)
+  Test: Does unified framework beat structure-blind pruning?
 ```
 
-### Proposed Fix: Golden Ratio Architecture
+**Victory condition**: Step 6 > Step 1 (RATIO beats SPAM pruning)
 
-**Configuration**:
-```python
-InferenceOptimalConfig(
-    d_model=768,
-    n_heads=12,
-    latent_dim=128,
-    golden_ratio=2.5,
-    mechanism_budget_fraction=0.15
-)
-```
-
-**Auto-calculated dimensions**:
-```
-mlp_dim: 2150 (not 3072!)
-cross_latent_dim: 110 (not 3072!)
-gate_dim: 55
-Total params: ~119M
-Ratio: 1:2.50 exactly ✓
-```
-
-**Expected results**:
-- Params: 119M (vs 230M for broken step 2)
-- Ratio: 1:2.50 (vs 1:9.14)
-- Inference cost: +17% (vs +200%)
-- **Tests "information discovery" with proper capacity**
-
-**Hypothesis**: Latent bottleneck (110-dim) forces learning what matters, not
-memorizing everything. If cross-token mechanism has value, it should work here.
+**Key comparisons**:
+- Step 2 vs 0: Does golden ratio alone help?
+- Step 3 vs 2: Do mechanisms beat raw MLP parameters?
+- Step 4 vs 3: Does cross-token add value?
+- Step 5 vs 4: Does MLA help or hurt?
+- Step 6 vs 1: Does RATIO beat structure-blind pruning?
 
 ---
 
