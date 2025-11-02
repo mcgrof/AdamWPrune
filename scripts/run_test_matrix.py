@@ -1531,8 +1531,8 @@ def main():
     parser.add_argument(
         "--wait-for-memory",
         type=float,
-        default=44.0,
-        help="Wait for this much free GPU memory (GiB) before starting next test (default: 44.0)",
+        default=18.0,
+        help="Wait for this much free GPU memory (GiB) before starting next test (default: auto-detect 80%% of GPU total, fallback 18.0)",
     )
     parser.add_argument(
         "--memory-wait-timeout",
@@ -2150,6 +2150,27 @@ def main():
         parallel_jobs = int(config.get("PARALLEL_JOBS", 1))
 
     max_memory_percent = int(config.get("MAX_GPU_MEMORY_PERCENT", 90))
+
+    # Dynamically determine wait_for_memory based on GPU if not set in config
+    if config.get("WAIT_FOR_MEMORY"):
+        args.wait_for_memory = float(config.get("WAIT_FOR_MEMORY"))
+    elif GPU_MONITOR_AVAILABLE:
+        try:
+            monitor = GPUMonitor()
+            if monitor.initialized and monitor.gpu_count > 0:
+                # Get total memory of first GPU
+                stats = monitor.get_stats(0)
+                total_memory_gb = (
+                    stats.get("memory_total", 0) / 1024
+                )  # Convert MB to GB
+                # Wait for 80% of total memory to be free (conservative)
+                args.wait_for_memory = total_memory_gb * 0.8
+                print(
+                    f"Auto-detected GPU memory: {total_memory_gb:.1f} GiB total, waiting for {args.wait_for_memory:.1f} GiB free between tests"
+                )
+        except Exception as e:
+            print(f"Warning: Could not auto-detect GPU memory, using default: {e}")
+            # Keep default from args (44.0)
 
     if parallel_jobs > 1:
         print(

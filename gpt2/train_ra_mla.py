@@ -566,49 +566,54 @@ if args.ra_mla_ablation_step is not None:
         raise ValueError(f"Invalid ablation step: {step}. Must be 0-14.")
 
 # Override RA+MLA config from config.py if available (for test matrix integration)
-try:
-    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    config_path = os.path.join(parent_dir, "config.py")
-    if os.path.exists(config_path):
-        import importlib.util
+# IMPORTANT: Skip config overrides when running ablation study - ablation step has full control
+if args.ra_mla_ablation_step is None:
+    try:
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = os.path.join(parent_dir, "config.py")
+        if os.path.exists(config_path):
+            import importlib.util
 
-        spec = importlib.util.spec_from_file_location("config", config_path)
-        config_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(config_module)
+            spec = importlib.util.spec_from_file_location("config", config_path)
+            config_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(config_module)
 
-        if hasattr(config_module, "config"):
-            cfg = config_module.config
-            # Override RA+MLA parameters from config if they exist
-            if hasattr(cfg, "RA_MLA_LATENT_DIM"):
-                args.latent_dim = int(cfg.RA_MLA_LATENT_DIM)
-            if hasattr(cfg, "RA_MLA_RA_WINDOW"):
-                args.ra_window = int(cfg.RA_MLA_RA_WINDOW)
-            if hasattr(cfg, "RA_MLA_RA_ALPHA"):
-                args.ra_alpha = float(cfg.RA_MLA_RA_ALPHA)
-            if hasattr(cfg, "RA_MLA_PER_HEAD_Q_LATENT"):
-                args.per_head_q_latent = (
-                    cfg.RA_MLA_PER_HEAD_Q_LATENT == "y"
-                    or cfg.RA_MLA_PER_HEAD_Q_LATENT is True
-                )
-            if hasattr(cfg, "RA_MLA_PER_HEAD_V_UP"):
-                args.per_head_v_up = (
-                    cfg.RA_MLA_PER_HEAD_V_UP == "y" or cfg.RA_MLA_PER_HEAD_V_UP is True
-                )
-            if hasattr(cfg, "RA_MLA_USE_FLASH"):
-                args.use_flash = (
-                    cfg.RA_MLA_USE_FLASH == "y" or cfg.RA_MLA_USE_FLASH is True
-                )
-            if hasattr(cfg, "RA_MLA_LOG_METRICS"):
-                args.log_metrics = (
-                    cfg.RA_MLA_LOG_METRICS == "y" or cfg.RA_MLA_LOG_METRICS is True
-                )
-            # Override training parameters only if not set via environment variable
-            # (test matrix passes GPT2_MAX_ITERS via environment which overrides config)
-            if hasattr(cfg, "GPT2_MAX_ITERS") and not os.environ.get("GPT2_MAX_ITERS"):
-                args.max_iters = int(cfg.GPT2_MAX_ITERS)
-except Exception as e:
-    # If config.py doesn't exist or can't be loaded, just use command line args
-    pass
+            if hasattr(config_module, "config"):
+                cfg = config_module.config
+                # Override RA+MLA parameters from config if they exist
+                if hasattr(cfg, "RA_MLA_LATENT_DIM"):
+                    args.latent_dim = int(cfg.RA_MLA_LATENT_DIM)
+                if hasattr(cfg, "RA_MLA_RA_WINDOW"):
+                    args.ra_window = int(cfg.RA_MLA_RA_WINDOW)
+                if hasattr(cfg, "RA_MLA_RA_ALPHA"):
+                    args.ra_alpha = float(cfg.RA_MLA_RA_ALPHA)
+                if hasattr(cfg, "RA_MLA_PER_HEAD_Q_LATENT"):
+                    args.per_head_q_latent = (
+                        cfg.RA_MLA_PER_HEAD_Q_LATENT == "y"
+                        or cfg.RA_MLA_PER_HEAD_Q_LATENT is True
+                    )
+                if hasattr(cfg, "RA_MLA_PER_HEAD_V_UP"):
+                    args.per_head_v_up = (
+                        cfg.RA_MLA_PER_HEAD_V_UP == "y"
+                        or cfg.RA_MLA_PER_HEAD_V_UP is True
+                    )
+                if hasattr(cfg, "RA_MLA_USE_FLASH"):
+                    args.use_flash = (
+                        cfg.RA_MLA_USE_FLASH == "y" or cfg.RA_MLA_USE_FLASH is True
+                    )
+                if hasattr(cfg, "RA_MLA_LOG_METRICS"):
+                    args.log_metrics = (
+                        cfg.RA_MLA_LOG_METRICS == "y" or cfg.RA_MLA_LOG_METRICS is True
+                    )
+                # Override training parameters only if not set via environment variable
+                # (test matrix passes GPT2_MAX_ITERS via environment which overrides config)
+                if hasattr(cfg, "GPT2_MAX_ITERS") and not os.environ.get(
+                    "GPT2_MAX_ITERS"
+                ):
+                    args.max_iters = int(cfg.GPT2_MAX_ITERS)
+    except Exception as e:
+        # If config.py doesn't exist or can't be loaded, just use command line args
+        pass
 
 
 # ============================================================================
