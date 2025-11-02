@@ -430,41 +430,132 @@ if os.environ.get("GPT2_MAX_ITERS"):
     args.max_iters = int(os.environ.get("GPT2_MAX_ITERS"))
 
 # Handle ablation study step if specified
-# This overrides the mechanism flags to enable specific combinations for ablation study
+# This overrides configuration for RATIO ablation study (15 steps)
 if args.ra_mla_ablation_step is not None:
     step = args.ra_mla_ablation_step
     if step == "0":
-        # Baseline: MLA only, no reciprocal MLP mechanisms
+        # Step 0: Baseline GPT-2 (ratio 1:2.0, standard attention)
+        args.enable_mla = False
+        args.ra_alpha = 0.0
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
+        # Keep standard mlp_dim=3072 (will be set by config)
     elif step == "1":
-        # Step 1: Mechanism 1 only (MLP-to-Attention Gating)
+        # Step 1: Baseline + SPAM pruning 50% (pruning baseline)
+        args.enable_mla = False
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        # Pruning enabled via config (OPTIMIZER=adamwspam, TARGET_SPARSITY=0.5)
+    elif step == "2":
+        # Step 2: Golden ratio 1:2.5 via MLP resize (mlp_dim=3840)
+        args.enable_mla = False
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        # mlp_dim will be overridden to 3840 by config for golden ratio
+    elif step == "3":
+        # Step 3: Step 2 + MLP gating 15%
+        args.enable_mla = False
+        args.ra_alpha = 0.0
         args.mlp_attn_gate = True
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-    elif step == "2":
-        # Step 2: Mechanisms 1+2 (+ Cross-Token MLP Aggregation)
-        args.mlp_attn_gate = True
-        args.mlp_cross_token = True
-        args.mlp_latent_recip = False
-    elif step == "3":
-        # Step 3: All three mechanisms
-        args.mlp_attn_gate = True
-        args.mlp_cross_token = True
-        args.mlp_latent_recip = True
+        # mlp_dim=3264 (85% of 3840), gating takes 15%
     elif step == "4":
-        # Step 4: Mechanisms 1+2 (AdamWSPAM sanity check)
+        # Step 4: Step 3 + cross-token 10%
+        args.enable_mla = False
+        args.ra_alpha = 0.0
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
+        # mlp_dim=3072 (80%), gating+cross-token take 20%
     elif step == "5":
-        # Step 5: Full solution (all three mechanisms with AdamWSPAM)
+        # Step 5: Baseline + RA (ra_alpha=0.3, ratio 1:2.0)
+        args.enable_mla = False
+        args.ra_alpha = 0.3
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+    elif step == "6":
+        # Step 6: RA + golden ratio (ra_alpha=0.3, mlp_dim=3840, ratio 1:2.5)
+        args.enable_mla = False
+        args.ra_alpha = 0.3
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        # mlp_dim=3840 for golden ratio
+    elif step == "7":
+        # Step 7: Step 6 + mechanisms (RA + ratio + gating + cross-token)
+        args.enable_mla = False
+        args.ra_alpha = 0.3
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
-        args.mlp_latent_recip = True
+        args.mlp_latent_recip = False
+        # mlp_dim=3072 (80%), mechanisms take 20%
+    elif step == "8":
+        # Step 8: Baseline + MLA (latent_dim=128, ratio 1:3.0)
+        args.enable_mla = True
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        # Keep standard mlp_dim=3072 (creates ratio 1:3.0 with MLA)
+    elif step == "9":
+        # Step 9: MLA + golden ratio (latent_dim=128, mlp_dim=2560, ratio 1:2.5)
+        args.enable_mla = True
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        # mlp_dim=2560 for golden ratio with MLA
+    elif step == "10":
+        # Step 10: Step 9 + mechanisms (MLA + ratio + gating + cross-token)
+        args.enable_mla = True
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = True
+        args.mlp_cross_token = True
+        args.mlp_latent_recip = False
+        # mlp_dim=2048 (80%), mechanisms take 20%
+    elif step == "11":
+        # Step 11: RA + MLA + golden ratio (ra_alpha=0.3, latent_dim=128, ratio 1:2.5)
+        args.enable_mla = True
+        args.ra_alpha = 0.3
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        # mlp_dim=2560 for golden ratio
+    elif step == "12":
+        # Step 12: Step 11 + mechanisms (RA + MLA + ratio + mechanisms)
+        args.enable_mla = True
+        args.ra_alpha = 0.3
+        args.mlp_attn_gate = True
+        args.mlp_cross_token = True
+        args.mlp_latent_recip = False
+        # mlp_dim=2048 (80%), mechanisms take 20%
+    elif step == "13":
+        # Step 13: Step 10 + AdamWStructure (MLA + ratio + mechanisms + structure-aware)
+        args.enable_mla = True
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = True
+        args.mlp_cross_token = True
+        args.mlp_latent_recip = False
+        # TODO: Need to add AdamWStructure optimizer support
+        # mlp_dim=2048, mechanisms take 20%
+    elif step == "14":
+        # Step 14: Step 13 + ratio-preserving pruning (full RATIO framework)
+        args.enable_mla = True
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = True
+        args.mlp_cross_token = True
+        args.mlp_latent_recip = False
+        # TODO: Need to add ratio-preserving pruning support
+        # mlp_dim=2048, 50% pruning that preserves ratio 1:2.5
     else:
-        raise ValueError(f"Invalid ablation step: {step}. Must be 0-5.")
+        raise ValueError(f"Invalid ablation step: {step}. Must be 0-14.")
 
 # Override RA+MLA config from config.py if available (for test matrix integration)
 try:
@@ -958,20 +1049,29 @@ def main():
             base_opt = getattr(args, "adamwprune_base_optimizer_name", "adamw")
             print(f"Base optimizer: {base_opt}")
 
-    # Show RA+MLA ablation step if specified
+    # Show RATIO ablation step if specified
     if args.ra_mla_ablation_step is not None:
         step_names = {
-            "0": "Baseline (MLA only, no reciprocal MLP)",
-            "1": "Mechanism 1 (MLP-to-Attention Gating)",
-            "2": "Mechanisms 1+2 (+ Cross-Token Aggregation)",
-            "3": "All three mechanisms",
-            "4": "Mechanisms 1+2 (AdamWSPAM check)",
-            "5": "Full solution (all three + AdamWSPAM)",
+            "0": "Baseline GPT-2 (ratio 1:2.0, standard attention)",
+            "1": "Baseline + SPAM pruning 50%",
+            "2": "Golden ratio 1:2.5 via MLP resize",
+            "3": "Step 2 + MLP gating 15%",
+            "4": "Step 3 + cross-token 10%",
+            "5": "Baseline + RA (ra_alpha=0.3)",
+            "6": "RA + golden ratio 1:2.5",
+            "7": "Step 6 + mechanisms (RA + ratio + gating + cross-token)",
+            "8": "Baseline + MLA (ratio 1:3.0)",
+            "9": "MLA + golden ratio 1:2.5",
+            "10": "Step 9 + mechanisms (MLA + ratio + mechanisms)",
+            "11": "RA + MLA + golden ratio",
+            "12": "Step 11 + mechanisms (RA + MLA + ratio + mechanisms)",
+            "13": "Step 10 + AdamWStructure",
+            "14": "Step 13 + ratio-preserving pruning (Full RATIO)",
         }
         step_desc = step_names.get(
             args.ra_mla_ablation_step, f"Step {args.ra_mla_ablation_step}"
         )
-        print(f"RA+MLA Ablation: Step {args.ra_mla_ablation_step} - {step_desc}")
+        print(f"RATIO Ablation: Step {args.ra_mla_ablation_step} - {step_desc}")
 
     # Show reciprocal MLP mechanisms
     if args.mlp_attn_gate or args.mlp_cross_token or args.mlp_latent_recip:
