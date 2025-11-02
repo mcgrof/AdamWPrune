@@ -801,7 +801,13 @@ creating ratio 1:9.14 (286% MLP-heavy). Also confounded MLA with mechanisms.
 
 ### New Ablation Plan: Isolated Variables
 
-**Strategy**: Test one variable per step, maintain golden ratio throughout.
+**Core Philosophy**: The first intuition is NOT to use MLA. Instead: how do we
+grow the MLP to achieve golden ratio, and do something effective with that
+capacity? The MLP mechanisms test reciprocity of information before adding KV
+compression complexity.
+
+**Strategy**: Test one variable per step. First explore ratio + mechanisms with
+standard attention, then test MLA separately, then combine.
 
 **Setup**:
 - Dataset: FineWebEdu
@@ -834,7 +840,7 @@ Step 2: Golden ratio via MLP resize
   Ratio: 1:2.5 ✓
   Optimizer: AdamW
   Total: ~148M params
-  Test: Does golden ratio improve quality/efficiency?
+  Test: Does golden ratio alone improve quality/efficiency?
 
 Step 3: Golden ratio + MLP gating
   Purpose: Test selective activation
@@ -844,10 +850,10 @@ Step 3: Golden ratio + MLP gating
   Ratio: 1:2.5 ✓
   Optimizer: AdamW
   Total: ~148M params
-  Test: Does gating beat raw parameters?
+  Test: Does gating beat raw MLP parameters?
 
 Step 4: Golden ratio + gating + cross-token
-  Purpose: Test information discovery
+  Purpose: Test information discovery (reciprocity)
   Attention: 2.36M/layer
   MLP: 4.73M/layer (80% of 5.90M, mlp_dim=3072)
   Gating: 0.59M/layer (10% budget)
@@ -855,36 +861,57 @@ Step 4: Golden ratio + gating + cross-token
   Ratio: 1:2.5 ✓
   Optimizer: AdamW
   Total: ~148M params
-  Test: Does cross-token aggregation help?
+  Test: Does cross-token information discovery help?
 
-Step 5: Step 4 + MLA
-  Purpose: Test KV cache compression impact
+Step 5: Baseline GPT-2 + MLA
+  Purpose: Test MLA alone (no ratio change)
   MLA attention: 1.57M/layer (latent_dim=128, 6× KV reduction)
-  MLP: 3.14M/layer (rescaled: 1.57M × 2.5 × 0.8)
+  MLP: 4.72M/layer (mlp_dim=3072, unchanged)
+  Ratio: 1:3.0 (MLA-heavy, not optimal)
+  Optimizer: AdamW
+  Total: ~115M params
+  Test: Does MLA alone help?
+
+Step 6: Baseline GPT-2 + MLA + golden ratio
+  Purpose: Combine MLA with golden ratio (no mechanisms yet)
+  MLA attention: 1.57M/layer (latent_dim=128)
+  MLP: 3.93M/layer (1.57M × 2.5, mlp_dim=2560)
+  Ratio: 1:2.5 ✓
+  Optimizer: AdamW
+  Total: ~98M params
+  Test: Does adding golden ratio to MLA help?
+
+Step 7: Step 4 + MLA (MLA + ratio + mechanisms)
+  Purpose: Full combination - mechanisms with KV compression
+  MLA attention: 1.57M/layer (latent_dim=128, 6× KV reduction)
+  MLP: 3.14M/layer (80% of 3.93M, mlp_dim=2048)
   Gating: 0.39M/layer (10% budget)
   Cross-token: 0.39M/layer (10% budget, cross_latent_dim=110)
   Ratio: 1:2.5 ✓
   Optimizer: AdamW
   Total: ~98M params
-  Test: Does MLA enhance or break mechanisms?
+  Test: Do mechanisms add value on top of MLA + ratio?
 
-Step 6: Step 5 + AdamWStructure + ratio-preserving pruning
+Step 8: Step 7 + AdamWStructure + ratio-preserving pruning
   Purpose: Full RATIO framework
-  Architecture: Same as step 5
+  Architecture: Same as step 7
   Optimizer: AdamWStructure (role-specific learning rates)
   Pruning: Ratio-preserving (maintains 1:2.5 at 50% sparsity)
   Total: ~49M params (50% pruned)
   Test: Does unified framework beat structure-blind pruning?
 ```
 
-**Victory condition**: Step 6 > Step 1 (RATIO beats SPAM pruning)
+**Victory condition**: Step 8 > Step 1 (RATIO beats SPAM pruning)
 
 **Key comparisons**:
 - Step 2 vs 0: Does golden ratio alone help?
-- Step 3 vs 2: Do mechanisms beat raw MLP parameters?
-- Step 4 vs 3: Does cross-token add value?
-- Step 5 vs 4: Does MLA help or hurt?
-- Step 6 vs 1: Does RATIO beat structure-blind pruning?
+- Step 3 vs 2: Does gating beat raw MLP parameters?
+- Step 4 vs 3: Does cross-token information discovery help?
+- Step 5 vs 0: Does MLA alone help?
+- Step 6 vs 5: Does adding golden ratio to MLA help?
+- Step 7 vs 6: Do mechanisms add value on top of MLA + ratio?
+- Step 7 vs 4: Does MLA enhance or break mechanisms?
+- Step 8 vs 1: Does full RATIO beat SPAM pruning? (THE KEY TEST)
 
 ---
 
