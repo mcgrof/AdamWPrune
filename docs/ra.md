@@ -1347,3 +1347,99 @@ budget).
 **Last Updated**: 2025-11-01
 **Version**: 0.1.0
 
+
+---
+
+## GPU Alignment: Hardware-Aware Tensor Dimensions
+
+**RATIO as GPU-Aligned Optimization**: All tensor dimensions are multiples of 64 for NVIDIA tensor core efficiency.
+
+### The Multiple of 64 Rule
+
+Following Karpathy's nanoGPT discovery: padding vocab from 50257 to 50304 (48×64) triggers optimized CUDA kernels with:
+- **Better memory coalescing**: Aligned memory access patterns
+- **Higher SM occupancy**: More warps per Streaming Multiprocessor
+- **Tensor core utilization**: Optimal for WMMA (Warp Matrix Multiply-Accumulate)
+- **Reduced warp divergence**: Better branch prediction
+
+### RATIO Dimensions (All GPU-Aligned)
+
+```
+Base model:
+  d_model = 768 = 12×64 ✓
+  n_heads = 12
+  head_dim = 64 = 1×64 ✓ (perfect for tensor cores)
+
+MLA compression:
+  latent_dim = 128 = 2×64 ✓
+
+Golden ratio MLPs (all steps):
+  Step 2,6:      mlp_dim = 3840 = 60×64 ✓
+  Step 3:        mlp_dim = 3264 = 51×64 ✓
+  Step 4,5,7,8:  mlp_dim = 3072 = 48×64 ✓
+  Step 9,11:     mlp_dim = 2560 = 40×64 ✓ (expansion_ratio = 3.3333333333)
+  Step 10,12-14: mlp_dim = 2048 = 32×64 ✓ (expansion_ratio = 2.6666666667)
+```
+
+**Implementation**: Use precise expansion ratios (e.g., 3.3333333333 not 3.33) to ensure `int(ratio * d_model)` produces exact multiples of 64.
+
+---
+
+## Structure-Aware Pruning: Respecting Adam's Beta Values
+
+### The Conservative Signal Intuition
+
+Adam's hyperparameters encode important time scales:
+- `beta1 = 0.9` (momentum): 90% of past → averages ~10 steps
+- `beta2 = 0.999` (variance): 99.9% of past → averages ~1000 steps
+
+**Key Insight**: Variance (`exp_avg_sq`) accumulates **100× more slowly** than momentum, making it a far more **conservative signal** for pruning decisions.
+
+### New RATIO Pruning Variants
+
+These variants combine structural importance (golden ratio) with optimizer state signals while respecting Adam's inherent conservatism.
+
+#### bitter7: Conservative Variance
+```python
+importance = |w| * (exp_avg_sq^0.25 + eps)
+```
+**When to use**: Very stable pruning that only removes parameters with consistent long-term low activity.
+
+#### bitter8: RATIO Structure-Aware (Momentum)
+```python
+structural_importance = {
+    'attention': 2.5,  # Scarce (1/2.5 of total capacity)
+    'mlp_base': 1.0,   # Abundant (2.5/2.5 of capacity)  
+    'coupling': 3.0    # Critical for RA↔MLP bidirectional flow
+}
+importance = structural_importance * |w| * sqrt(|exp_avg| + eps)
+```
+**When to use**: RATIO models where golden ratio must be preserved during pruning. Uses momentum (faster signal) for dynamic importance.
+
+#### bitter9: RATIO Conservative (Recommended for Production)
+```python
+importance = structural_importance * |w| * (exp_avg_sq^0.25 + eps)
+```
+**When to use**: Final RATIO deployment where maximum confidence is required. Combines structural + variance signals for most conservative pruning.
+
+### Ratio-Preserving Pruning
+
+**Goal**: Prune 50% of parameters while maintaining golden ratio 1:2.5.
+
+**Constraint optimization**:
+```
+1. Total sparsity: α·A + μ·M = S·(A + M)
+2. Ratio preservation: M·(1-μ) / [A·(1-α)] = 2.5
+
+Solution (example: A=1.57M, M=3.93M, S=0.5):
+  α ≈ 0.56 (prune 56% of attention)
+  μ ≈ 0.48 (prune 48% of MLP)
+  Result: ratio maintained at 1:2.5 ✓
+```
+
+**Implementation**: See `docs/ratio-pruning-variants.md` for algorithm details and code examples.
+
+---
+
+**Last Updated**: 2025-11-02  
+**RATIO Version**: 0.2.0 (GPU-aligned with structure-aware pruning)
