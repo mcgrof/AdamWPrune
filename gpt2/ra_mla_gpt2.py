@@ -102,6 +102,20 @@ class RA_MLA_Config:
     # MLP architecture
     mlp_expansion_ratio: float = 4.0  # MLP hidden dim = expansion_ratio * n_embd
 
+    # === Cross-Token RA (RA-CT): Attention-only gating without MLP ===
+    ra_cross_token: bool = (
+        False  # enable per-token, per-head gating from attention stats
+    )
+    ra_ct_apply: str = "output"  # "output" | "weights" (where to apply the gate)
+    ra_ct_mode: str = "topk"  # "topk" | "max" | "entropy" | "rms"
+    ra_ct_k: int = 8  # for "topk" mode
+    ra_ct_tau: float = 0.5  # for "rms" threshold
+    ra_ct_alpha: float = 0.2  # mix weight for gate application
+    ra_ct_head_average: bool = (
+        False  # average stats across heads first (cheap & stable)
+    )
+    ra_ct_detach_stats: bool = False  # True: compute stats under no_grad to save mem
+
 
 # --------------------------- Utility: AdamWPrune SNR -------------------- #
 
@@ -409,6 +423,16 @@ class ReciprocalMLP(nn.Module):
         Returns:
             output: [B, T, E]
         """
+        # === Assertions: Check reciprocity inputs are properly connected ===
+        if self.cfg.mlp_cross_token:
+            assert (
+                attn_weights is not None
+            ), "mlp_cross_token enabled but no attn_weights"
+        if self.cfg.mlp_latent_recip:
+            assert (
+                attn_latent is not None
+            ), "mlp_latent_recip enabled but no attn_latent"
+
         # Standard MLP
         hidden = F.gelu(self.c_fc(x))  # [B, T, 4*E]
 
@@ -553,6 +577,13 @@ class RA_MLA_Attention(nn.Module):
         )
         self._latent_k_export = None  # Export latent K for MLP (mechanism 3)
 
+        # === Cross-Token RA (RA-CT) Learnables ===
+        if cfg.ra_cross_token:
+            # Per-head affine transforms for gating: sigmoid(stat * scale + bias)
+            # Initialize bias ≈ 2.0 for near-1 gates initially (pass-through)
+            self.ra_ct_scale = nn.Parameter(torch.ones(self.n_head))
+            self.ra_ct_bias = nn.Parameter(torch.full((self.n_head,), 2.0))
+
     def _split_heads(self, x):  # [B,T,E] -> [B,T,H,D]
         B, T, E = x.shape
         H, D = self.n_head, self.head_dim
@@ -571,6 +602,42 @@ class RA_MLA_Attention(nn.Module):
             up = self.v_up_shared(latent_v)  # [B,Tc,D]
             up = up.unsqueeze(2).expand(-1, -1, self.n_head, -1)  # [B,Tc,H,D]
             return up
+
+    def _row_stats(self, attn):
+        """
+        Compute per-token, per-head statistics from attention weights for RA-CT gating.
+
+        Args:
+            attn: [B, H, T, T_tot] - attention weights
+
+        Returns:
+            stat: [B, H, T] - per-token, per-head statistics
+        """
+        # Optionally average across heads first for stability
+        if self.cfg.ra_ct_head_average:
+            # average heads -> [B,1,T,T_tot] then broadcast back
+            A = attn.mean(dim=1, keepdim=True)  # [B,1,T,T_tot]
+        else:
+            A = attn  # [B,H,T,T_tot]
+
+        mode = self.cfg.ra_ct_mode
+        if mode == "topk":
+            k = min(self.cfg.ra_ct_k, A.size(-1))
+            vals, _ = torch.topk(A, k, dim=-1)  # [B,H_or_1,T,k]
+            stat = vals.sum(dim=-1)  # [B,H_or_1,T]
+        elif mode == "max":
+            stat = A.max(dim=-1).values  # [B,H_or_1,T]
+        elif mode == "entropy":
+            p = A.clamp_min(1e-12)
+            stat = -(p * p.log()).sum(dim=-1)  # [B,H_or_1,T]
+        elif mode == "rms":
+            stat = torch.sqrt((A * A).mean(dim=-1))  # [B,H_or_1,T]
+        else:
+            raise ValueError(f"Unknown ra_ct_mode: {self.cfg.ra_ct_mode}")
+
+        if self.cfg.ra_ct_head_average:
+            stat = stat.expand(-1, self.n_head, -1)  # [B,H,T]
+        return stat  # [B,H,T]
 
     def forward(
         self,
@@ -602,6 +669,16 @@ class RA_MLA_Attention(nn.Module):
         """
         B, T, E = hidden_states.shape
         H, D, L = self.n_head, self.head_dim, self.cfg.latent_dim
+
+        # === Assertions: Check reciprocity paths are properly connected ===
+        if self.cfg.mlp_attn_gate:
+            assert (
+                mlp_gate_context is not None
+            ), "mlp_attn_gate enabled but no gate context"
+        if self.cfg.mlp_latent_recip:
+            assert (
+                mlp_latent_context is not None
+            ), "mlp_latent_recip enabled but no latent ctx"
 
         # === 1. Project Q, K, V ===
         Q = self._split_heads(self.q_proj(hidden_states))  # [B, T, H, D]
@@ -725,6 +802,34 @@ class RA_MLA_Attention(nn.Module):
                 attn * gate
             )
 
+        # === 8b. Apply Cross-Token RA (RA-CT) Gating ===
+        ra_ct_gate = None  # Will store gate for output mode
+        if self.cfg.ra_cross_token:
+            if self.cfg.ra_ct_detach_stats:
+                with torch.no_grad():
+                    stat = self._row_stats(attn)  # [B, H, T]
+            else:
+                stat = self._row_stats(attn)  # [B, H, T]
+
+            # Affine per-head -> sigmoid gate in [0,1]
+            # stat: [B,H,T]
+            g = torch.sigmoid(
+                stat * self.ra_ct_scale.view(1, self.n_head, 1)
+                + self.ra_ct_bias.view(1, self.n_head, 1)
+            )  # [B,H,T]
+
+            if self.cfg.ra_ct_apply == "weights":
+                # Gate the attention WEIGHTS per token/head (broadcast along key axis)
+                gate = g.unsqueeze(-1)  # [B,H,T,1]
+                attn = (1 - self.cfg.ra_ct_alpha) * attn + self.cfg.ra_ct_alpha * (
+                    attn * gate
+                )
+            elif self.cfg.ra_ct_apply == "output":
+                # Defer to after ctx computation; stash gate for output gating
+                ra_ct_gate = g  # [B,H,T]
+            else:
+                raise ValueError(f"Unknown ra_ct_apply: {self.cfg.ra_ct_apply}")
+
         # Log metrics if requested and enabled (controlled by flag to save memory)
         if self.cfg.log_attention_entropy and self.enable_metrics_computation:
             self.attention_entropy = self._compute_entropy(attn)
@@ -746,6 +851,11 @@ class RA_MLA_Attention(nn.Module):
 
         # Weighted sum: [B,H,T,T_tot] x [B,T_tot,H,D] -> [B,T,H,D]
         ctx = torch.einsum("bhts,bshd->bthd", attn, V_expanded)
+
+        # === 9a. Apply RA-CT Output Gating (if output mode) ===
+        if self.cfg.ra_cross_token and self.cfg.ra_ct_apply == "output":
+            # ctx: [B,T,H,D], ra_ct_gate: [B,H,T] -> [B,T,H,1]
+            ctx = ctx * ra_ct_gate.transpose(1, 2).unsqueeze(-1)
 
         # === 10. Merge Heads and Output Projection ===
         out = self._merge_heads(ctx)  # [B, T, E]
@@ -872,6 +982,66 @@ class RA_MLA_Attention(nn.Module):
         return self._latent_k_export
 
 
+# --------------------------- Block wrapper for context flow -------------- #
+
+
+class RA_MLA_Block(nn.Module):
+    """
+    Wrapper for a transformer block that properly manages MLP↔Attention reciprocity.
+
+    This block carries context from MLP to the next block's attention, fixing the
+    silent no-op bug where mlp_gate_context and mlp_latent_context were never passed.
+    """
+
+    def __init__(self, attn_core, mlp_core, orig):
+        super().__init__()
+        self.ln_1, self.ln_2 = orig.ln_1, orig.ln_2
+        self.attn, self.mlp = attn_core, mlp_core
+        self._ctx = {}  # carry MLP→next Attn across blocks
+
+    def forward(
+        self,
+        x,
+        layer_past=None,
+        attention_mask=None,
+        head_mask=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        use_cache=False,
+        output_attentions=False,
+    ):
+        # Attention forward with MLP context from previous block
+        a_out, present = self.attn(
+            self.ln_1(x),
+            past_key_value=layer_past,
+            use_cache=use_cache,
+            attn_mask=attention_mask,
+            mlp_gate_context=self._ctx.get("mlp_gate_context_prev"),
+            mlp_latent_context=self._ctx.get("mlp_latent_context_prev"),
+        )
+        x = x + a_out
+
+        # Get attention outputs for MLP
+        attn_weights = self.attn.get_attn_weights_export()
+        attn_latent = self.attn.get_latent_k_export()
+
+        # MLP forward with attention inputs
+        m_out = self.mlp(
+            self.ln_2(x), attn_weights=attn_weights, attn_latent=attn_latent
+        )
+        x = x + m_out
+
+        # Produce contexts for NEXT block's attention
+        self._ctx = dict(
+            mlp_gate_context_prev=self.mlp.get_attn_gate_context(),
+            mlp_latent_context_prev=self.mlp.get_mlp_latent_context(),
+        )
+
+        if output_attentions:
+            return x, present, None
+        return (x, present) if use_cache else x
+
+
 # --------------------------- GPT-2 patcher ------------------------------- #
 
 
@@ -964,59 +1134,19 @@ def patch_gpt2_with_ra_mla(
     for i, block in enumerate(model.transformer.h):
         n_embd = model.config.n_embd
         n_head = model.config.n_head
+        original_attn = block.attn
+        original_mlp = block.mlp
 
         # Build RA+MLA attention
         ra_attn = RA_MLA_Attention(n_embd=n_embd, n_head=n_head, cfg=cfg)
 
-        # Wire it: replace block.attn forward via a wrapper module that matches HF API
-        # Create a small shim so outer block interface remains unchanged.
-        original_attn = block.attn
-
-        class _Shim(nn.Module):
-            def __init__(self, core_attn, n_embd, n_head):
-                super().__init__()
-                self.core = core_attn
-                self.n_embd = n_embd
-                self.n_head = n_head
-
-            def forward(
-                self,
-                hidden_states,
-                layer_past=None,
-                attention_mask=None,
-                head_mask=None,
-                encoder_hidden_states=None,
-                encoder_attention_mask=None,
-                use_cache=False,
-                output_attentions=False,
-            ):
-                out, new_past = self.core(
-                    hidden_states,
-                    past_key_value=layer_past,
-                    use_cache=use_cache,
-                    attn_mask=attention_mask,
-                )
-                # HF expects (attn_output, present, (optional) attn_probs)
-                # But during training with torch.compile, we need to return just the output
-                if output_attentions:
-                    # For brevity we don't return attn_probs here; extend core to optionally return it if you need.
-                    return out, new_past, None
-                if use_cache:
-                    return out, new_past
-                # During training (use_cache=False), return only output for torch.compile compatibility
-                return out
-
-        block.attn = _Shim(ra_attn, n_embd, n_head)
-
-        # Optionally: copy initial weights from original to keep behavior close
-        # Seed q_proj from original c_attn's Q slice, and initialize down/up near identity-ish.
+        # Seed q_proj from original c_attn's Q slice
         with torch.no_grad():
-            # original c_attn projects to [Q|K|V] jointly: weight shape [3E, E] (PyTorch Linear format)
+            # original c_attn projects to [Q|K|V] jointly: weight shape [3E, E]
             Wqkv = original_attn.c_attn.weight.data  # [3E, E]
             E = n_embd
             # Q slice - first E rows (out of 3E) correspond to Q projection
             ra_attn.q_proj.weight.copy_(Wqkv[:E, :])
-            # Reasonable small init for down-proj / up-proj is already set by default normal_(0.02)
 
         # Preserve dropout configs if any
         if hasattr(original_attn, "attn_dropout"):
@@ -1024,12 +1154,15 @@ def patch_gpt2_with_ra_mla(
         if hasattr(original_attn, "resid_dropout"):
             ra_attn.resid_dropout.p = getattr(original_attn.resid_dropout, "p", 0.0)
 
-        # === Replace MLP with Reciprocal MLP (if any mechanism enabled) ===
-        if mlp_attn_gate or mlp_cross_token or mlp_latent_recip:
-            original_mlp = block.mlp
-            recip_mlp = ReciprocalMLP(n_embd=n_embd, n_head=n_head, cfg=cfg)
+        # === Build MLP (reciprocal or standard) ===
+        recip_mlp = (
+            ReciprocalMLP(n_embd=n_embd, n_head=n_head, cfg=cfg)
+            if (mlp_attn_gate or mlp_cross_token or mlp_latent_recip)
+            else original_mlp
+        )
 
-            # Copy weights from original MLP, handling dimension mismatches
+        # Copy weights from original MLP if we created a new one
+        if recip_mlp is not original_mlp:
             with torch.no_grad():
                 # Get dimensions
                 orig_hidden_dim = original_mlp.c_fc.weight.shape[0]
@@ -1059,15 +1192,13 @@ def patch_gpt2_with_ra_mla(
                     )
                     recip_mlp.c_proj.bias.copy_(original_mlp.c_proj.bias)
 
-                    # Initialize new dimensions with small random values (already done by PyTorch init)
-                    # Extra dims in recip_mlp already have proper initialization from __init__
-
                     print(
                         f"  MLP dimension mismatch: {orig_hidden_dim} -> {new_hidden_dim}, copied {min_hidden} dims"
                     )
 
-            # Replace MLP
-            block.mlp = recip_mlp
+        # === Replace entire block with RA_MLA_Block wrapper ===
+        # This properly manages MLP↔Attention reciprocity context flow
+        model.transformer.h[i] = RA_MLA_Block(ra_attn, recip_mlp, block)
 
     # Mark config so your training loop knows it's RA+MLA
     model.config.ra_mla = True
