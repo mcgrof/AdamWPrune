@@ -676,42 +676,47 @@ def get_test_matrix(config):
 
     # Check for RA_MLA ablation mode
     ra_mla_ablation_steps = []
-    if config.get("RA_MLA_ABLATION_MODE") == "y" and config.get("ENABLE_RA_MLA") == "y":
+    # Handle both string "y" (from .config) and boolean True (from config.py)
+    ablation_mode = config.get("RA_MLA_ABLATION_MODE")
+    enable_ra_mla = config.get("ENABLE_RA_MLA")
+    if (ablation_mode == "y" or ablation_mode is True) and (enable_ra_mla == "y" or enable_ra_mla is True):
         # Parse the ablation steps string (e.g., "0,1,2,3,4,5")
-        ablation_steps_str = config.get("RA_MLA_ABLATION_STEPS", "").strip('"')
+        ablation_steps_str = config.get("RA_MLA_ABLATION_STEPS", "")
+        if isinstance(ablation_steps_str, str):
+            ablation_steps_str = ablation_steps_str.strip('"')
         if ablation_steps_str:
-            ra_mla_ablation_steps = [s.strip() for s in ablation_steps_str.split(",")]
+            ra_mla_ablation_steps = [s.strip() for s in str(ablation_steps_str).split(",")]
         else:
             # If ablation mode is enabled but no steps specified, check individual flags
-            if config.get("RA_MLA_ABLATION_BASELINE") == "y":
+            if config.get("RA_MLA_ABLATION_BASELINE") in ("y", True):
                 ra_mla_ablation_steps.append("0")
-            if config.get("RA_MLA_ABLATION_STEP1") == "y":
+            if config.get("RA_MLA_ABLATION_STEP1") in ("y", True):
                 ra_mla_ablation_steps.append("1")
-            if config.get("RA_MLA_ABLATION_STEP2") == "y":
+            if config.get("RA_MLA_ABLATION_STEP2") in ("y", True):
                 ra_mla_ablation_steps.append("2")
-            if config.get("RA_MLA_ABLATION_STEP3") == "y":
+            if config.get("RA_MLA_ABLATION_STEP3") in ("y", True):
                 ra_mla_ablation_steps.append("3")
-            if config.get("RA_MLA_ABLATION_STEP4") == "y":
+            if config.get("RA_MLA_ABLATION_STEP4") in ("y", True):
                 ra_mla_ablation_steps.append("4")
-            if config.get("RA_MLA_ABLATION_STEP5") == "y":
+            if config.get("RA_MLA_ABLATION_STEP5") in ("y", True):
                 ra_mla_ablation_steps.append("5")
-            if config.get("RA_MLA_ABLATION_STEP6") == "y":
+            if config.get("RA_MLA_ABLATION_STEP6") in ("y", True):
                 ra_mla_ablation_steps.append("6")
-            if config.get("RA_MLA_ABLATION_STEP7") == "y":
+            if config.get("RA_MLA_ABLATION_STEP7") in ("y", True):
                 ra_mla_ablation_steps.append("7")
-            if config.get("RA_MLA_ABLATION_STEP8") == "y":
+            if config.get("RA_MLA_ABLATION_STEP8") in ("y", True):
                 ra_mla_ablation_steps.append("8")
-            if config.get("RA_MLA_ABLATION_STEP9") == "y":
+            if config.get("RA_MLA_ABLATION_STEP9") in ("y", True):
                 ra_mla_ablation_steps.append("9")
-            if config.get("RA_MLA_ABLATION_STEP10") == "y":
+            if config.get("RA_MLA_ABLATION_STEP10") in ("y", True):
                 ra_mla_ablation_steps.append("10")
-            if config.get("RA_MLA_ABLATION_STEP11") == "y":
+            if config.get("RA_MLA_ABLATION_STEP11") in ("y", True):
                 ra_mla_ablation_steps.append("11")
-            if config.get("RA_MLA_ABLATION_STEP12") == "y":
+            if config.get("RA_MLA_ABLATION_STEP12") in ("y", True):
                 ra_mla_ablation_steps.append("12")
-            if config.get("RA_MLA_ABLATION_STEP13") == "y":
+            if config.get("RA_MLA_ABLATION_STEP13") in ("y", True):
                 ra_mla_ablation_steps.append("13")
-            if config.get("RA_MLA_ABLATION_STEP14") == "y":
+            if config.get("RA_MLA_ABLATION_STEP14") in ("y", True):
                 ra_mla_ablation_steps.append("14")
 
     matrix["ra_mla_ablation_steps"] = (
@@ -1979,8 +1984,13 @@ def main():
         print("\nDry run - would execute:")
         for i, combo in enumerate(combinations, 1):
             variant_part = f"_{combo['variant']}" if combo.get("variant") else ""
+            ablation_step = combo.get("ra_mla_ablation_step")
+
             if combo["pruning"] == "none":
-                test_id = f"{combo['model']}_{combo['optimizer']}{variant_part}_{combo['pruning']}"
+                if ablation_step is not None:
+                    test_id = f"{combo['model']}_{combo['optimizer']}_ramla_step{ablation_step}"
+                else:
+                    test_id = f"{combo['model']}_{combo['optimizer']}{variant_part}_{combo['pruning']}"
             else:
                 sparsity_pct = int(float(combo.get("sparsity", "0")) * 100)
                 test_id = f"{combo['model']}_{combo['optimizer']}{variant_part}_{combo['pruning']}_{sparsity_pct}"
