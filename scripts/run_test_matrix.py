@@ -2077,19 +2077,28 @@ def main():
             ablation_step = combo.get("ra_mla_ablation_step")
             if combo["pruning"] == "none":
                 if ablation_step is not None:
-                    # Detailed ablation step descriptions
+                    # Detailed RATIO ablation step descriptions (15 steps)
                     step_descriptions = {
-                        "0": "Baseline (MLA only, no reciprocal MLP)",
-                        "1": "Mechanism 1 (MLP-to-Attention Gating)",
-                        "2": "Mechanisms 1+2 (MLP-to-Attn + Cross-Token)",
-                        "3": "Mechanisms 1+2+3 (Full reciprocal MLP)",
-                        "4": "AdamWSPAM sanity check (Mech 1+2)",
-                        "5": "Full RA-MLP solution (all mechanisms)",
+                        "0": "Baseline GPT-2 (ratio 1:2.0, standard attention)",
+                        "1": "Baseline + SPAM pruning 50%",
+                        "2": "Golden ratio 1:2.5 via MLP resize",
+                        "3": "Step 2 + MLP gating 15%",
+                        "4": "Step 3 + cross-token 10%",
+                        "5": "Baseline + RA (ra_alpha=0.3)",
+                        "6": "RA + golden ratio 1:2.5",
+                        "7": "Step 6 + mechanisms (RA + ratio + gating + cross-token)",
+                        "8": "Baseline + MLA (ratio 1:3.0)",
+                        "9": "MLA + golden ratio 1:2.5",
+                        "10": "Step 9 + mechanisms (MLA + ratio + mechanisms)",
+                        "11": "RA + MLA + golden ratio",
+                        "12": "Step 11 + mechanisms (RA + MLA + ratio + mechanisms)",
+                        "13": "Step 10 + AdamWStructure",
+                        "14": "Step 13 + ratio-preserving pruning (Full RATIO)",
                     }
                     step_desc = step_descriptions.get(
                         ablation_step, f"Step {ablation_step}"
                     )
-                    test_desc = f"  - {variant_str}RA+MLA ablation step {ablation_step} - {step_desc}"
+                    test_desc = f"  - {variant_str}RATIO ablation step {ablation_step} - {step_desc}"
                 else:
                     test_desc = f"  - {variant_str}{combo['pruning']} (no sparsity)"
             else:
