@@ -679,13 +679,17 @@ def get_test_matrix(config):
     # Handle both string "y" (from .config) and boolean True (from config.py)
     ablation_mode = config.get("RA_MLA_ABLATION_MODE")
     enable_ra_mla = config.get("ENABLE_RA_MLA")
-    if (ablation_mode == "y" or ablation_mode is True) and (enable_ra_mla == "y" or enable_ra_mla is True):
+    if (ablation_mode == "y" or ablation_mode is True) and (
+        enable_ra_mla == "y" or enable_ra_mla is True
+    ):
         # Parse the ablation steps string (e.g., "0,1,2,3,4,5")
         ablation_steps_str = config.get("RA_MLA_ABLATION_STEPS", "")
         if isinstance(ablation_steps_str, str):
             ablation_steps_str = ablation_steps_str.strip('"')
         if ablation_steps_str:
-            ra_mla_ablation_steps = [s.strip() for s in str(ablation_steps_str).split(",")]
+            ra_mla_ablation_steps = [
+                s.strip() for s in str(ablation_steps_str).split(",")
+            ]
         else:
             # If ablation mode is enabled but no steps specified, check individual flags
             if config.get("RA_MLA_ABLATION_BASELINE") in ("y", True):
