@@ -99,6 +99,9 @@ class RA_MLA_Config:
     mlp_sparse_normalize: bool = True  # Re-normalize after sparsification
     mlp_sparse_head_average: bool = True  # Average attention weights across heads
 
+    # MLP architecture
+    mlp_expansion_ratio: float = 4.0  # MLP hidden dim = expansion_ratio * n_embd
+
 
 # --------------------------- Utility: AdamWPrune SNR -------------------- #
 
@@ -351,14 +354,15 @@ class ReciprocalMLP(nn.Module):
         self.n_embd = n_embd
         self.n_head = n_head
 
-        # Standard MLP projections (GPT-2 uses 4x expansion)
-        self.c_fc = nn.Linear(n_embd, 4 * n_embd, bias=True)
-        self.c_proj = nn.Linear(4 * n_embd, n_embd, bias=True)
+        # MLP projections (configurable expansion ratio)
+        self.mlp_dim = int(cfg.mlp_expansion_ratio * n_embd)
+        self.c_fc = nn.Linear(n_embd, self.mlp_dim, bias=True)
+        self.c_proj = nn.Linear(self.mlp_dim, n_embd, bias=True)
         self.dropout = nn.Dropout(cfg.resid_dropout)
 
         # Mechanism 1: MLP-to-Attention Gating
         if cfg.mlp_attn_gate:
-            self.gate_proj = nn.Linear(4 * n_embd, cfg.mlp_gate_dim, bias=False)
+            self.gate_proj = nn.Linear(self.mlp_dim, cfg.mlp_gate_dim, bias=False)
             self.gate_to_heads = nn.Linear(cfg.mlp_gate_dim, n_head, bias=False)
 
         # Mechanism 2: Cross-Token MLP Aggregation with sparsification
@@ -370,14 +374,14 @@ class ReciprocalMLP(nn.Module):
                 head_average=cfg.mlp_sparse_head_average,
                 normalize_kept=cfg.mlp_sparse_normalize,
             )
-            self.cross_proj = nn.Linear(4 * n_embd, 4 * n_embd, bias=False)
+            self.cross_proj = nn.Linear(self.mlp_dim, self.mlp_dim, bias=False)
 
         # Mechanism 3: MLP Latent Space Reciprocity with parameter tying
         if cfg.mlp_latent_recip:
-            self.mlp_down = nn.Linear(4 * n_embd, cfg.mlp_latent_dim, bias=False)
+            self.mlp_down = nn.Linear(self.mlp_dim, cfg.mlp_latent_dim, bias=False)
             # Use ReciprocalCoupler for parameter-efficient bidirectional coupling
             self.coupler = ReciprocalCoupler(
-                hidden_dim=4 * n_embd,
+                hidden_dim=self.mlp_dim,
                 attn_latent_dim=cfg.latent_dim,
                 n_heads=n_head,
                 tying=cfg.mlp_tying_mode,
@@ -541,6 +545,7 @@ class RA_MLA_Attention(nn.Module):
         # === Metrics Tracking ===
         self.attention_entropy = None  # Last computed attention entropy
         self.reciprocity_score = None  # Last computed reciprocity correlation
+        self.enable_metrics_computation = False  # Flag to enable expensive metrics
 
         # === Reciprocal MLP Support ===
         self._attn_weights_export = (
@@ -720,10 +725,14 @@ class RA_MLA_Attention(nn.Module):
                 attn * gate
             )
 
-        # Log metrics if requested
-        if self.cfg.log_attention_entropy:
+        # Log metrics if requested and enabled (controlled by flag to save memory)
+        if self.cfg.log_attention_entropy and self.enable_metrics_computation:
             self.attention_entropy = self._compute_entropy(attn)
-        if self.cfg.log_reciprocity_score and self.cfg.ra_alpha > 0:
+        if (
+            self.cfg.log_reciprocity_score
+            and self.cfg.ra_alpha > 0
+            and self.enable_metrics_computation
+        ):
             self.reciprocity_score = self._compute_reciprocity(attn)
 
         attn = self.attn_dropout(attn)
@@ -872,6 +881,7 @@ def patch_gpt2_with_ra_mla(
     mlp_recip_alpha=0.2,
     mlp_gate_dim=64,
     mlp_latent_dim=128,
+    mlp_expansion_ratio=4.0,
     # Parameter tying and sparsification
     mlp_tying_mode="tied_transpose",
     mlp_sparse_mode="topk",
@@ -927,6 +937,7 @@ def patch_gpt2_with_ra_mla(
         mlp_recip_alpha=mlp_recip_alpha,
         mlp_gate_dim=mlp_gate_dim,
         mlp_latent_dim=mlp_latent_dim,
+        mlp_expansion_ratio=mlp_expansion_ratio,
         # Parameter tying and sparsification
         mlp_tying_mode=mlp_tying_mode,
         mlp_sparse_mode=mlp_sparse_mode,

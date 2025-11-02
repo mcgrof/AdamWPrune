@@ -268,6 +268,12 @@ parser.add_argument(
     help="Dimension for MLP latent space",
 )
 parser.add_argument(
+    "--mlp-expansion-ratio",
+    type=float,
+    default=4.0,
+    help="MLP expansion ratio (mlp_dim = expansion_ratio * n_embd)",
+)
+parser.add_argument(
     "--mlp-tying-mode",
     type=str,
     default="tied_transpose",
@@ -440,7 +446,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        # Keep standard mlp_dim=3072 (will be set by config)
+        args.mlp_expansion_ratio = 4.0  # Standard 3072
     elif step == "1":
         # Step 1: Baseline + SPAM pruning 50% (pruning baseline)
         args.enable_mla = False
@@ -448,6 +454,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
+        args.mlp_expansion_ratio = 4.0  # Standard 3072
         # Pruning enabled via config (OPTIMIZER=adamwspam, TARGET_SPARSITY=0.5)
     elif step == "2":
         # Step 2: Golden ratio 1:2.5 via MLP resize (mlp_dim=3840)
@@ -456,7 +463,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        # mlp_dim will be overridden to 3840 by config for golden ratio
+        args.mlp_expansion_ratio = 5.0  # 3840 for golden ratio
     elif step == "3":
         # Step 3: Step 2 + MLP gating 15%
         args.enable_mla = False
@@ -464,7 +471,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        # mlp_dim=3264 (85% of 3840), gating takes 15%
+        args.mlp_expansion_ratio = 4.25  # 3264 (85% of 3840), gating takes 15%
     elif step == "4":
         # Step 4: Step 3 + cross-token 10%
         args.enable_mla = False
@@ -472,7 +479,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
-        # mlp_dim=3072 (80%), gating+cross-token take 20%
+        args.mlp_expansion_ratio = 4.0  # 3072 (80%), mechanisms take 20%
     elif step == "5":
         # Step 5: Baseline + RA (ra_alpha=0.3, ratio 1:2.0)
         args.enable_mla = False
@@ -480,6 +487,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
+        args.mlp_expansion_ratio = 4.0  # Standard 3072
     elif step == "6":
         # Step 6: RA + golden ratio (ra_alpha=0.3, mlp_dim=3840, ratio 1:2.5)
         args.enable_mla = False
@@ -487,7 +495,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        # mlp_dim=3840 for golden ratio
+        args.mlp_expansion_ratio = 5.0  # 3840 for golden ratio
     elif step == "7":
         # Step 7: Step 6 + mechanisms (RA + ratio + gating + cross-token)
         args.enable_mla = False
@@ -495,7 +503,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
-        # mlp_dim=3072 (80%), mechanisms take 20%
+        args.mlp_expansion_ratio = 4.0  # 3072 (80%), mechanisms take 20%
     elif step == "8":
         # Step 8: Baseline + MLA (latent_dim=128, ratio 1:3.0)
         args.enable_mla = True
@@ -503,7 +511,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        # Keep standard mlp_dim=3072 (creates ratio 1:3.0 with MLA)
+        args.mlp_expansion_ratio = 4.0  # 3072 (creates ratio 1:3.0 with MLA)
     elif step == "9":
         # Step 9: MLA + golden ratio (latent_dim=128, mlp_dim=2560, ratio 1:2.5)
         args.enable_mla = True
@@ -511,7 +519,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        # mlp_dim=2560 for golden ratio with MLA
+        args.mlp_expansion_ratio = 3.33  # 2560 for golden ratio with MLA
     elif step == "10":
         # Step 10: Step 9 + mechanisms (MLA + ratio + gating + cross-token)
         args.enable_mla = True
@@ -519,7 +527,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
-        # mlp_dim=2048 (80%), mechanisms take 20%
+        args.mlp_expansion_ratio = 2.67  # 2048 (80%), mechanisms take 20%
     elif step == "11":
         # Step 11: RA + MLA + golden ratio (ra_alpha=0.3, latent_dim=128, ratio 1:2.5)
         args.enable_mla = True
@@ -527,7 +535,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        # mlp_dim=2560 for golden ratio
+        args.mlp_expansion_ratio = 3.33  # 2560 for golden ratio
     elif step == "12":
         # Step 12: Step 11 + mechanisms (RA + MLA + ratio + mechanisms)
         args.enable_mla = True
@@ -535,7 +543,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
-        # mlp_dim=2048 (80%), mechanisms take 20%
+        args.mlp_expansion_ratio = 2.67  # 2048 (80%), mechanisms take 20%
     elif step == "13":
         # Step 13: Step 10 + AdamWStructure (MLA + ratio + mechanisms + structure-aware)
         args.enable_mla = True
@@ -543,8 +551,8 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
+        args.mlp_expansion_ratio = 2.67  # 2048, mechanisms take 20%
         # TODO: Need to add AdamWStructure optimizer support
-        # mlp_dim=2048, mechanisms take 20%
     elif step == "14":
         # Step 14: Step 13 + ratio-preserving pruning (full RATIO framework)
         args.enable_mla = True
@@ -552,8 +560,8 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
+        args.mlp_expansion_ratio = 2.67  # 2048, 50% pruning preserving ratio 1:2.5
         # TODO: Need to add ratio-preserving pruning support
-        # mlp_dim=2048, 50% pruning that preserves ratio 1:2.5
     else:
         raise ValueError(f"Invalid ablation step: {step}. Must be 0-14.")
 
@@ -655,6 +663,14 @@ def get_batch(
 # ============================================================================
 # Metrics Logging
 # ============================================================================
+
+
+def set_metrics_computation(model: GPT, enabled: bool):
+    """Enable/disable expensive metrics computation (entropy, reciprocity)."""
+    actual_model = model.module if hasattr(model, "module") else model
+    for block in actual_model.transformer.h:
+        if hasattr(block.attn, "core"):  # RA_MLA_Attention
+            block.attn.core.enable_metrics_computation = enabled
 
 
 class RAMLAMetrics:
@@ -866,13 +882,14 @@ def main():
     model = GPT(model_config)
 
     # Apply RA+MLA patch only if needed
-    # Skip patching for baseline steps (no MLA, no RA, no mechanisms)
+    # Skip patching for baseline steps (no MLA, no RA, no mechanisms, standard MLP)
     needs_patch = (
         args.enable_mla
         or args.ra_alpha > 0.0
         or args.mlp_attn_gate
         or args.mlp_cross_token
         or args.mlp_latent_recip
+        or args.mlp_expansion_ratio != 4.0  # Non-standard MLP size (e.g., golden ratio)
     )
 
     if needs_patch:
@@ -910,6 +927,7 @@ def main():
             mlp_recip_alpha=args.mlp_recip_alpha,
             mlp_gate_dim=args.mlp_gate_dim,
             mlp_latent_dim=args.mlp_latent_dim,
+            mlp_expansion_ratio=args.mlp_expansion_ratio,
             # Parameter tying and sparsification
             mlp_tying_mode=args.mlp_tying_mode,
             mlp_sparse_mode=args.mlp_sparse_mode,
@@ -1179,6 +1197,11 @@ def main():
         t0 = time.time()
         total_loss = 0.0
 
+        # Enable expensive metrics computation only when logging
+        should_log_metrics = args.log_metrics and iter_num % args.log_interval == 0
+        if should_log_metrics:
+            set_metrics_computation(model, True)
+
         optimizer.zero_grad(set_to_none=True)
 
         for micro_step in range(args.gradient_accumulation):
@@ -1194,6 +1217,10 @@ def main():
 
             total_loss += loss.item()
             loss.backward()
+
+        # Disable metrics computation after forward pass
+        if should_log_metrics:
+            set_metrics_computation(model, False)
 
         # Gradient clipping
         if gradient_clip_norm is not None:
