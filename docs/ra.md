@@ -833,6 +833,7 @@ Step 1: Baseline + AdamWPrune (SPAM 50%)
   Total: ~62M params (50% pruned)
   Test: Does structure-blind pruning work?
 
+# Test golden ratio with standard attention
 Step 2: Golden ratio via MLP resize
   Purpose: Test if ratio alone improves
   Attention: 2.36M/layer (standard, unchanged)
@@ -842,7 +843,7 @@ Step 2: Golden ratio via MLP resize
   Total: ~148M params
   Test: Does golden ratio alone improve quality/efficiency?
 
-Step 3: Golden ratio + MLP gating
+Step 3: Step 2 + MLP gating
   Purpose: Test selective activation
   Attention: 2.36M/layer
   MLP: 5.02M/layer (85% of 5.90M, mlp_dim=3264)
@@ -852,7 +853,7 @@ Step 3: Golden ratio + MLP gating
   Total: ~148M params
   Test: Does gating beat raw MLP parameters?
 
-Step 4: Golden ratio + gating + cross-token
+Step 4: Step 3 + cross-token
   Purpose: Test information discovery (reciprocity)
   Attention: 2.36M/layer
   MLP: 4.73M/layer (80% of 5.90M, mlp_dim=3072)
@@ -863,7 +864,38 @@ Step 4: Golden ratio + gating + cross-token
   Total: ~148M params
   Test: Does cross-token information discovery help?
 
-Step 5: Baseline GPT-2 + MLA
+# Test reciprocal attention (RA)
+Step 5: Baseline + RA
+  Purpose: Test reciprocal attention scoring
+  Attention: 2.36M/layer (standard + reciprocal scoring, ra_alpha=0.3)
+  MLP: 4.72M/layer (mlp_dim=3072, unchanged)
+  Ratio: 1:2.0
+  Optimizer: AdamW
+  Total: ~124M params
+  Test: Does reciprocal attention scoring help?
+
+Step 6: RA + golden ratio
+  Purpose: Combine RA with golden ratio
+  Attention: 2.36M/layer (ra_alpha=0.3)
+  MLP: 5.90M/layer (2.36M × 2.5, mlp_dim=3840)
+  Ratio: 1:2.5 ✓
+  Optimizer: AdamW
+  Total: ~148M params
+  Test: Does golden ratio help RA?
+
+Step 7: Step 6 + mechanisms
+  Purpose: RA + ratio + MLP mechanisms
+  Attention: 2.36M/layer (ra_alpha=0.3)
+  MLP: 4.73M/layer (80% of 5.90M, mlp_dim=3072)
+  Gating: 0.59M/layer (10% budget)
+  Cross-token: 0.59M/layer (10% budget)
+  Ratio: 1:2.5 ✓
+  Optimizer: AdamW
+  Total: ~148M params
+  Test: Does RA enhance mechanisms vs standard attention?
+
+# Test MLA
+Step 8: Baseline + MLA
   Purpose: Test MLA alone (no ratio change)
   MLA attention: 1.57M/layer (latent_dim=128, 6× KV reduction)
   MLP: 4.72M/layer (mlp_dim=3072, unchanged)
@@ -872,7 +904,7 @@ Step 5: Baseline GPT-2 + MLA
   Total: ~115M params
   Test: Does MLA alone help?
 
-Step 6: Baseline GPT-2 + MLA + golden ratio
+Step 9: MLA + golden ratio
   Purpose: Combine MLA with golden ratio (no mechanisms yet)
   MLA attention: 1.57M/layer (latent_dim=128)
   MLP: 3.93M/layer (1.57M × 2.5, mlp_dim=2560)
@@ -881,8 +913,8 @@ Step 6: Baseline GPT-2 + MLA + golden ratio
   Total: ~98M params
   Test: Does adding golden ratio to MLA help?
 
-Step 7: Step 4 + MLA (MLA + ratio + mechanisms)
-  Purpose: Full combination - mechanisms with KV compression
+Step 10: Step 9 + mechanisms
+  Purpose: MLA + ratio + MLP mechanisms
   MLA attention: 1.57M/layer (latent_dim=128, 6× KV reduction)
   MLP: 3.14M/layer (80% of 3.93M, mlp_dim=2048)
   Gating: 0.39M/layer (10% budget)
@@ -892,26 +924,58 @@ Step 7: Step 4 + MLA (MLA + ratio + mechanisms)
   Total: ~98M params
   Test: Do mechanisms add value on top of MLA + ratio?
 
-Step 8: Step 7 + AdamWStructure + ratio-preserving pruning
-  Purpose: Full RATIO framework
-  Architecture: Same as step 7
+# Test RA + MLA combination
+Step 11: RA + MLA + golden ratio
+  Purpose: Combine all attention strategies with golden ratio
+  Attention: 1.57M/layer (MLA + RA, latent_dim=128, ra_alpha=0.3)
+  MLP: 3.93M/layer (mlp_dim=2560)
+  Ratio: 1:2.5 ✓
+  Optimizer: AdamW
+  Total: ~98M params
+  Test: Does RA+MLA combination work with golden ratio?
+
+Step 12: Step 11 + mechanisms
+  Purpose: Full attention combination + mechanisms
+  Attention: 1.57M/layer (MLA + RA, latent_dim=128, ra_alpha=0.3)
+  MLP: 3.14M/layer (80% of 3.93M, mlp_dim=2048)
+  Gating: 0.39M/layer (10% budget)
+  Cross-token: 0.39M/layer (10% budget)
+  Ratio: 1:2.5 ✓
+  Optimizer: AdamW
+  Total: ~98M params
+  Test: Best combination of all innovations?
+
+# Test structure-aware optimization
+Step 13: Step 10 + AdamWStructure
+  Purpose: MLA + ratio + mechanisms + structure-aware training
+  Architecture: Same as step 10
   Optimizer: AdamWStructure (role-specific learning rates)
+  Total: ~98M params
+  Test: Does structure-aware optimization help?
+
+Step 14: Step 13 + ratio-preserving pruning
+  Purpose: Full RATIO framework
+  Architecture: Same as step 13
+  Optimizer: AdamWStructure
   Pruning: Ratio-preserving (maintains 1:2.5 at 50% sparsity)
   Total: ~49M params (50% pruned)
   Test: Does unified framework beat structure-blind pruning?
 ```
 
-**Victory condition**: Step 8 > Step 1 (RATIO beats SPAM pruning)
+**Victory condition**: Step 14 > Step 1 (RATIO beats SPAM pruning)
 
 **Key comparisons**:
 - Step 2 vs 0: Does golden ratio alone help?
 - Step 3 vs 2: Does gating beat raw MLP parameters?
-- Step 4 vs 3: Does cross-token information discovery help?
-- Step 5 vs 0: Does MLA alone help?
-- Step 6 vs 5: Does adding golden ratio to MLA help?
-- Step 7 vs 6: Do mechanisms add value on top of MLA + ratio?
-- Step 7 vs 4: Does MLA enhance or break mechanisms?
-- Step 8 vs 1: Does full RATIO beat SPAM pruning? (THE KEY TEST)
+- Step 4 vs 3: Does cross-token add value?
+- Step 6 vs 5: Does golden ratio help RA?
+- Step 7 vs 4: Does RA enhance mechanisms?
+- Step 9 vs 8: Does golden ratio help MLA?
+- Step 10 vs 9: Do mechanisms add value on MLA + ratio?
+- Step 11 vs 6 vs 9: Which attention strategy with golden ratio?
+- Step 12 vs 7 vs 10: Best full combination?
+- Step 13 vs 10: Does structure-aware optimization help?
+- Step 14 vs 1: Does full RATIO beat SPAM pruning? (THE KEY TEST)
 
 ---
 
