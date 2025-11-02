@@ -1,0 +1,81 @@
+# RATIO Framework: 15-Step Ablation Study Configuration
+# Tests golden ratio (1:2.5), MLP mechanisms, RA, MLA, and structure-aware optimization
+#
+# Victory condition: Step 14 (full RATIO) > Step 1 (SPAM pruning baseline)
+#
+# To run: make defconfig-gpt2-ratio-ablation && make && scripts/run_test_matrix.py
+
+# Enable GPT-2 model
+CONFIG_MODEL_MODE_SINGLE=y
+CONFIG_MODEL_SELECT_GPT2=y
+
+# Enable RA+MLA architecture
+CONFIG_ENABLE_RA_MLA=y
+
+# Enable ablation study mode with all 15 steps
+CONFIG_RA_MLA_ABLATION_MODE=y
+CONFIG_RA_MLA_ABLATION_STEPS="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14"
+
+# MLA configuration (for steps 8-14)
+CONFIG_RA_MLA_LATENT_DIM=128
+CONFIG_RA_MLA_CROSS_LATENT_DIM=110
+
+# Reciprocal attention configuration (for steps 5-7, 11-12)
+CONFIG_RA_ALPHA="0.3"
+
+# Enable test matrix mode
+CONFIG_TEST_MATRIX_MODE=y
+CONFIG_OPTIMIZER_MODE_SINGLE=y
+CONFIG_OPTIMIZER_SELECT_ADAMWSPAM=y
+
+# Pruning configuration (for steps 1 and 14)
+CONFIG_PRUNING_MODE_SINGLE=y
+CONFIG_PRUNING_SELECT_NONE=y
+CONFIG_TARGET_SPARSITY="0.5"
+
+# GPT-2 training configuration
+CONFIG_GPT2_MODEL_NAME="gpt2"
+CONFIG_GPT2_BATCH_SIZE=32
+CONFIG_GPT2_GRADIENT_ACCUMULATION=4
+CONFIG_GPT2_MAX_ITERS=10400
+CONFIG_GPT2_WARMUP_STEPS=2000
+CONFIG_GPT2_EVAL_INTERVAL=500
+CONFIG_GPT2_LEARNING_RATE="6e-4"
+CONFIG_GPT2_MIN_LR="6e-5"
+CONFIG_GPT2_WEIGHT_DECAY="0.1"
+CONFIG_GPT2_GRAD_CLIP="1.0"
+
+# Dataset configuration
+CONFIG_GPT2_DATASET="fineweb-edu"
+CONFIG_GPT2_DATASET_CACHE_DIR="data/fineweb-edu"
+
+# Hardware configuration
+CONFIG_COMPILE_MODE=y
+CONFIG_COMPILE_BACKEND="inductor"
+CONFIG_DTYPE="bfloat16"
+CONFIG_DDP_ENABLED=y
+
+# Experiment tracking
+CONFIG_TRACKER="wandb,trackio"
+CONFIG_TRACKER_PROJECT="gpt2-ratio-ablation"
+
+# Test execution
+CONFIG_TEST_PARALLEL_JOBS=1
+CONFIG_OUTPUT_DIR="test_matrix_results_ratio_ablation"
+
+# Notes on step-specific configuration:
+# - Step 0: Baseline GPT-2 (no MLA, no RA, standard mlp_dim=3072)
+# - Step 1: Uses SPAM pruning (50% sparsity) - configured via optimizer
+# - Step 2: mlp_dim=3840 for golden ratio 1:2.5
+# - Step 3: mlp_dim=3264 (85%), gating 15%
+# - Step 4: mlp_dim=3072 (80%), gating+cross-token 20%
+# - Step 5: ra_alpha=0.3, mlp_dim=3072
+# - Step 6: ra_alpha=0.3, mlp_dim=3840
+# - Step 7: ra_alpha=0.3, mlp_dim=3072, mechanisms 20%
+# - Step 8: MLA enabled, mlp_dim=3072 (ratio 1:3.0)
+# - Step 9: MLA enabled, mlp_dim=2560 (ratio 1:2.5)
+# - Step 10: MLA enabled, mlp_dim=2048 (80%), mechanisms 20%
+# - Step 11: MLA + RA, mlp_dim=2560
+# - Step 12: MLA + RA, mlp_dim=2048, mechanisms 20%
+# - Step 13: MLA, mlp_dim=2048, AdamWStructure (TODO)
+# - Step 14: MLA, mlp_dim=2048, ratio-preserving pruning (TODO)
