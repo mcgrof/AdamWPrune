@@ -1073,6 +1073,14 @@ def patch_gpt2_with_ra_mla(
     mlp_sparse_tau=0.5,
     mlp_sparse_normalize=True,
     mlp_sparse_head_average=True,
+    # Cross-Token RA (RA-CT) parameters
+    ra_cross_token=False,
+    ra_ct_mode="topk",
+    ra_ct_apply="output",
+    ra_ct_alpha=0.2,
+    ra_ct_k=8,
+    ra_ct_head_average=False,
+    ra_ct_detach_stats=False,
 ):
     """
     Replace each GPT-2 attention and MLP module with RA+MLA+ReciprocalMLP variant.
@@ -1129,6 +1137,14 @@ def patch_gpt2_with_ra_mla(
         mlp_sparse_tau=mlp_sparse_tau,
         mlp_sparse_normalize=mlp_sparse_normalize,
         mlp_sparse_head_average=mlp_sparse_head_average,
+        # Cross-Token RA (RA-CT) config
+        ra_cross_token=ra_cross_token,
+        ra_ct_mode=ra_ct_mode,
+        ra_ct_apply=ra_ct_apply,
+        ra_ct_alpha=ra_ct_alpha,
+        ra_ct_k=ra_ct_k,
+        ra_ct_head_average=ra_ct_head_average,
+        ra_ct_detach_stats=ra_ct_detach_stats,
     )
 
     for i, block in enumerate(model.transformer.h):

@@ -447,6 +447,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 4.0  # Standard 3072
+        args.ra_cross_token = False
     elif step == "1":
         # Step 1: Baseline + SPAM pruning 50% (pruning baseline)
         args.enable_mla = False
@@ -455,6 +456,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 4.0  # Standard 3072
+        args.ra_cross_token = False
         # Pruning enabled via config (OPTIMIZER=adamwspam, TARGET_SPARSITY=0.5)
     elif step == "2":
         # Step 2: Golden ratio 1:2.5 via MLP resize (mlp_dim=3840)
@@ -464,6 +466,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 5.0  # 3840 for golden ratio
+        args.ra_cross_token = False
     elif step == "3":
         # Step 3: Step 2 + MLP gating 15%
         args.enable_mla = False
@@ -472,6 +475,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 4.25  # 3264 (85% of 3840), gating takes 15%
+        args.ra_cross_token = False
     elif step == "4":
         # Step 4: Step 3 + cross-token 10%
         args.enable_mla = False
@@ -480,6 +484,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 4.0  # 3072 (80%), mechanisms take 20%
+        args.ra_cross_token = False
     elif step == "5":
         # Step 5: Baseline + RA (ra_alpha=0.3, ratio 1:2.0)
         args.enable_mla = False
@@ -488,6 +493,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 4.0  # Standard 3072
+        args.ra_cross_token = False
     elif step == "6":
         # Step 6: RA + golden ratio (ra_alpha=0.3, mlp_dim=3840, ratio 1:2.5)
         args.enable_mla = False
@@ -496,6 +502,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 5.0  # 3840 for golden ratio
+        args.ra_cross_token = False
     elif step == "7":
         # Step 7: Step 6 + mechanisms (RA + ratio + gating + cross-token)
         args.enable_mla = False
@@ -504,6 +511,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 4.0  # 3072 (80%), mechanisms take 20%
+        args.ra_cross_token = False
     elif step == "8":
         # Step 8: Baseline + MLA (latent_dim=128, ratio 1:3.0)
         args.enable_mla = True
@@ -512,6 +520,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 4.0  # 3072 (creates ratio 1:3.0 with MLA)
+        args.ra_cross_token = False
     elif step == "9":
         # Step 9: MLA + golden ratio (latent_dim=128, mlp_dim=2560, ratio 1:2.5)
         args.enable_mla = True
@@ -545,25 +554,85 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 2.6666666667  # 2048 = 32×64 (GPU-aligned)
     elif step == "13":
-        # Step 13: Step 10 + AdamWStructure (MLA + ratio + mechanisms + structure-aware)
-        args.enable_mla = True
+        # Step 13: Baseline + RA-CT (topk, output mode, alpha=0.2)
+        args.enable_mla = False
         args.ra_alpha = 0.0
-        args.mlp_attn_gate = True
-        args.mlp_cross_token = True
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        args.mlp_expansion_ratio = 2.6666666667  # 2048 = 32×64 (GPU-aligned)
-        # TODO: Need to add AdamWStructure optimizer support
+        args.mlp_expansion_ratio = 4.0  # Standard 3072
+        args.ra_cross_token = True
+        args.ra_ct_mode = "topk"
+        args.ra_ct_apply = "output"
+        args.ra_ct_alpha = 0.2
+        args.ra_ct_k = 8
     elif step == "14":
-        # Step 14: Step 13 + ratio-preserving pruning (full RATIO framework)
+        # Step 14: MLA + RA-CT (compression + cross-token gating)
         args.enable_mla = True
         args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        args.mlp_expansion_ratio = 3.3333333333  # 2560 = 40×64 (GPU-aligned)
+        args.ra_cross_token = True
+        args.ra_ct_mode = "topk"
+        args.ra_ct_apply = "output"
+        args.ra_ct_alpha = 0.2
+        args.ra_ct_k = 8
+    elif step == "15":
+        # Step 15: MLA + RA + RA-CT (full attention stack)
+        args.enable_mla = True
+        args.ra_alpha = 0.3
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        args.mlp_expansion_ratio = 3.3333333333  # 2560 = 40×64 (GPU-aligned)
+        args.ra_cross_token = True
+        args.ra_ct_mode = "topk"
+        args.ra_ct_apply = "output"
+        args.ra_ct_alpha = 0.2
+        args.ra_ct_k = 8
+    elif step == "16":
+        # Step 16: Full RATIO (step 12 + RA-CT, all mechanisms)
+        args.enable_mla = True
+        args.ra_alpha = 0.3
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
         args.mlp_expansion_ratio = 2.6666666667  # 2048 = 32×64 (GPU-aligned)
-        # TODO: Need to add ratio-preserving pruning support
+        args.ra_cross_token = True
+        args.ra_ct_mode = "topk"
+        args.ra_ct_apply = "output"
+        args.ra_ct_alpha = 0.2
+        args.ra_ct_k = 8
+    elif step == "17":
+        # Step 17: RA-CT weights mode (vs step 13 output mode)
+        args.enable_mla = False
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        args.mlp_expansion_ratio = 4.0  # Standard 3072
+        args.ra_cross_token = True
+        args.ra_ct_mode = "topk"
+        args.ra_ct_apply = "weights"  # Different from step 13
+        args.ra_ct_alpha = 0.2
+        args.ra_ct_k = 8
+    elif step == "18":
+        # Step 18: RA-CT entropy mode (adaptive gating)
+        args.enable_mla = False
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.mlp_latent_recip = False
+        args.mlp_expansion_ratio = 4.0  # Standard 3072
+        args.ra_cross_token = True
+        args.ra_ct_mode = "entropy"  # Different from step 13
+        args.ra_ct_apply = "output"
+        args.ra_ct_alpha = 0.2
+        args.ra_ct_k = 8  # Not used in entropy mode
     else:
-        raise ValueError(f"Invalid ablation step: {step}. Must be 0-14.")
+        raise ValueError(f"Invalid ablation step: {step}. Must be 0-18.")
 
 # Override RA+MLA config from config.py if available (for test matrix integration)
 # IMPORTANT: Skip config overrides when running ablation study - ablation step has full control
@@ -894,6 +963,7 @@ def main():
         or args.mlp_attn_gate
         or args.mlp_cross_token
         or args.mlp_latent_recip
+        or getattr(args, "ra_cross_token", False)
         or args.mlp_expansion_ratio != 4.0  # Non-standard MLP size (e.g., golden ratio)
     )
 
@@ -913,6 +983,11 @@ def main():
                 print(f"  [2] Cross-Token MLP Aggregation: α={args.mlp_cross_alpha}")
             if args.mlp_latent_recip:
                 print(f"  [3] MLP Latent Reciprocity: α={args.mlp_recip_alpha}")
+        if getattr(args, "ra_cross_token", False):
+            print("Cross-Token RA (RA-CT) gating:")
+            print(
+                f"  mode={args.ra_ct_mode}, apply={args.ra_ct_apply}, α={args.ra_ct_alpha}, k={args.ra_ct_k}"
+            )
 
         model, ra_cfg = patch_gpt2_with_ra_mla(
             model,
@@ -940,6 +1015,12 @@ def main():
             mlp_sparse_tau=args.mlp_sparse_tau,
             mlp_sparse_normalize=args.mlp_sparse_normalize,
             mlp_sparse_head_average=args.mlp_sparse_head_average,
+            # Cross-Token RA (RA-CT) parameters
+            ra_cross_token=getattr(args, "ra_cross_token", False),
+            ra_ct_mode=getattr(args, "ra_ct_mode", "topk"),
+            ra_ct_apply=getattr(args, "ra_ct_apply", "output"),
+            ra_ct_alpha=getattr(args, "ra_ct_alpha", 0.2),
+            ra_ct_k=getattr(args, "ra_ct_k", 8),
         )
     else:
         print("Using standard GPT-2 (no RA/MLA patching needed)")
