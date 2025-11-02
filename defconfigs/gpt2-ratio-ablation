@@ -5,7 +5,7 @@
 # Based on: gpt2-ra-mla-full proven settings for A10G×4
 # Victory condition: Step 14 (full RATIO) > Step 1 (SPAM pruning baseline)
 #
-# To run: make defconfig-gpt2-ratio-ablation && make && scripts/run_test_matrix.py
+# To run: make defconfig-gpt2-ratio-ablation && make
 
 # Enable GPT-2 model
 CONFIG_MODEL_MODE_SINGLE=y

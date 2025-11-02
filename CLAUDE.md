@@ -69,6 +69,30 @@ When optimizing PyTorch training for AMD GPUs:
 - Check for linting/formatting issues
 - Ensure no syntax errors
 
+## Experiment Workflow
+
+The standard workflow for running experiments:
+
+1. **Load configuration**: `make defconfig-<name>`
+   - Example: `make defconfig-gpt2-ratio-ablation`
+   - This loads the defconfig and generates config.py
+
+2. **Build and run**: `make`
+   - The build system automatically runs the configured experiments
+   - For test matrix mode, this runs all ablation steps
+   - Results are saved to the configured output directory
+
+3. **Never manually invoke scripts/run_test_matrix.py**
+   - The Makefile handles test execution automatically
+   - Manual script invocation is for debugging only
+
+Example complete workflow:
+```bash
+make defconfig-gpt2-ratio-ablation
+make
+# Results appear in test_matrix_results_ratio_ablation/
+```
+
 ## Documentation
 - Keep changes well-documented in commit messages
 - Explain technical rationale for optimizations
