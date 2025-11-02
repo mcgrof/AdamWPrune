@@ -865,49 +865,62 @@ def main():
     model_config.dropout = args.dropout
     model = GPT(model_config)
 
-    # Apply RA+MLA patch
-    print(f"Applying RA+MLA patch:")
-    print(
-        f"  latent_dim={args.latent_dim}, ra_window={args.ra_window}, ra_alpha={args.ra_alpha}"
+    # Apply RA+MLA patch only if needed
+    # Skip patching for baseline steps (no MLA, no RA, no mechanisms)
+    needs_patch = (
+        args.enable_mla
+        or args.ra_alpha > 0.0
+        or args.mlp_attn_gate
+        or args.mlp_cross_token
+        or args.mlp_latent_recip
     )
-    print(
-        f"  per_head_q_latent={args.per_head_q_latent}, per_head_v_up={args.per_head_v_up}"
-    )
-    if args.mlp_attn_gate or args.mlp_cross_token or args.mlp_latent_recip:
-        print("Reciprocal MLP mechanisms:")
-        if args.mlp_attn_gate:
-            print(f"  [1] MLP-to-Attention Gating: α={args.mlp_gate_alpha}")
-        if args.mlp_cross_token:
-            print(f"  [2] Cross-Token MLP Aggregation: α={args.mlp_cross_alpha}")
-        if args.mlp_latent_recip:
-            print(f"  [3] MLP Latent Reciprocity: α={args.mlp_recip_alpha}")
 
-    model, ra_cfg = patch_gpt2_with_ra_mla(
-        model,
-        latent_dim=args.latent_dim,
-        ra_window=args.ra_window,
-        ra_alpha=args.ra_alpha,
-        per_head_q_latent=args.per_head_q_latent,
-        per_head_v_up=args.per_head_v_up,
-        use_flash=args.use_flash,
-        log_metrics=args.log_metrics,
-        # Reciprocal MLP parameters
-        mlp_attn_gate=args.mlp_attn_gate,
-        mlp_cross_token=args.mlp_cross_token,
-        mlp_latent_recip=args.mlp_latent_recip,
-        mlp_gate_alpha=args.mlp_gate_alpha,
-        mlp_cross_alpha=args.mlp_cross_alpha,
-        mlp_recip_alpha=args.mlp_recip_alpha,
-        mlp_gate_dim=args.mlp_gate_dim,
-        mlp_latent_dim=args.mlp_latent_dim,
-        # Parameter tying and sparsification
-        mlp_tying_mode=args.mlp_tying_mode,
-        mlp_sparse_mode=args.mlp_sparse_mode,
-        mlp_sparse_k=args.mlp_sparse_k,
-        mlp_sparse_tau=args.mlp_sparse_tau,
-        mlp_sparse_normalize=args.mlp_sparse_normalize,
-        mlp_sparse_head_average=args.mlp_sparse_head_average,
-    )
+    if needs_patch:
+        print(f"Applying RA+MLA patch:")
+        print(
+            f"  latent_dim={args.latent_dim}, ra_window={args.ra_window}, ra_alpha={args.ra_alpha}"
+        )
+        print(
+            f"  per_head_q_latent={args.per_head_q_latent}, per_head_v_up={args.per_head_v_up}"
+        )
+        if args.mlp_attn_gate or args.mlp_cross_token or args.mlp_latent_recip:
+            print("Reciprocal MLP mechanisms:")
+            if args.mlp_attn_gate:
+                print(f"  [1] MLP-to-Attention Gating: α={args.mlp_gate_alpha}")
+            if args.mlp_cross_token:
+                print(f"  [2] Cross-Token MLP Aggregation: α={args.mlp_cross_alpha}")
+            if args.mlp_latent_recip:
+                print(f"  [3] MLP Latent Reciprocity: α={args.mlp_recip_alpha}")
+
+        model, ra_cfg = patch_gpt2_with_ra_mla(
+            model,
+            latent_dim=args.latent_dim,
+            ra_window=args.ra_window,
+            ra_alpha=args.ra_alpha,
+            per_head_q_latent=args.per_head_q_latent,
+            per_head_v_up=args.per_head_v_up,
+            use_flash=args.use_flash,
+            log_metrics=args.log_metrics,
+            # Reciprocal MLP parameters
+            mlp_attn_gate=args.mlp_attn_gate,
+            mlp_cross_token=args.mlp_cross_token,
+            mlp_latent_recip=args.mlp_latent_recip,
+            mlp_gate_alpha=args.mlp_gate_alpha,
+            mlp_cross_alpha=args.mlp_cross_alpha,
+            mlp_recip_alpha=args.mlp_recip_alpha,
+            mlp_gate_dim=args.mlp_gate_dim,
+            mlp_latent_dim=args.mlp_latent_dim,
+            # Parameter tying and sparsification
+            mlp_tying_mode=args.mlp_tying_mode,
+            mlp_sparse_mode=args.mlp_sparse_mode,
+            mlp_sparse_k=args.mlp_sparse_k,
+            mlp_sparse_tau=args.mlp_sparse_tau,
+            mlp_sparse_normalize=args.mlp_sparse_normalize,
+            mlp_sparse_head_average=args.mlp_sparse_head_average,
+        )
+    else:
+        print("Using standard GPT-2 (no RA/MLA patching needed)")
+        ra_cfg = None
 
     model = model.to(device)
 
