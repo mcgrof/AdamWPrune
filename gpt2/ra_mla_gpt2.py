@@ -809,12 +809,26 @@ class RA_MLA_Attention(nn.Module):
         return band
 
     def _compute_entropy(self, attn: torch.Tensor) -> float:
-        """Compute average attention entropy across all heads and positions."""
+        """Compute average attention entropy across all heads and positions.
+
+        Memory-efficient implementation that computes in-place to reduce memory overhead.
+        """
         # attn: [B, H, T, T_tot]
         eps = 1e-12
-        log_attn = torch.log(attn + eps)
-        entropy = -(attn * log_attn).sum(dim=-1)  # [B, H, T]
-        return entropy.mean().item()
+
+        # Compute entropy in a memory-efficient way
+        # Instead of creating log_attn as a separate tensor, compute directly
+        # entropy = -sum(p * log(p))
+        with torch.no_grad():
+            # Detach to avoid gradient tracking overhead
+            attn_detached = attn.detach()
+            # Compute log in-place on a clone to avoid modifying original
+            log_attn = torch.log(attn_detached + eps)
+            entropy = -(attn_detached * log_attn).sum(dim=-1)  # [B, H, T]
+            result = entropy.mean().item()
+            # Clean up immediately
+            del log_attn, entropy, attn_detached
+        return result
 
     def _compute_reciprocity(self, attn: torch.Tensor) -> float:
         """
@@ -1015,12 +1029,42 @@ def patch_gpt2_with_ra_mla(
             original_mlp = block.mlp
             recip_mlp = ReciprocalMLP(n_embd=n_embd, n_head=n_head, cfg=cfg)
 
-            # Copy weights from original MLP
+            # Copy weights from original MLP, handling dimension mismatches
             with torch.no_grad():
-                recip_mlp.c_fc.weight.copy_(original_mlp.c_fc.weight)
-                recip_mlp.c_fc.bias.copy_(original_mlp.c_fc.bias)
-                recip_mlp.c_proj.weight.copy_(original_mlp.c_proj.weight)
-                recip_mlp.c_proj.bias.copy_(original_mlp.c_proj.bias)
+                # Get dimensions
+                orig_hidden_dim = original_mlp.c_fc.weight.shape[0]
+                new_hidden_dim = recip_mlp.c_fc.weight.shape[0]
+
+                if orig_hidden_dim == new_hidden_dim:
+                    # Dimensions match, copy directly
+                    recip_mlp.c_fc.weight.copy_(original_mlp.c_fc.weight)
+                    recip_mlp.c_fc.bias.copy_(original_mlp.c_fc.bias)
+                    recip_mlp.c_proj.weight.copy_(original_mlp.c_proj.weight)
+                    recip_mlp.c_proj.bias.copy_(original_mlp.c_proj.bias)
+                else:
+                    # Dimensions differ, copy what matches and initialize the rest
+                    min_hidden = min(orig_hidden_dim, new_hidden_dim)
+
+                    # Copy c_fc (input -> hidden)
+                    recip_mlp.c_fc.weight[:min_hidden].copy_(
+                        original_mlp.c_fc.weight[:min_hidden]
+                    )
+                    recip_mlp.c_fc.bias[:min_hidden].copy_(
+                        original_mlp.c_fc.bias[:min_hidden]
+                    )
+
+                    # Copy c_proj (hidden -> output)
+                    recip_mlp.c_proj.weight[:, :min_hidden].copy_(
+                        original_mlp.c_proj.weight[:, :min_hidden]
+                    )
+                    recip_mlp.c_proj.bias.copy_(original_mlp.c_proj.bias)
+
+                    # Initialize new dimensions with small random values (already done by PyTorch init)
+                    # Extra dims in recip_mlp already have proper initialization from __init__
+
+                    print(
+                        f"  MLP dimension mismatch: {orig_hidden_dim} -> {new_hidden_dim}, copied {min_hidden} dims"
+                    )
 
             # Replace MLP
             block.mlp = recip_mlp
