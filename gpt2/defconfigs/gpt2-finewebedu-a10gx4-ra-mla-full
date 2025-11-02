@@ -1,131 +1,169 @@
 #
-# GPT-2 with MLA + Reciprocal MLP for AWS g5.12xlarge (4x NVIDIA A10G)
-# Based on gpt2-finewebedu-a10gx4 with RA+MLA reciprocal mechanisms enabled
-# Tests 6 ablation steps (0-5) with MLP reciprocity at ra_alpha=0.0
+# GPT-2 RATIO Framework: Full 15-Step Ablation Study (4x NVIDIA A10G)
+# Tests golden ratio (1:2.5), MLP mechanisms, RA, MLA, and structure-aware optimization
 #
+# Hardware: 4× NVIDIA A10G (24GB each) - Single GPU mode for baseline comparison
+# Includes: OOM fixes, tensor mismatch fixes, GPU-aligned dimensions
+# Victory condition: Step 14 (full RATIO) > Step 1 (SPAM pruning baseline)
+#
+# GPU Alignment: All tensor dimensions are multiples of 64 for optimal NVIDIA occupancy
+# Following Karpathy's nanoGPT optimization (vocab 50257→50304 for tensor core efficiency)
+#
+# To run: make defconfig-gpt2-finewebedu-a10gx4-ra-mla-full && make
 
-# Model Selection - GPT-2
-CONFIG_MODEL_MODE_SINGLE=y
-CONFIG_MODEL_SELECT_GPT2=y
-CONFIG_MODEL="gpt2"
-CONFIG_MODEL_GPT2=y
-CONFIG_GPT2_MODEL_124M=y
-CONFIG_GPT2_MODEL_NAME="gpt2"
+# Enable GPT-2 model
+CONFIG_MODEL_MODE_SINGLE = y
+CONFIG_MODEL_SELECT_GPT2 = y
+CONFIG_MODEL_GPT2 = y
+CONFIG_MODEL = "gpt2"
 
-# Dataset Configuration
-CONFIG_GPT2_DATASET_FINEWEBEDU=y
-CONFIG_GPT2_DATASET="finewebedu"
-CONFIG_GPT2_BLOCK_SIZE=1024
-CONFIG_DATA_DIR="./gpt2/data"
+# GPT-2 Configuration
+CONFIG_GPT2_MODEL_124M = y
+CONFIG_GPT2_MODEL_NAME = "gpt2"
+CONFIG_GPT2_DATASET_FINEWEBEDU = y
+CONFIG_GPT2_DATASET = "finewebedu"
+CONFIG_GPT2_BLOCK_SIZE = 1024
+CONFIG_GPT2_GRADIENT_ACCUMULATION = 8
+CONFIG_GPT2_MAX_ITERS = 10400
+CONFIG_GPT2_EVAL_INTERVAL = 500
+CONFIG_GPT2_EVAL_SAMPLES = 200
+CONFIG_GPT2_LOG_INTERVAL = 10
+CONFIG_GPT2_WARMUP_STEPS = 2000
+CONFIG_GPT2_DECAY_LR = y
+CONFIG_GPT2_MIN_LR = "6e-5"
+CONFIG_GPT2_DROPOUT = "0.1"
+CONFIG_GPT2_FLASH_ATTENTION = n
+CONFIG_GPT2_COMPILE = n
+CONFIG_GPT2_WEIGHT_TYING = y
+CONFIG_GPT2_BIAS = y
+CONFIG_GPT2_CUDNN_BENCHMARK = y
+CONFIG_GPT2_TF32_ALLOWED = y
+CONFIG_GPT2_AMP_DTYPE = "bfloat16"
 
-# Training Parameters - Matching A10x4 memory profile
-CONFIG_BATCH_SIZE=2
-CONFIG_GPT2_GRADIENT_ACCUMULATION=4
-CONFIG_NUM_EPOCHS=10
-CONFIG_GPT2_MAX_ITERS=10400
-CONFIG_GPT2_EVAL_INTERVAL=500
-CONFIG_GPT2_EVAL_SAMPLES=200
-CONFIG_GPT2_LOG_INTERVAL=10
+# Training parameters - GPU-optimized for A10G 24GB with tensor core alignment
+# Baseline comparison: batch_size=16 × gradient_accumulation=4 = effective_batch=64
+# Fixed config: batch_size=8 × gradient_accumulation=8 = effective_batch=64 (SAME!)
+# Maintains identical optimization dynamics while preventing OOM
+CONFIG_BATCH_SIZE = 8
+CONFIG_NUM_EPOCHS = 10
+CONFIG_LEARNING_RATE = "6e-4"
+CONFIG_WEIGHT_DECAY = "0.1"
+CONFIG_NUM_WORKERS = 16
+CONFIG_DEVICE = "cuda"
+CONFIG_DATA_DIR = "./gpt2/data"
+CONFIG_PIN_MEMORY = y
+CONFIG_PERSISTENT_WORKERS = y
+CONFIG_PREFETCH_FACTOR = 4
 
-# Learning Rate Schedule
-CONFIG_LEARNING_RATE="6e-4"
-CONFIG_GPT2_MIN_LR="6e-5"
-CONFIG_GPT2_WARMUP_STEPS=2000
-CONFIG_GPT2_DECAY_LR=y
-CONFIG_WEIGHT_DECAY="0.1"
-
-# Optimizer - AdamWSPAM only (for consistency)
-CONFIG_OPTIMIZER_MODE_SINGLE=y
-CONFIG_OPTIMIZER_SELECT_ADAMWSPAM=y
-CONFIG_OPTIMIZER="adamwspam"
+# Optimizer - AdamWSPAM (for all steps except step 1 which uses pruning)
+CONFIG_OPTIMIZER_MODE_SINGLE = y
+CONFIG_OPTIMIZER_SELECT_ADAMWSPAM = y
+CONFIG_OPTIMIZER = "adamwspam"
 
 # SPAM Configuration
-CONFIG_SPAM_THETA="50.0"
-CONFIG_SPAM_ENABLE_CLIP=y
-CONFIG_SPAM_SPIKE_THRESHOLD="2.0"
-CONFIG_SPAM_PERIODIC_RESET=y
-CONFIG_SPAM_INTERVAL=1000
-CONFIG_SPAM_WARMUP=y
-CONFIG_SPAM_WARMUP_STEPS=1000
+CONFIG_SPAM_THETA = "50.0"
+CONFIG_SPAM_ENABLE_CLIP = y
+CONFIG_SPAM_SPIKE_THRESHOLD = "2.0"
+CONFIG_SPAM_PERIODIC_RESET = y
+CONFIG_SPAM_INTERVAL = 1000
+CONFIG_SPAM_WARMUP = y
+CONFIG_SPAM_WARMUP_STEPS = 1000
 
-# Pruning - Disabled for RA+MLA experiments
-CONFIG_PRUNING_MODE_NONE=y
-CONFIG_PRUNING_METHOD="none"
+# Pruning - Disabled (will be enabled per-step for steps 1 and 14)
+CONFIG_PRUNING_MODE_NONE = y
+CONFIG_PRUNING_METHOD = "none"
 
-# RA+MLA Configuration - MLP Reciprocity Focus
-# ra_alpha=0.0 means NO reciprocal attention scoring overhead
-# Focus is on the three reciprocal MLP mechanisms
-CONFIG_ENABLE_RA_MLA=y
-CONFIG_RA_MLA_LATENT_DIM=128
-CONFIG_RA_MLA_RA_WINDOW=64
-CONFIG_RA_MLA_RA_ALPHA="0.0"
-CONFIG_RA_MLA_PER_HEAD_Q_LATENT=y
-CONFIG_RA_MLA_PER_HEAD_V_UP=y
-CONFIG_RA_MLA_USE_FLASH=n
-CONFIG_RA_MLA_LOG_METRICS=y
-CONFIG_RA_MLA_CACHE_Q_WINDOW=y
-CONFIG_RA_MLA_USE_ROPE=n
+# RA+MLA Configuration for RATIO ablation
+CONFIG_ENABLE_RA_MLA = y
+CONFIG_RA_MLA_LATENT_DIM = 128
+CONFIG_RA_MLA_RA_WINDOW = 64
+CONFIG_RA_MLA_RA_ALPHA = "0.3"
+CONFIG_RA_MLA_PER_HEAD_Q_LATENT = y
+CONFIG_RA_MLA_PER_HEAD_V_UP = y
+CONFIG_RA_MLA_USE_FLASH = n
+# CRITICAL FIX: Disable metrics logging to prevent OOM during entropy computation
+CONFIG_RA_MLA_LOG_METRICS = n
+CONFIG_RA_MLA_CACHE_Q_WINDOW = y
+CONFIG_RA_MLA_USE_ROPE = n
 
 # Reciprocal MLP Mechanisms (enabled via ablation steps)
-CONFIG_RA_MLA_MLP_ATTN_GATE=y
-CONFIG_RA_MLA_MLP_CROSS_TOKEN=y
-CONFIG_RA_MLA_MLP_LATENT_RECIP=y
+CONFIG_RA_MLA_MLP_ATTN_GATE = y
+CONFIG_RA_MLA_MLP_CROSS_TOKEN = y
+CONFIG_RA_MLA_MLP_LATENT_RECIP = y
 
 # Parameter Tying & Sparsification (Memory Optimization)
-# Reduces 34% memory overhead via parameter sharing and sparse aggregation
-CONFIG_RA_MLA_MLP_TYING_TIED_TRANSPOSE=y
-CONFIG_RA_MLA_MLP_TYING_MODE="tied_transpose"
-CONFIG_RA_MLA_MLP_SPARSE_TOPK=y
-CONFIG_RA_MLA_MLP_SPARSE_MODE="topk"
-CONFIG_RA_MLA_MLP_SPARSE_K=8
-CONFIG_RA_MLA_MLP_SPARSE_NORMALIZE=y
-CONFIG_RA_MLA_MLP_SPARSE_HEAD_AVERAGE=y
+CONFIG_RA_MLA_MLP_TYING_TIED_TRANSPOSE = y
+CONFIG_RA_MLA_MLP_TYING_MODE = "tied_transpose"
+CONFIG_RA_MLA_MLP_SPARSE_TOPK = y
+CONFIG_RA_MLA_MLP_SPARSE_MODE = "topk"
+CONFIG_RA_MLA_MLP_SPARSE_K = 8
+CONFIG_RA_MLA_MLP_SPARSE_NORMALIZE = y
+CONFIG_RA_MLA_MLP_SPARSE_HEAD_AVERAGE = y
 
-# Enable test matrix mode for ablation study
-CONFIG_TEST_MATRIX_MODE=y
-CONFIG_RA_MLA_ABLATION_MODE=y
-CONFIG_RA_MLA_ABLATION_STEPS="0,1,2,3,4,5"
+# Enable ablation study mode with ALL 15 steps (0-14)
+CONFIG_RA_MLA_ABLATION_MODE = y
+CONFIG_RA_MLA_ABLATION_STEPS = "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14"
 
-# Multi-GPU Configuration for 4x A10G
-# Note: For initial testing, may want single-GPU mode
-# To enable DDP: uncomment CONFIG_GPT2_USE_DDP=y
-CONFIG_GPT2_USE_DDP=y
-CONFIG_GPT2_DDP_NUM_GPUS=4
-CONFIG_GPT2_DDP_BACKEND="nccl"
-CONFIG_GPT2_DDP_FIND_UNUSED_PARAMS=y
+# Enable test matrix mode
+CONFIG_TEST_MATRIX_MODE = y
 
-# Data Loading Optimization
-CONFIG_NUM_WORKERS=12
-CONFIG_PIN_MEMORY=y
-CONFIG_PERSISTENT_WORKERS=y
-CONFIG_PREFETCH_FACTOR=4
-
-# Mixed Precision Training
-CONFIG_MIXED_PRECISION=y
-CONFIG_GPT2_AMP_DTYPE="bfloat16"
-
-# Performance Optimizations
-CONFIG_GPT2_CUDNN_BENCHMARK=y
-CONFIG_GPT2_TF32_ALLOWED=y
-CONFIG_GPU_WARMUP=y
-CONFIG_GPT2_DROPOUT="0.1"
-CONFIG_GPT2_FLASH_ATTENTION=n
-CONFIG_GPT2_COMPILE=n
-CONFIG_GPT2_WEIGHT_TYING=y
-CONFIG_GPT2_BIAS=y
-
-# Memory Optimizations for Multi-GPU
-CONFIG_PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
-
-# Checkpointing
-CONFIG_SAVE_CHECKPOINT=y
-CONFIG_CHECKPOINT_INTERVAL=1000
+# Single-GPU mode for baseline comparison
+# Original baseline ran single-GPU with batch_size=16, gradient_accumulation=4
+# DDP config commented out - uncomment for multi-GPU training
+# CONFIG_GPT2_USE_DDP=y
+# CONFIG_GPT2_DDP_NUM_GPUS=4
+# CONFIG_GPT2_DDP_BACKEND="nccl"
+# CONFIG_GPT2_DDP_FIND_UNUSED_PARAMS=y
 
 # Experiment Tracking
-CONFIG_ENABLE_TRACKIO=y
-CONFIG_ENABLE_WANDB=y
-CONFIG_TRACKER_PROJECT="gpt2-mla-ra-mlp"
+CONFIG_ENABLE_TRACKIO = y
+CONFIG_ENABLE_WANDB = n
+CONFIG_TRACKER_PROJECT = "gpt2-ratio-ablation-full"
 
 # Advanced options
-CONFIG_COMPILE_MODEL=n
-CONFIG_DEVICE="cuda"
+CONFIG_COMPILE_MODEL = n
+CONFIG_MIXED_PRECISION = y
+CONFIG_GPU_WARMUP = y
+CONFIG_SAVE_CHECKPOINT = y
+CONFIG_CHECKPOINT_INTERVAL = 1000
+
+# Memory Optimizations - CRITICAL for A10G GPUs preventing fragmentation
+CONFIG_PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
+
+# Test execution
+CONFIG_TEST_PARALLEL_JOBS = 1
+CONFIG_OUTPUT_DIR = "test_matrix_results_ratio_ablation_full"
+
+# GPU-Aligned Dimensions (all multiples of 64 for tensor core optimization):
+# - d_model = 768 = 12×64 ✓
+# - head_dim = 64 = 1×64 ✓
+# - latent_dim = 128 = 2×64 ✓
+# - mlp_dim (step 2): 3840 = 60×64 ✓
+# - mlp_dim (step 3): 3264 = 51×64 ✓
+# - mlp_dim (step 4,5,7,8): 3072 = 48×64 ✓
+# - mlp_dim (step 9,11): 2560 = 40×64 ✓ (expansion_ratio=3.3333333333)
+# - mlp_dim (step 10,12,13,14): 2048 = 32×64 ✓ (expansion_ratio=2.6666666667)
+#
+# Fixes applied in this version:
+# 1. CONFIG_BATCH_SIZE=8 + CONFIG_GPT2_GRADIENT_ACCUMULATION=8 (maintains effective_batch=64)
+# 2. CONFIG_RA_MLA_LOG_METRICS=n (disables entropy computation to prevent OOM)
+# 3. train_ra_mla.py handles MLP dimension mismatch when copying pretrained weights
+# 4. train_ra_mla.py uses precise expansion ratios for GPU-aligned dimensions
+# 5. ra_mla_gpt2.py has memory-efficient entropy computation (when enabled)
+#
+# Ablation step details (see docs/ra.md for full description):
+# - Step 0: Baseline GPT-2 (ratio 1:2.0, mlp_dim=3072)
+# - Step 1: Baseline + SPAM pruning 50%
+# - Step 2: Golden ratio 1:2.5 (mlp_dim=3840)
+# - Step 3: Step 2 + MLP gating 15% (mlp_dim=3264)
+# - Step 4: Step 3 + cross-token 10% (mlp_dim=3072)
+# - Step 5: Baseline + RA (ra_alpha=0.3)
+# - Step 6: RA + golden ratio (mlp_dim=3840)
+# - Step 7: Step 6 + mechanisms (mlp_dim=3072)
+# - Step 8: Baseline + MLA (latent_dim=128, ratio 1:3.0)
+# - Step 9: MLA + golden ratio (mlp_dim=2560, ratio 1:2.5)
+# - Step 10: Step 9 + mechanisms (mlp_dim=2048)
+# - Step 11: MLA + RA + golden ratio (mlp_dim=2560)
+# - Step 12: Step 11 + mechanisms (mlp_dim=2048)
+# - Step 13: MLA + mechanisms + AdamWStructure (TODO)
+# - Step 14: Step 13 + ratio-preserving pruning (TODO)

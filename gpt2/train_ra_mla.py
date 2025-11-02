@@ -519,7 +519,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        args.mlp_expansion_ratio = 3.33  # 2560 for golden ratio with MLA
+        args.mlp_expansion_ratio = 3.3333333333  # 2560 = 40×64 (GPU-aligned)
     elif step == "10":
         # Step 10: Step 9 + mechanisms (MLA + ratio + gating + cross-token)
         args.enable_mla = True
@@ -527,7 +527,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
-        args.mlp_expansion_ratio = 2.67  # 2048 (80%), mechanisms take 20%
+        args.mlp_expansion_ratio = 2.6666666667  # 2048 = 32×64 (GPU-aligned)
     elif step == "11":
         # Step 11: RA + MLA + golden ratio (ra_alpha=0.3, latent_dim=128, ratio 1:2.5)
         args.enable_mla = True
@@ -535,7 +535,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = False
         args.mlp_cross_token = False
         args.mlp_latent_recip = False
-        args.mlp_expansion_ratio = 3.33  # 2560 for golden ratio
+        args.mlp_expansion_ratio = 3.3333333333  # 2560 = 40×64 (GPU-aligned)
     elif step == "12":
         # Step 12: Step 11 + mechanisms (RA + MLA + ratio + mechanisms)
         args.enable_mla = True
@@ -543,7 +543,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
-        args.mlp_expansion_ratio = 2.67  # 2048 (80%), mechanisms take 20%
+        args.mlp_expansion_ratio = 2.6666666667  # 2048 = 32×64 (GPU-aligned)
     elif step == "13":
         # Step 13: Step 10 + AdamWStructure (MLA + ratio + mechanisms + structure-aware)
         args.enable_mla = True
@@ -551,7 +551,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
-        args.mlp_expansion_ratio = 2.67  # 2048, mechanisms take 20%
+        args.mlp_expansion_ratio = 2.6666666667  # 2048 = 32×64 (GPU-aligned)
         # TODO: Need to add AdamWStructure optimizer support
     elif step == "14":
         # Step 14: Step 13 + ratio-preserving pruning (full RATIO framework)
@@ -560,7 +560,7 @@ if args.ra_mla_ablation_step is not None:
         args.mlp_attn_gate = True
         args.mlp_cross_token = True
         args.mlp_latent_recip = False
-        args.mlp_expansion_ratio = 2.67  # 2048, 50% pruning preserving ratio 1:2.5
+        args.mlp_expansion_ratio = 2.6666666667  # 2048 = 32×64 (GPU-aligned)
         # TODO: Need to add ratio-preserving pruning support
     else:
         raise ValueError(f"Invalid ablation step: {step}. Must be 0-14.")
