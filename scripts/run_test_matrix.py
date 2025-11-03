@@ -2091,7 +2091,7 @@ def main():
             ablation_step = combo.get("ra_mla_ablation_step")
             if combo["pruning"] == "none":
                 if ablation_step is not None:
-                    # Detailed RATIO ablation step descriptions (15 steps)
+                    # Detailed RATIO ablation step descriptions (19 steps)
                     step_descriptions = {
                         "0": "Baseline GPT-2 (ratio 1:2.0, standard attention)",
                         "1": "Baseline + SPAM pruning 50%",
@@ -2106,8 +2106,12 @@ def main():
                         "10": "Step 9 + mechanisms (MLA + ratio + mechanisms)",
                         "11": "RA + MLA + golden ratio",
                         "12": "Step 11 + mechanisms (RA + MLA + ratio + mechanisms)",
-                        "13": "Step 10 + AdamWStructure",
-                        "14": "Step 13 + ratio-preserving pruning (Full RATIO)",
+                        "13": "Baseline + RA-CT (topk, output mode, alpha=0.2)",
+                        "14": "MLA + RA-CT (compression + cross-token gating)",
+                        "15": "MLA + RA + RA-CT (full attention stack)",
+                        "16": "Full RATIO (step 12 + RA-CT, all mechanisms)",
+                        "17": "RA-CT weights mode (vs step 13 output mode)",
+                        "18": "RA-CT entropy mode (adaptive gating)",
                     }
                     step_desc = step_descriptions.get(
                         ablation_step, f"Step {ablation_step}"
