@@ -355,6 +355,17 @@ config PROFILE
 	help
 	  Enable performance profiling during training.
 
+config DRY_RUN
+	bool "Dry-run mode: architecture validation only"
+	default n
+	help
+	  Enable dry-run mode for quick architecture validation without GPU.
+	  Creates model, runs single forward/backward/optimizer step with
+	  dummy data on CPU, then exits. Catches configuration and
+	  architecture errors in seconds instead of hours.
+
+	  Use 'make check' to validate all ablation steps automatically.
+
 config INFERENCE_TEST
 	bool "Test inference after training"
 	default n

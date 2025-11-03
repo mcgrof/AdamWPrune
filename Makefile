@@ -160,6 +160,32 @@ prepare-gpt2-datasets:
 		python3 gpt2/prepare_data.py --dataset openwebtext; \
 	fi
 
+# Validate architecture with dry-run mode (RATIO ablation)
+# Quick check to catch configuration/architecture errors before GPU training
+.PHONY: check
+check: FORCE
+	@echo "============================================================"
+	@echo "Running dry-run architecture validation"
+	@echo "============================================================"
+	@START_TIME=$$(date +%s); \
+	$(MAKE) defconfig-gpt2-ratio-ablation DRY_RUN=1 > /dev/null 2>&1 || exit 1; \
+	./scripts/validate_ablation_steps.sh; \
+	RESULT=$$?; \
+	END_TIME=$$(date +%s); \
+	DURATION=$$((END_TIME - START_TIME)); \
+	echo ""; \
+	echo "============================================================"; \
+	if [ $$RESULT -eq 0 ]; then \
+		echo "✓ Architecture validation completed in $${DURATION}s"; \
+		echo "  All 19 RATIO ablation steps validated successfully"; \
+		echo "  Ready for GPU training"; \
+	else \
+		echo "✗ Architecture validation failed after $${DURATION}s"; \
+		echo "  Fix errors before committing GPU resources"; \
+		exit 1; \
+	fi; \
+	echo "============================================================"
+
 # Train with current configuration (using test matrix framework for consistency)
 # Automatically detects and uses multiple GPUs with DDP when available
 train: check-config generate-config prepare-datasets
@@ -414,33 +440,34 @@ summary:
 
 # Defconfig targets - simple pattern rule for all defconfigs
 # Override kconfig's defconfig handling
+# Supports command-line overrides: make defconfig-name VAR=value
 .PHONY: defconfig-%
 defconfig-%: FORCE
 	@# Check in main defconfigs directory first
 	@if [ -f defconfigs/$* ]; then \
 		echo "Loading defconfig: $*"; \
 		cp defconfigs/$* .config; \
-		python scripts/kconfig2py.py .config > config.py; \
-		echo "Configuration loaded: $*"; \
-		echo "Ready to run: make train"; \
 	elif [ -f lenet5/defconfigs/$* ]; then \
 		echo "Loading LeNet-5 defconfig: $*"; \
 		cp lenet5/defconfigs/$* .config; \
-		python scripts/kconfig2py.py .config > config.py; \
-		echo "Configuration loaded: $*"; \
-		echo "Ready to run: make train"; \
 	elif [ -f resnet18/defconfigs/$* ]; then \
 		echo "Loading ResNet-18 defconfig: $*"; \
 		cp resnet18/defconfigs/$* .config; \
-		python scripts/kconfig2py.py .config > config.py; \
-		echo "Configuration loaded: $*"; \
-		echo "Ready to run: make train"; \
 	else \
 		echo "Error: defconfig '$*' not found"; \
 		echo ""; \
 		$(MAKE) list-all-defconfigs; \
 		exit 1; \
-	fi
+	fi; \
+	\
+	if [ -n "$(DRY_RUN)" ]; then \
+		echo "  Enabling DRY_RUN mode..."; \
+		echo "CONFIG_DRY_RUN=y" >> .config; \
+	fi; \
+	\
+	python scripts/kconfig2py.py .config > config.py; \
+	echo "Configuration loaded: $*"; \
+	echo "Ready to run: make train"
 
 FORCE:
 

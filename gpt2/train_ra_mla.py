@@ -439,6 +439,16 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+# Override dry-run from config if set (CLI --dry-run takes precedence)
+if not args.dry_run:
+    try:
+        if hasattr(config, "DRY_RUN") and (
+            config.DRY_RUN is True or config.DRY_RUN == "y"
+        ):
+            args.dry_run = True
+    except (NameError, AttributeError):
+        pass
+
 # Override max_iters from environment if set (takes precedence over config and command-line)
 if os.environ.get("GPT2_MAX_ITERS"):
     args.max_iters = int(os.environ.get("GPT2_MAX_ITERS"))
