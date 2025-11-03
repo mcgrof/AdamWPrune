@@ -168,6 +168,27 @@ When implementing bidirectional information flow between transformer blocks:
 - Produce contexts for the **next** block at the end of forward pass
 - Never assume contexts exist - always check with assertions when used
 
+### Wrapper Class Adaptability
+When creating wrapper classes for mixed configurations:
+
+- **Check wrapped component type at runtime**: Use `hasattr()` or `isinstance()` to detect capabilities
+- **Conditionally pass arguments**: Standard components may not accept extended keyword arguments
+- **Graceful degradation**: Support both enhanced and standard components in same wrapper
+- Pattern:
+  ```python
+  # Good - adapts to component type
+  is_enhanced = hasattr(self.component, "enhanced_method")
+  if is_enhanced:
+      out = self.component(x, extra_arg=value)
+  else:
+      out = self.component(x)
+
+  # Bad - assumes all components are enhanced
+  out = self.component(x, extra_arg=value)  # crashes on standard components
+  ```
+
+Example: `RA_MLA_Block` wraps either `ReciprocalMLP` (accepts attn_weights/attn_latent) or standard `MLP` (does not). Runtime check prevents TypeError when ablation steps disable reciprocity mechanisms.
+
 ## Architectural Pattern Guidelines
 
 ### Feature Independence and Composability
