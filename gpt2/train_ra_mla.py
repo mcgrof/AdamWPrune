@@ -428,6 +428,14 @@ parser.add_argument(
 parser.add_argument(
     "--compile", action="store_true", default=False, help="Use torch.compile"
 )
+parser.add_argument(
+    "--dry-run",
+    action="store_true",
+    default=False,
+    help="Quick architecture validation: create model, run single "
+    "forward/backward pass with dummy data on CPU, exit. "
+    "Catches config/architecture errors without GPU time.",
+)
 
 args = parser.parse_args()
 
@@ -854,6 +862,16 @@ def main():
     # Setup
     os.makedirs(args.checkpoint_dir, exist_ok=True)
 
+    # Dry-run mode: force CPU to avoid GPU allocation
+    if args.dry_run:
+        print("=" * 60)
+        print("DRY-RUN MODE: Architecture Validation")
+        print("=" * 60)
+        print("Testing: model creation, forward pass, backward pass")
+        print("Device: CPU (forced)")
+        print("=" * 60)
+        args.device = "cpu"
+
     # Validate device - handle CUDA/ROCm availability
     device = args.device
     if device == "cuda":
@@ -1058,6 +1076,54 @@ def main():
     print(
         f"Optimizer: {args.optimizer}, LR: {args.learning_rate}, weight_decay: {args.weight_decay}"
     )
+
+    # =========================================================================
+    # DRY-RUN MODE: Quick architecture validation
+    # =========================================================================
+    if args.dry_run:
+        print("\nRunning architecture validation...")
+        print(f"  Model parameters: {model.get_num_params() / 1e6:.2f}M")
+
+        # Create minimal dummy batch (batch_size=2, seq_len=32)
+        batch_size = 2
+        seq_len = 32
+        x = torch.randint(0, 50257, (batch_size, seq_len), device=device)
+        y = torch.randint(0, 50257, (batch_size, seq_len), device=device)
+
+        print(f"  Dummy batch: {batch_size}x{seq_len}")
+
+        try:
+            # Forward pass
+            print("  ✓ Testing forward pass...")
+            logits, loss = model(x, y)
+            print(f"    Output shape: {logits.shape}, Loss: {loss.item():.4f}")
+
+            # Backward pass
+            print("  ✓ Testing backward pass...")
+            loss.backward()
+            print("    Gradients computed")
+
+            # Optimizer step
+            print("  ✓ Testing optimizer step...")
+            optimizer.step()
+            optimizer.zero_grad()
+            print("    Parameters updated")
+
+            # Success
+            print("\n" + "=" * 60)
+            print("✓ DRY-RUN PASSED: Architecture is valid")
+            print("=" * 60)
+            sys.exit(0)
+
+        except Exception as e:
+            print("\n" + "=" * 60)
+            print("✗ DRY-RUN FAILED: Architecture validation error")
+            print("=" * 60)
+            print(f"Error: {e}")
+            import traceback
+
+            traceback.print_exc()
+            sys.exit(1)
 
     # Metrics tracking
     metrics = RAMLAMetrics()

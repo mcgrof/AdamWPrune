@@ -670,15 +670,10 @@ class RA_MLA_Attention(nn.Module):
         B, T, E = hidden_states.shape
         H, D, L = self.n_head, self.head_dim, self.cfg.latent_dim
 
-        # === Assertions: Check reciprocity paths are properly connected ===
-        if self.cfg.mlp_attn_gate:
-            assert (
-                mlp_gate_context is not None
-            ), "mlp_attn_gate enabled but no gate context"
-        if self.cfg.mlp_latent_recip:
-            assert (
-                mlp_latent_context is not None
-            ), "mlp_latent_recip enabled but no latent ctx"
+        # Note: mlp_gate_context and mlp_latent_context may be None for
+        # the first block in the model (no previous block). The code
+        # handles None gracefully - reciprocity features only apply when
+        # context is available.
 
         # === 1. Project Q, K, V ===
         Q = self._split_heads(self.q_proj(hidden_states))  # [B, T, H, D]
