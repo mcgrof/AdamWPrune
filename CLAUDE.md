@@ -40,6 +40,12 @@
 - Follow PEP 8 conventions (handled by black)
 - No manual formatting - always use black
 
+### Defconfig Files
+- **CRITICAL**: Defconfig files must use exact Kconfig syntax: `CONFIG_XXX=y` (no spaces around `=`)
+- **DO NOT** apply `black` formatter to defconfig files or `.config` files
+- Kconfig parser silently ignores lines with spaces around equals signs
+- After any edit to defconfigs, verify syntax: `grep " = " defconfigs/*` should return nothing
+
 ## GPU Optimization Preferences
 
 ### Training Optimizations
@@ -92,6 +98,116 @@ make defconfig-gpt2-ratio-ablation
 make
 # Results appear in test_matrix_results_ratio_ablation/
 ```
+
+## Configuration System Internals
+
+### Type Handling
+- `.config` files use string values: `"y"`, `"n"`, `"value"`
+- `config.py` converts to Python types: `True`, `False`, integers, floats
+- When checking config values in Python code, handle both types:
+  ```python
+  # Good - handles both string and boolean
+  if value in ("y", True):
+
+  # Bad - only works with one type
+  if value == "y":
+  ```
+
+### Test Matrix vs Ablation Mode
+- **Mutually exclusive**: Cannot enable both `CONFIG_TEST_MATRIX_MODE` and `CONFIG_RA_MLA_ABLATION_MODE`
+- Test matrix mode: Tests optimizer/pruning combinations
+- Ablation mode: Tests architectural variations (RA, MLA, RA-CT, etc.)
+- Always verify which mode is active when debugging unexpected test counts
+
+## Ablation Study Requirements
+
+### Multi-File Synchronization
+When extending ablation studies with new steps, **THREE** files must be updated in sync:
+
+1. **defconfigs/gpt2-ratio-ablation**: Add step descriptions in comments
+2. **gpt2/train_ra_mla.py**: Add step configurations (elif step == "N" blocks)
+3. **scripts/run_test_matrix.py**: Update `step_descriptions` dictionary
+
+Missing any of these causes:
+- Defconfig only: Steps run but have no description
+- train_ra_mla.py only: Steps fail to execute
+- run_test_matrix.py only: Descriptions show but steps don't run
+
+### Ablation Step Checklist
+When adding a new ablation step:
+- [ ] Add step config block to train_ra_mla.py (around line 500+)
+- [ ] Update step_descriptions dict in run_test_matrix.py (around line 2095)
+- [ ] Document step in defconfig comments
+- [ ] Update CONFIG_RA_MLA_ABLATION_STEPS string to include new step number
+- [ ] Verify with dry-run: `python scripts/run_test_matrix.py --dry-run`
+
+## Defensive Programming
+
+### Assertions for Optional Features
+When implementing optional/conditional features that depend on data flow:
+
+- **Always add assertions** to catch when features are enabled but required data is None
+- Silent failures are worse than crashes - they waste GPU time and produce invalid results
+- Pattern:
+  ```python
+  if self.cfg.feature_enabled:
+      assert required_data is not None, "feature_enabled but no required_data"
+  ```
+
+Examples from RA+MLA:
+- MLP-to-Attention gating requires `mlp_gate_context` from previous block
+- MLP latent reciprocity requires `mlp_latent_context` from previous block
+- Cross-token MLP requires `attn_weights` from attention layer
+
+### Context Flow for Multi-Block Architectures
+When implementing bidirectional information flow between transformer blocks:
+
+- Use wrapper classes (e.g., `RA_MLA_Block`) to manage context state across blocks
+- Store contexts in instance variable (e.g., `self._ctx = {}`)
+- Pass contexts as keyword arguments (enables detection of missing connections)
+- Produce contexts for the **next** block at the end of forward pass
+- Never assume contexts exist - always check with assertions when used
+
+## Architectural Pattern Guidelines
+
+### Feature Independence and Composability
+When adding new attention/MLP mechanisms:
+
+- **Keep features orthogonal**: RA-CT (attention-only gating) vs MLP mechanisms (cross-layer flow)
+- **Use clear naming**: `ra_cross_token` for attention features, `mlp_attn_gate` for MLP features
+- **Enable ablation**: Each feature should be independently testable
+- **Avoid coupling**: RA-CT doesn't require MLA/RA, can be tested on baseline GPT-2
+
+### Per-Head Learnable Parameters
+For per-head gating mechanisms:
+
+- Initialize to near-identity: `bias ≈ 2.0` for sigmoid gates (pass-through initially)
+- Use affine transforms: `sigmoid(stat * scale + bias)` for numerical stability
+- Shape: `[n_head]` for per-head parameters, expandable to `[B,H,T]` when needed
+- Consider `head_average=True` option for cheaper computation
+
+### Statistics-Based Gating
+When implementing gating based on attention statistics:
+
+- Support multiple modes: `topk`, `max`, `entropy`, `rms`
+- Provide `detach_stats` option to compute under `no_grad()` for memory savings
+- Apply gate at multiple points: `weights` (pre-softmax) or `output` (post-aggregation)
+- Use `alpha` mixing parameter for smooth interpolation: `(1-α)·x + α·(x⊙gate)`
+
+## GPU Memory Management
+
+### Memory Optimization Strategies
+- Enable expandable segments: `PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"`
+- Disable expensive metrics logging during training (e.g., entropy computation on attention weights)
+- Use `@torch.no_grad()` for statistics computation that doesn't need gradients
+- Monitor for OOM errors in attention mechanisms - often caused by extra allocations for metrics
+- Batch size × gradient accumulation = effective batch size (keep constant when adjusting for memory)
+
+### A10G-Specific Considerations
+- 24GB VRAM per GPU requires careful batch size tuning
+- For GPT-2 124M with RA+MLA: batch_size=8, gradient_accumulation=8 (effective=64)
+- Tensor dimensions should be multiples of 64 for optimal tensor core utilization
+- Disable metrics logging for attention mechanisms to prevent OOM during entropy computation
 
 ## Documentation
 - Keep changes well-documented in commit messages
