@@ -1021,21 +1021,31 @@ class RA_MLA_Block(nn.Module):
         )
         x = x + a_out
 
-        # Get attention outputs for MLP
-        attn_weights = self.attn.get_attn_weights_export()
-        attn_latent = self.attn.get_latent_k_export()
+        # Get attention outputs for MLP (only needed for ReciprocalMLP)
+        # Check if MLP is ReciprocalMLP by checking for reciprocal methods
+        is_reciprocal_mlp = hasattr(self.mlp, "get_attn_gate_context")
 
-        # MLP forward with attention inputs
-        m_out = self.mlp(
-            self.ln_2(x), attn_weights=attn_weights, attn_latent=attn_latent
-        )
-        x = x + m_out
+        if is_reciprocal_mlp:
+            # MLP forward with attention inputs (ReciprocalMLP)
+            attn_weights = self.attn.get_attn_weights_export()
+            attn_latent = self.attn.get_latent_k_export()
+            m_out = self.mlp(
+                self.ln_2(x), attn_weights=attn_weights, attn_latent=attn_latent
+            )
+            x = x + m_out
 
-        # Produce contexts for NEXT block's attention
-        self._ctx = dict(
-            mlp_gate_context_prev=self.mlp.get_attn_gate_context(),
-            mlp_latent_context_prev=self.mlp.get_mlp_latent_context(),
-        )
+            # Produce contexts for NEXT block's attention
+            self._ctx = dict(
+                mlp_gate_context_prev=self.mlp.get_attn_gate_context(),
+                mlp_latent_context_prev=self.mlp.get_mlp_latent_context(),
+            )
+        else:
+            # Standard MLP forward (no reciprocity)
+            m_out = self.mlp(self.ln_2(x))
+            x = x + m_out
+
+            # No contexts to propagate
+            self._ctx = {}
 
         if output_attentions:
             return x, present, None
