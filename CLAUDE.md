@@ -96,13 +96,16 @@ The standard workflow for running experiments:
    - This loads the defconfig and generates config.py
 
 2. **Build and run**: `make`
-   - The build system automatically runs the configured experiments
+   - The build system automatically runs the configured
+     experiments
    - For test matrix mode, this runs all ablation steps
    - Results are saved to the configured output directory
 
-3. **Never manually invoke scripts/run_test_matrix.py**
-   - The Makefile handles test execution automatically
-   - Manual script invocation is for debugging only
+3. **NEVER manually invoke make targets or scripts**
+   - Never run `make train` directly
+   - Never run `scripts/run_test_matrix.py` directly
+   - The default `make` target handles everything automatically
+   - Manual target/script invocation is for debugging only
 
 Example complete workflow:
 ```bash
@@ -110,6 +113,10 @@ make defconfig-gpt2-ratio-ablation
 make
 # Results appear in test_matrix_results_ratio_ablation/
 ```
+
+**CRITICAL**: Always use `make` (not `make train`) to run
+experiments. The default target adapts automatically based on
+configuration (single training vs test matrix mode).
 
 ## Configuration System Internals
 

@@ -24,7 +24,7 @@ MODEL ?= $(if $(CONFIG_MODEL),$(CONFIG_MODEL),lenet5)
 memory-comparison: check-config
 	@echo "Running memory comparison experiments..."
 	@echo "Use 'make test-matrix' for full optimizer/pruning comparisons"
-	@echo "Or configure specific tests with 'make menuconfig' then 'make train'"
+	@echo "Or configure specific tests with 'make menuconfig' then 'make'"
 
 # Update graphs with latest results
 update-graphs: check-config generate-config
@@ -467,7 +467,7 @@ defconfig-%: FORCE
 	\
 	python scripts/kconfig2py.py .config > config.py; \
 	echo "Configuration loaded: $*"; \
-	echo "Ready to run: make train"
+	echo "Ready to run: make"
 
 FORCE:
 
@@ -580,16 +580,16 @@ help:
 	@echo "  kconfig-help      - Show all Kconfig targets"
 	@echo ""
 	@echo "Training targets:"
-	@echo "  train             - Train with current configuration (auto multi-GPU)"
+	@echo "  make              - Run experiments with current config (use this!)"
 	@echo "  all               - Run memory comparison and update graphs (default)"
 	@echo "  memory-comparison - Run all optimizer experiments with memory tracking"
 	@echo "  update-graphs     - Update visualization graphs with latest results"
 	@echo "  analyze-gpu       - Analyze GPU memory usage from battle results"
 	@echo ""
-	@echo "Multi-GPU training:"
-	@echo "  The 'train' target automatically detects available GPUs and uses"
-	@echo "  torchrun for distributed training when multiple GPUs are present."
-	@echo "  Supports NVIDIA, AMD, and other GPU vendors transparently."
+	@echo "Note: Use plain 'make' to run experiments. The build system"
+	@echo "automatically adapts based on configuration (single training vs"
+	@echo "test matrix mode) and detects available GPUs for multi-GPU training."
+	@echo "Supports NVIDIA, AMD, and other GPU vendors transparently."
 	@echo ""
 	@echo "RA+MLA (Reciprocal Attention) targets:"
 	@echo "  train-ra-mla      - Train GPT-2 with RA+MLA (requires RA+MLA defconfig)"
@@ -635,7 +635,7 @@ help:
 	@echo "  make defconfig-lenet5-sgd       # Load LeNet-5 with SGD"
 	@echo "  make defconfig-lenet5-adamwprune # Load LeNet-5 with AdamWPrune"
 	@echo "  make menuconfig                 # Customize configuration"
-	@echo "  make train                      # Train with current config"
+	@echo "  make                            # Run experiments with current config"
 	@echo ""
 	@echo "Test matrix mode:"
 	@echo "  make allyesconfig               # Configure for all combinations"
