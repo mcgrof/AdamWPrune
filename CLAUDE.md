@@ -21,6 +21,10 @@
   Signed-off-by: Luis Chamberlain <mcgrof@kernel.org>
   ```
 
+- **LINE LENGTH**: Maximum 70 characters per line in commit messages
+  - Subject line (first line): 70 characters max
+  - Body paragraphs: 70 characters max per line
+  - Ensures proper display in git log, email patches, and terminal output
 - **CRITICAL**: Never use "🤖 Generated with [Claude Code]" or "Co-Authored-By: Claude"
 - **REQUIRED**: Every commit MUST have both "Generated-by: Claude AI" and "Signed-off-by: Luis Chamberlain <mcgrof@kernel.org>"
 - **NO EXCEPTIONS**: This format is mandatory for ALL commits, no matter how small
