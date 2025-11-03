@@ -143,25 +143,99 @@ When adding a new ablation step:
 - [ ] Update step_descriptions dict in run_test_matrix.py (around line 2095)
 - [ ] Document step in defconfig comments
 - [ ] Update CONFIG_RA_MLA_ABLATION_STEPS string to include new step number
-- [ ] Verify with dry-run: `python scripts/run_test_matrix.py --dry-run`
+- [ ] **REQUIRED**: Validate with dry-run: `./scripts/validate_ablation_steps.sh`
+
+## Dry-Run Validation
+
+### Architecture Validation Before GPU Training
+**CRITICAL**: Always validate architectural changes with dry-run
+before committing GPU resources. Recent bugs wasted 7+ hours of
+GPU time that dry-run would have caught in 60 seconds.
+
+### When to Use Dry-Run
+Run dry-run validation before:
+- Committing architectural changes (new attention mechanisms,
+  MLP modifications)
+- Adding new ablation steps
+- Modifying forward/backward pass logic
+- Changing wrapper classes or patching code
+- After fixing bugs that affected multiple configurations
+
+### Dry-Run Tools
+
+#### Single Step Validation
+```bash
+# Test specific ablation step
+python3 gpt2/train_ra_mla.py --ra-mla-ablation-step N \
+  --optimizer adamwspam --dataset finewebedu --dry-run
+
+# Exit code 0: architecture valid
+# Exit code 1: error (prints stack trace)
+```
+
+#### All Steps Validation
+```bash
+# Test all 19 RATIO ablation steps
+./scripts/validate_ablation_steps.sh
+
+# Completes in ~60 seconds
+# Reports which steps pass/fail
+# Provides commands to debug failures
+```
+
+### What Dry-Run Catches
+- Configuration errors (wrong test mode, invalid parameters)
+- Architecture errors (TypeError from wrong arguments)
+- Assertion failures (missing required data)
+- Forward pass failures (dimension mismatches)
+- Backward pass failures (gradient computation errors)
+- Optimizer step failures (parameter update errors)
+
+### What Dry-Run Misses
+- OOM errors (uses small batch on CPU)
+- Multi-GPU/DDP issues (runs single CPU)
+- Data loading errors (uses dummy data)
+- Long-term training instabilities
+- Performance regressions
+
+### Recent Bugs Caught by Dry-Run
+1. **RA_MLA_Block argument passing**: 17/19 steps failed with
+   TypeError when MLP received unexpected kwargs
+2. **Assertion strictness**: 6/19 steps failed when first block
+   had no context from previous block
+
+Both would have been caught before GPU training with dry-run.
 
 ## Defensive Programming
 
 ### Assertions for Optional Features
-When implementing optional/conditional features that depend on data flow:
+When implementing optional/conditional features that depend on
+data flow:
 
-- **Always add assertions** to catch when features are enabled but required data is None
-- Silent failures are worse than crashes - they waste GPU time and produce invalid results
-- Pattern:
+- Add assertions for data that MUST be present (e.g., within
+  a single component)
+- Avoid assertions for data that may legitimately be None
+  (e.g., first block in sequence)
+- Silent failures waste GPU time - better to fail fast with
+  clear error messages
+- Pattern for required data within component:
   ```python
   if self.cfg.feature_enabled:
       assert required_data is not None, "feature_enabled but no required_data"
   ```
+- Pattern for optional data from other blocks:
+  ```python
+  if self.cfg.feature_enabled and data_from_prev_block is not None:
+      # use the data
+  ```
 
 Examples from RA+MLA:
-- MLP-to-Attention gating requires `mlp_gate_context` from previous block
-- MLP latent reciprocity requires `mlp_latent_context` from previous block
-- Cross-token MLP requires `attn_weights` from attention layer
+- ReciprocalMLP asserts `attn_weights`/`attn_latent` are
+  provided by RA_MLA_Block (same component, always required)
+- RA_MLA_Attention handles None `mlp_gate_context` gracefully
+  (from previous block, None for first block)
+- Use dry-run validation to catch assertion failures before
+  GPU training
 
 ### Context Flow for Multi-Block Architectures
 When implementing bidirectional information flow between transformer blocks:
