@@ -34,8 +34,16 @@
 1. Make a single focused change
 2. Run `black` formatter on Python files
 3. Test that the code runs without errors
-4. Commit with detailed message
-5. Repeat for next change
+4. **If architectural changes**: Run `make check` to validate
+5. Commit with detailed message
+6. Repeat for next change
+
+Architectural changes include:
+- New attention or MLP mechanisms
+- Modified forward/backward pass logic
+- Changes to model patching or wrapper classes
+- New ablation steps or configurations
+- Updates to reciprocity/context flow
 
 ## Code Style
 
@@ -163,6 +171,20 @@ Run dry-run validation before:
 
 ### Dry-Run Tools
 
+#### Quick Check (Recommended)
+```bash
+# Run full architecture validation via Makefile
+make check
+
+# Completes in ~97 seconds (19 steps @ ~5s each)
+# Loads gpt2-ratio-ablation config with DRY_RUN=1
+# Tests all ablation steps automatically
+# Exit code 0: all pass, 1: failures detected
+```
+
+**ALWAYS run `make check` before committing architectural changes
+that may affect runtime behavior.**
+
 #### Single Step Validation
 ```bash
 # Test specific ablation step
@@ -173,9 +195,9 @@ python3 gpt2/train_ra_mla.py --ra-mla-ablation-step N \
 # Exit code 1: error (prints stack trace)
 ```
 
-#### All Steps Validation
+#### Manual All Steps Validation
 ```bash
-# Test all 19 RATIO ablation steps
+# Test all 19 RATIO ablation steps (manual script)
 ./scripts/validate_ablation_steps.sh
 
 # Completes in ~60 seconds
