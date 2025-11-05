@@ -2092,6 +2092,7 @@ def main():
             if combo["pruning"] == "none":
                 if ablation_step is not None:
                     # Detailed RATIO ablation step descriptions (19 steps)
+                    # Lens-gated architecture step descriptions (8 steps)
                     step_descriptions = {
                         "0": "Baseline GPT-2 (ratio 1:2.0, standard attention)",
                         "1": "Baseline + SPAM pruning 50%",
@@ -2112,6 +2113,14 @@ def main():
                         "16": "Full RATIO (step 12 + RA-CT, all mechanisms)",
                         "17": "RA-CT weights mode (vs step 13 output mode)",
                         "18": "RA-CT entropy mode (adaptive gating)",
+                        "L0": "Lens baseline (no enhancements)",
+                        "L1": "Lens reciprocity only (S^T mixing, zero-cost)",
+                        "L2": "Lens discoverability only (column bias, 768 params)",
+                        "L3": "Lens reciprocity + discoverability",
+                        "L4": "Lens attention-only (MLP disabled)",
+                        "L5": "Lens full without MLP context (route gate annealing)",
+                        "L6": "Lens full + low-rank MLP context (R=128, 7% overhead)",
+                        "L7": "Lens full + conductor mode (adaptive context)",
                     }
                     step_desc = step_descriptions.get(
                         ablation_step, f"Step {ablation_step}"

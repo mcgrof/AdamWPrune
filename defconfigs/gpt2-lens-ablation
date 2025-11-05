@@ -1,0 +1,164 @@
+# Lens-Gated Architecture: 8-Step Ablation Study Configuration
+# Tests simplified lens-gated mechanisms for KV cache reduction
+#
+# Goal: Learn to shift from attention-heavy to MLP-heavy via route
+# gate annealing, reducing KV cache size at inference.
+#
+# Key mechanisms:
+# - Reciprocity (S^T): Zero-cost transpose for bidirectional flow
+# - Discoverability (column bias): Tiny learnable vectors (768 params)
+# - Lens gates (softmax mixing): Scale-stable per-head learning
+# - Route gate (attention vs MLP): Learnable ratio with annealing
+# - Low-rank MLP context: Parameter-efficient E→R→mult*E (5× savings)
+#
+# To run: make defconfig-gpt2-lens-ablation && make
+
+# Enable GPT-2 model
+CONFIG_MODEL_MODE_SINGLE=y
+CONFIG_MODEL_SELECT_GPT2=y
+CONFIG_MODEL_GPT2=y
+CONFIG_MODEL="gpt2"
+
+# GPT-2 Configuration
+CONFIG_GPT2_MODEL_124M=y
+CONFIG_GPT2_MODEL_NAME="gpt2"
+CONFIG_GPT2_DATASET_FINEWEBEDU=y
+CONFIG_GPT2_DATASET="finewebedu"
+CONFIG_GPT2_BLOCK_SIZE=1024
+CONFIG_GPT2_GRADIENT_ACCUMULATION=8
+CONFIG_GPT2_MAX_ITERS=10400
+CONFIG_GPT2_EVAL_INTERVAL=500
+CONFIG_GPT2_EVAL_SAMPLES=200
+CONFIG_GPT2_LOG_INTERVAL=10
+CONFIG_GPT2_WARMUP_STEPS=2000
+CONFIG_GPT2_DECAY_LR=y
+CONFIG_GPT2_MIN_LR="6e-5"
+CONFIG_GPT2_DROPOUT="0.1"
+CONFIG_GPT2_FLASH_ATTENTION=n
+CONFIG_GPT2_COMPILE=n
+CONFIG_GPT2_WEIGHT_TYING=y
+CONFIG_GPT2_BIAS=y
+CONFIG_GPT2_CUDNN_BENCHMARK=y
+CONFIG_GPT2_TF32_ALLOWED=y
+CONFIG_GPT2_AMP_DTYPE="bfloat16"
+
+# Training parameters
+CONFIG_BATCH_SIZE=8
+CONFIG_NUM_EPOCHS=10
+CONFIG_LEARNING_RATE="6e-4"
+CONFIG_WEIGHT_DECAY="0.1"
+CONFIG_NUM_WORKERS=16
+CONFIG_DEVICE="cuda"
+CONFIG_DATA_DIR="./gpt2/data"
+CONFIG_PIN_MEMORY=y
+CONFIG_PERSISTENT_WORKERS=y
+CONFIG_PREFETCH_FACTOR=4
+
+# Optimizer - AdamWSPAM
+CONFIG_OPTIMIZER_MODE_SINGLE=y
+CONFIG_OPTIMIZER_SELECT_ADAMWSPAM=y
+CONFIG_OPTIMIZER="adamwspam"
+
+# SPAM Configuration
+CONFIG_SPAM_THETA="50.0"
+CONFIG_SPAM_ENABLE_CLIP=y
+CONFIG_SPAM_SPIKE_THRESHOLD="2.0"
+CONFIG_SPAM_PERIODIC_RESET=y
+CONFIG_SPAM_INTERVAL=1000
+CONFIG_SPAM_WARMUP=y
+CONFIG_SPAM_WARMUP_STEPS=1000
+
+# Pruning - Disabled
+CONFIG_PRUNING_MODE_NONE=y
+CONFIG_PRUNING_METHOD="none"
+
+# Lens-Gated Architecture Configuration
+CONFIG_ENABLE_RA_MLA=y
+
+# Enable ablation study mode with lens-gated steps
+CONFIG_RA_MLA_ABLATION_MODE=y
+CONFIG_RA_MLA_ABLATION_STEPS="L0,L1,L2,L3,L4,L5,L6,L7"
+
+# Disable test matrix mode
+CONFIG_TEST_MATRIX_MODE=n
+
+# Experiment Tracking
+CONFIG_ENABLE_TRACKIO=y
+CONFIG_ENABLE_WANDB=n
+CONFIG_TRACKER_PROJECT="gpt2-lens-ablation"
+
+# Advanced options
+CONFIG_COMPILE_MODEL=n
+CONFIG_MIXED_PRECISION=y
+CONFIG_GPU_WARMUP=y
+CONFIG_SAVE_CHECKPOINT=y
+CONFIG_CHECKPOINT_INTERVAL=1000
+
+# Memory Optimizations
+CONFIG_PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+
+# Test execution
+CONFIG_TEST_PARALLEL_JOBS=1
+CONFIG_OUTPUT_DIR="test_matrix_results_lens_ablation"
+
+# Lens-Gated Ablation Steps (8 total):
+#
+# L0: Baseline (no enhancements)
+#     - Standard GPT-2 transformer
+#     - use_reciprocity=False, use_discoverability=False
+#     - use_route_gate=False, mlp_use_ctx_summary=False
+#
+# L1: Reciprocity only
+#     - Test S^T mixing alone (zero-cost transpose)
+#     - use_reciprocity=True, other mechanisms disabled
+#     - Lens gates learn w_std vs w_rec weights
+#
+# L2: Discoverability only
+#     - Test column bias alone (768 learnable params)
+#     - use_discoverability=True, other mechanisms disabled
+#     - d = <K, u> allows tokens to broadcast importance
+#
+# L3: Reciprocity + Discoverability
+#     - Combined attention enhancements
+#     - use_reciprocity=True, use_discoverability=True
+#     - Lens gates learn 3-way mixing (w_std, w_rec, w_disc)
+#
+# L4: Attention-only (MLP disabled)
+#     - Test if enhanced attention alone can work
+#     - use_reciprocity=True, use_discoverability=True
+#     - mlp_disabled=True (no MLP at all)
+#
+# L5: Full lens without MLP context
+#     - Reciprocity + Discoverability + Route gate
+#     - use_route_gate=True, mlp_use_ctx_summary=False
+#     - Route gate learns attention vs MLP balance
+#     - Annealing: g: 0.9 → 0.3 (attention-heavy to MLP-heavy)
+#
+# L6: Full lens with low-rank MLP context
+#     - All mechanisms enabled
+#     - mlp_use_ctx_summary=True, mlp_ctx_rank=128
+#     - Low-rank factorization: E→R→mult*E (491K params/layer)
+#     - Parameter-efficient: 5× reduction vs full-rank
+#
+# L7: Full lens with conductor mode
+#     - Context only when MLP-heavy (route_gate < 0.5)
+#     - mlp_ctx_conductor=True
+#     - Adaptive: context usage scales with route gate
+#     - Most parameter-efficient + memory-efficient
+#
+# Parameter overhead summary:
+# - L0: 85.0M (baseline)
+# - L1-L3: 85.0M + 9,444 params (0.01% increase)
+# - L4: 85.0M + 9,444 - MLP params (attention-only)
+# - L5: 85.0M + 9,444 params (0.01% increase)
+# - L6: 90.9M (7% increase, low-rank context)
+# - L7: 90.9M (7% increase, conductor mode)
+#
+# Route gate annealing schedule (L5-L7):
+# - Step 0-2000: g ≈ 0.69 (attention-heavy warmup)
+# - Step 2000-10000: g: 0.69 → 0.27 (linear annealing)
+# - Step 10000+: g ≈ 0.27 (MLP-heavy, 73% KV cache reduction)
+#
+# Victory condition: L6 or L7 achieves comparable validation loss
+# to baseline L0 while learning route_gate ≈ 0.3, demonstrating
+# successful shift to MLP-heavy computation for KV cache reduction.
