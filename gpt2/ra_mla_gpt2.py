@@ -156,19 +156,33 @@ def rope_cache(seq_len, dim, base=10000.0, device="cpu", dtype=torch.float32):
 
 class ReciprocalCoupler(nn.Module):
     """
-    Bidirectional MLP<->Attn coupling with ALiBi-inspired parameter minimalism.
+    Bidirectional MLP<->Attn coupling with parameter-efficient tying options.
 
-    Modes:
-      - untied:       Two independent linear maps (A: attn->mlp, B: mlp->attn)
-      - tied_transpose: One weight W, attn->mlp uses W, mlp->attn uses W.T
-      - per_head_scalar: Per-head scalar gates shared across layers (low-DoF)
+    Three tying modes control parameter count vs expressiveness tradeoff:
+
+    1. untied (most expressive, most parameters):
+       - Two independent linear projections
+       - Parameters: 2 × (hidden_dim × attn_latent_dim)
+       - Example: 2 × (3072 × 128) = ~786K params
+
+    2. tied_transpose (default, balanced):
+       - Single weight matrix W used bidirectionally
+       - attn→mlp uses W^T, mlp→attn uses W
+       - Parameters: hidden_dim × attn_latent_dim
+       - Example: 3072 × 128 = ~393K params (50% reduction)
+
+    3. per_head_scalar (low-parameter, gated):
+       - Linear projections gated by per-head scalars
+       - Same projections as untied, but modulated per-head
+       - Parameters: 2 × (H × L) + 2 × n_heads
+       - Example: 786K + 24 ≈ 786K params, but scalars learn gating
 
     Args:
       hidden_dim: token hidden (MLP) dim
       attn_latent_dim: latent dim used by MLA path (e.g., 128)
       n_heads: number of heads (for per-head scalar mode)
-      tying: tying mode
-      init_scale: initialization scale
+      tying: "untied" | "tied_transpose" | "per_head_scalar"
+      init_scale: initialization scale for linear weights
     """
 
     def __init__(
@@ -198,12 +212,16 @@ class ReciprocalCoupler(nn.Module):
             self.W = nn.Parameter(W)
 
         elif tying == "per_head_scalar":
-            # Low-DoF: per-head scalars for both directions, shared across layers.
-            # We broadcast scalars over latent chunk per head.
+            # Low-DoF: Use linear projections but gate them with per-head scalars.
+            # This gives dimension flexibility while keeping gating parameters minimal.
+            self.attn_to_mlp = nn.Linear(attn_latent_dim, hidden_dim, bias=False)
+            self.mlp_to_attn = nn.Linear(hidden_dim, attn_latent_dim, bias=False)
+            nn.init.normal_(self.attn_to_mlp.weight, std=init_scale)
+            nn.init.normal_(self.mlp_to_attn.weight, std=init_scale)
+
+            # Per-head scalar gates (low-DoF component)
             self.alpha_attn_to_mlp = nn.Parameter(torch.ones(n_heads))
             self.alpha_mlp_to_attn = nn.Parameter(torch.ones(n_heads))
-            # optional normalization factor to keep scales tame
-            self.register_buffer("eps", torch.tensor(1e-6))
         else:
             raise ValueError(f"Unknown tying mode: {tying}")
 
@@ -233,37 +251,31 @@ class ReciprocalCoupler(nn.Module):
             return mlp_enrich, attn_context
 
         elif self.tying == "per_head_scalar":
-            # For per_head_scalar mode, we need to split dimensions
-            # This is a simplified version - assumes divisibility
-            assert (
-                H % self.n_heads == 0
-            ), "hidden_dim must be divisible by n_heads for per_head_scalar mode"
-            assert (
-                L % self.n_heads == 0
-            ), "attn_latent_dim must be divisible by n_heads for per_head_scalar mode"
+            # Per-head scalar mode: Use small linear layers with per-head gating
+            # This is "low-DoF" because we use per-head scalars to gate the projections,
+            # but we still need linear layers to handle dimension mismatch (H != L).
 
+            # Project with learned linear layers (same as untied mode)
+            mlp_enrich_pre = self.attn_to_mlp(attn_latent)  # [B,T,H]
+            attn_context_pre = self.mlp_to_attn(mlp_hidden)  # [B,T,L]
+
+            # Apply per-head scalar gating
+            # Reshape to per-head for broadcasting
             H_per_head = H // self.n_heads
             L_per_head = L // self.n_heads
 
-            # Reshape to per-head
-            mlp_h = mlp_hidden.view(B, T, self.n_heads, H_per_head)
-            attn_h = attn_latent.view(B, T, self.n_heads, L_per_head)
+            # attn->mlp gating
+            mlp_enrich_heads = mlp_enrich_pre.view(B, T, self.n_heads, H_per_head)
+            mlp_enrich = (
+                mlp_enrich_heads * self.alpha_attn_to_mlp.view(1, 1, self.n_heads, 1)
+            ).reshape(B, T, H)
 
-            # Scale per head, broadcast over last dim
-            # attn->mlp: scale attn_latent and project to mlp dim
-            a2m = (attn_h * self.alpha_attn_to_mlp.view(1, 1, self.n_heads, 1)).reshape(
-                B, T, L
-            )
-            # mlp->attn: scale mlp_hidden and project to attn dim
-            m2a = (mlp_h * self.alpha_mlp_to_attn.view(1, 1, self.n_heads, 1)).reshape(
-                B, T, H
-            )
+            # mlp->attn gating
+            attn_context_heads = attn_context_pre.view(B, T, self.n_heads, L_per_head)
+            attn_context = (
+                attn_context_heads * self.alpha_mlp_to_attn.view(1, 1, self.n_heads, 1)
+            ).reshape(B, T, L)
 
-            # Note: this is a simplified version, actual projection would need learned params
-            # For now, just return scaled versions (low-DoF approximation)
-            # In practice, you might want small linear layers here
-            mlp_enrich = torch.zeros_like(mlp_hidden)  # simplified
-            attn_context = torch.zeros_like(attn_latent)  # simplified
             return mlp_enrich, attn_context
 
         else:
@@ -376,8 +388,10 @@ class ReciprocalMLP(nn.Module):
 
         # Mechanism 1: MLP-to-Attention Gating
         if cfg.mlp_attn_gate:
-            self.gate_proj = nn.Linear(self.mlp_dim, cfg.mlp_gate_dim, bias=False)
-            self.gate_to_heads = nn.Linear(cfg.mlp_gate_dim, n_head, bias=False)
+            self.gate_proj = nn.Linear(self.mlp_dim, cfg.mlp_gate_dim, bias=True)
+            self.gate_to_heads = nn.Linear(cfg.mlp_gate_dim, n_head, bias=True)
+            # Initialize bias positive so gates start mostly open
+            nn.init.constant_(self.gate_to_heads.bias, 2.0)
 
         # Mechanism 2: Cross-Token MLP Aggregation with sparsification
         if cfg.mlp_cross_token:
@@ -389,6 +403,8 @@ class ReciprocalMLP(nn.Module):
                 normalize_kept=cfg.mlp_sparse_normalize,
             )
             self.cross_proj = nn.Linear(self.mlp_dim, self.mlp_dim, bias=False)
+            # Learnable mixing weight for cross-token aggregation
+            self.mlp_cross_alpha = nn.Parameter(torch.tensor(cfg.mlp_cross_alpha))
 
         # Mechanism 3: MLP Latent Space Reciprocity with parameter tying
         if cfg.mlp_latent_recip:
@@ -400,6 +416,8 @@ class ReciprocalMLP(nn.Module):
                 n_heads=n_head,
                 tying=cfg.mlp_tying_mode,
             )
+            # Learnable mixing weight for Attention→MLP enrichment (applied in MLP)
+            self.mlp_recip_alpha_mlp = nn.Parameter(torch.tensor(cfg.mlp_recip_alpha))
 
         # Storage for cross-layer communication
         self._attn_gate_context = None  # For mechanism 1
@@ -442,7 +460,7 @@ class ReciprocalMLP(nn.Module):
             mlp_enrich, attn_context = self.coupler(
                 mlp_hidden=hidden, attn_latent=attn_latent
             )
-            hidden = hidden + self.cfg.mlp_recip_alpha * mlp_enrich
+            hidden = hidden + self.mlp_recip_alpha_mlp * mlp_enrich
 
             # Store MLP latent context for attention layer (next block)
             self._mlp_latent_context = attn_context  # [B, T, L_attn]
@@ -452,9 +470,9 @@ class ReciprocalMLP(nn.Module):
             # Use CrossTokenMLPAggregator with sparsification
             cross_context = self.cross_aggregator(hidden, attn_weights)  # [B, T, 4*E]
 
-            # Mix into current hidden state
+            # Mix into current hidden state (learnable mixing weight)
             cross_contribution = self.cross_proj(cross_context)
-            hidden = hidden + self.cfg.mlp_cross_alpha * cross_contribution
+            hidden = hidden + self.mlp_cross_alpha * cross_contribution
 
         # Mechanism 1: MLP-to-Attention Gating
         if self.cfg.mlp_attn_gate:
@@ -577,6 +595,23 @@ class RA_MLA_Attention(nn.Module):
         )
         self._latent_k_export = None  # Export latent K for MLP (mechanism 3)
 
+        # === Reciprocal Attention (RA) Learnable Mixing ===
+        if cfg.ra_alpha > 0.0:
+            # Make ra_alpha learnable - start at config value
+            self.ra_alpha = nn.Parameter(torch.tensor(cfg.ra_alpha))
+        else:
+            # If RA disabled, register as buffer (not trainable)
+            self.register_buffer("ra_alpha", torch.tensor(0.0))
+
+        # === MLP-to-Attention Reciprocity Learnable Mixing ===
+        if cfg.mlp_attn_gate:
+            # Learnable mixing weight for MLP gating (applied in attention)
+            self.mlp_gate_alpha = nn.Parameter(torch.tensor(cfg.mlp_gate_alpha))
+
+        if cfg.mlp_latent_recip:
+            # Learnable mixing weight for MLP→Attention context (applied in attention)
+            self.mlp_recip_alpha_attn = nn.Parameter(torch.tensor(cfg.mlp_recip_alpha))
+
         # === Cross-Token RA (RA-CT) Learnables ===
         if cfg.ra_cross_token:
             # Per-head affine transforms for gating: sigmoid(stat * scale + bias)
@@ -683,8 +718,8 @@ class RA_MLA_Attention(nn.Module):
 
         # === 1a. Apply MLP Latent Reciprocity (Mechanism 3) ===
         if self.cfg.mlp_latent_recip and mlp_latent_context is not None:
-            # Mix MLP latent context into our latent K
-            latent_k_new = latent_k_new + self.cfg.mlp_recip_alpha * mlp_latent_context
+            # Mix MLP latent context into our latent K (learnable mixing weight)
+            latent_k_new = latent_k_new + self.mlp_recip_alpha_attn * mlp_latent_context
 
         # === 2. Concatenate with Past (for autoregressive generation) ===
         if past_key_value is not None:
@@ -735,7 +770,7 @@ class RA_MLA_Attention(nn.Module):
         )
 
         # === 7. Reciprocal Attention (RA) ===
-        if self.cfg.ra_alpha > 0.0:
+        if self.ra_alpha > 0.0:
             # Get all queries (past + current) for reciprocal computation
             if (
                 past_key_value is not None
@@ -777,10 +812,10 @@ class RA_MLA_Attention(nn.Module):
             )
             band_mask = band_mask & causal_mask  # Combine with causal
 
-            # Add reciprocal term within band
+            # Add reciprocal term within band (learnable mixing weight)
             logits = torch.where(
                 band_mask.unsqueeze(0).unsqueeze(0),
-                logits + self.cfg.ra_alpha * logits_recip_curr,
+                logits + self.ra_alpha * logits_recip_curr,
                 logits,
             )
 
@@ -792,8 +827,8 @@ class RA_MLA_Attention(nn.Module):
             # mlp_gate_context: [B, H] - per-head gating weights
             # Reshape for broadcasting: [B, H, 1, 1]
             gate = mlp_gate_context.unsqueeze(-1).unsqueeze(-1)  # [B, H, 1, 1]
-            # Mix gated attention: (1 - α) * attn + α * (attn * gate)
-            attn = (1 - self.cfg.mlp_gate_alpha) * attn + self.cfg.mlp_gate_alpha * (
+            # Mix gated attention with learnable mixing weight
+            attn = (1 - self.mlp_gate_alpha) * attn + self.mlp_gate_alpha * (
                 attn * gate
             )
 
@@ -830,7 +865,7 @@ class RA_MLA_Attention(nn.Module):
             self.attention_entropy = self._compute_entropy(attn)
         if (
             self.cfg.log_reciprocity_score
-            and self.cfg.ra_alpha > 0
+            and self.ra_alpha > 0
             and self.enable_metrics_computation
         ):
             self.reciprocity_score = self._compute_reciprocity(attn)
@@ -861,7 +896,7 @@ class RA_MLA_Attention(nn.Module):
         new_past = None
         if use_cache:
             # Cache last W queries for reciprocal attention
-            if self.cfg.cache_q_window and self.cfg.ra_alpha > 0:
+            if self.cfg.cache_q_window and self.ra_alpha > 0:
                 keep_q = Q[:, -min(T, self.cfg.ra_window) :, :, :]
                 if past_key_value is not None and "q_band" in past_key_value:
                     q_band = past_key_value["q_band"]
