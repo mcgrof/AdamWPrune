@@ -102,6 +102,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from model import GPT, GPTConfig
 from ra_mla_gpt2 import patch_gpt2_with_ra_mla, score_heads_for_prune_gpt2
+from ra_lens_gpt2 import (
+    patch_gpt2_with_lens_attention,
+    apply_route_annealing,
+    get_mean_route_gate,
+)
 
 # Import training utilities from base train.py
 try:
@@ -200,12 +205,32 @@ parser.add_argument(
     help="Use FlashAttention if available",
 )
 
-# Reciprocal MLP configuration
+# Lens-gated architecture option (simplified, parameter-efficient)
+parser.add_argument(
+    "--use-lens",
+    action="store_true",
+    default=False,
+    help="Use lens-gated architecture (reciprocity, discoverability, route gate) instead of complex RA+MLA",
+)
+parser.add_argument(
+    "--lens-ctx-rank",
+    type=int,
+    default=128,
+    help="Low-rank bottleneck for MLP context projection (lens mode only)",
+)
+parser.add_argument(
+    "--lens-ctx-conductor",
+    action="store_true",
+    default=False,
+    help="Conductor mode: only use MLP context when route_gate < 0.5 (lens mode only)",
+)
+
+# Reciprocal MLP configuration (legacy RA+MLA)
 parser.add_argument(
     "--mlp-attn-gate",
     action="store_true",
     default=False,
-    help="Enable mechanism 1: MLP gates attention heads",
+    help="Enable mechanism 1: MLP gates attention heads (legacy RA+MLA)",
 )
 parser.add_argument(
     "--no-mlp-attn-gate",
@@ -649,8 +674,62 @@ if args.ra_mla_ablation_step is not None:
         args.ra_ct_apply = "output"
         args.ra_ct_alpha = 0.2
         args.ra_ct_k = 8  # Not used in entropy mode
+    # ==== Lens-Gated Ablation Steps (Simplified Architecture) ====
+    elif step == "L0":
+        # L0: Baseline (no enhancements)
+        args.use_lens = True
+        args.ra_alpha = 0.0  # Disable reciprocity
+        args.mlp_expansion_ratio = 4.0
+        # Will set use_reciprocity=False, use_discoverability=False in patching
+    elif step == "L1":
+        # L1: Reciprocity only (S^T mixing)
+        args.use_lens = True
+        args.ra_alpha = 0.3  # Enable reciprocity
+        args.mlp_expansion_ratio = 4.0
+        # Will set use_reciprocity=True, use_discoverability=False
+    elif step == "L2":
+        # L2: Discoverability only (column bias)
+        args.use_lens = True
+        args.ra_alpha = 0.0
+        args.mlp_expansion_ratio = 4.0
+        # Will set use_reciprocity=False, use_discoverability=True
+    elif step == "L3":
+        # L3: Reciprocity + Discoverability (lens gates)
+        args.use_lens = True
+        args.ra_alpha = 0.3
+        args.mlp_expansion_ratio = 4.0
+        # Will set use_reciprocity=True, use_discoverability=True
+    elif step == "L4":
+        # L4: Attention-only (MLP disabled)
+        args.use_lens = True
+        args.ra_alpha = 0.3
+        args.mlp_expansion_ratio = 4.0
+        # Will set mlp_disabled=True
+    elif step == "L5":
+        # L5: Full lens (no MLP context)
+        args.use_lens = True
+        args.ra_alpha = 0.3
+        args.mlp_expansion_ratio = 4.0
+        # use_reciprocity=True, use_discoverability=True, use_route_gate=True
+        # mlp_use_ctx_summary=False
+    elif step == "L6":
+        # L6: Full lens + low-rank MLP context (R=128)
+        args.use_lens = True
+        args.ra_alpha = 0.3
+        args.mlp_expansion_ratio = 4.0
+        args.lens_ctx_rank = 128
+        # use_reciprocity=True, use_discoverability=True, use_route_gate=True
+        # mlp_use_ctx_summary=True, mlp_ctx_rank=128
+    elif step == "L7":
+        # L7: Full lens + conductor mode (adaptive context)
+        args.use_lens = True
+        args.ra_alpha = 0.3
+        args.mlp_expansion_ratio = 4.0
+        args.lens_ctx_rank = 128
+        args.lens_ctx_conductor = True
+        # mlp_ctx_conductor=True (context only when route_gate < 0.5)
     else:
-        raise ValueError(f"Invalid ablation step: {step}. Must be 0-18.")
+        raise ValueError(f"Invalid ablation step: {step}. Must be 0-18 or L0-L7.")
 
 # Override RA+MLA config from config.py if available (for test matrix integration)
 # IMPORTANT: Skip config overrides when running ablation study - ablation step has full control
@@ -983,19 +1062,102 @@ def main():
     model_config.dropout = args.dropout
     model = GPT(model_config)
 
-    # Apply RA+MLA patch only if needed
-    # Skip patching for baseline steps (no MLA, no RA, no mechanisms, standard MLP)
-    needs_patch = (
+    # Determine which architecture to use
+    use_lens = getattr(args, "use_lens", False)
+
+    # Apply lens-gated OR legacy RA+MLA patch
+    if use_lens:
+        # === Lens-Gated Architecture (Simplified, Parameter-Efficient) ===
+        # Determine mechanism configuration based on ablation step
+        step = args.ra_mla_ablation_step
+        if step == "L0":
+            # Baseline (no enhancements)
+            use_reciprocity = False
+            use_discoverability = False
+            use_route_gate = False
+            mlp_use_ctx_summary = False
+            mlp_disabled = False
+        elif step == "L1":
+            # Reciprocity only
+            use_reciprocity = True
+            use_discoverability = False
+            use_route_gate = False
+            mlp_use_ctx_summary = False
+            mlp_disabled = False
+        elif step == "L2":
+            # Discoverability only
+            use_reciprocity = False
+            use_discoverability = True
+            use_route_gate = False
+            mlp_use_ctx_summary = False
+            mlp_disabled = False
+        elif step == "L3":
+            # Reciprocity + Discoverability
+            use_reciprocity = True
+            use_discoverability = True
+            use_route_gate = False
+            mlp_use_ctx_summary = False
+            mlp_disabled = False
+        elif step == "L4":
+            # Attention-only (MLP disabled)
+            use_reciprocity = True
+            use_discoverability = True
+            use_route_gate = False
+            mlp_use_ctx_summary = False
+            mlp_disabled = True
+        elif step in ("L5", "L6", "L7"):
+            # Full lens with route gate
+            use_reciprocity = True
+            use_discoverability = True
+            use_route_gate = True
+            mlp_use_ctx_summary = step in ("L6", "L7")  # Context for L6, L7
+            mlp_disabled = False
+        else:
+            # Default: all features
+            use_reciprocity = args.ra_alpha > 0.0
+            use_discoverability = True
+            use_route_gate = True
+            mlp_use_ctx_summary = True
+            mlp_disabled = False
+
+        print("=" * 70)
+        print("Applying Lens-Gated Architecture:")
+        print(f"  Reciprocity (S^T):     {use_reciprocity}")
+        print(f"  Discoverability (d):   {use_discoverability}")
+        print(f"  Route Gate:            {use_route_gate}")
+        print(f"  MLP Context Summary:   {mlp_use_ctx_summary}")
+        if mlp_use_ctx_summary:
+            print(f"    Low-rank bottleneck: R={args.lens_ctx_rank}")
+            print(f"    Conductor mode:      {args.lens_ctx_conductor}")
+        print(f"  MLP Disabled:          {mlp_disabled}")
+        print(f"  MLP Expansion Ratio:   {args.mlp_expansion_ratio}")
+        print("=" * 70)
+
+        model, lens_cfg = patch_gpt2_with_lens_attention(
+            model,
+            use_reciprocity=use_reciprocity,
+            use_discoverability=use_discoverability,
+            use_route_gate=use_route_gate,
+            mlp_use_ctx_summary=mlp_use_ctx_summary,
+            mlp_ctx_detach=True,
+            mlp_expansion_ratio=args.mlp_expansion_ratio,
+            mlp_ctx_rank=args.lens_ctx_rank,
+            mlp_ctx_conductor=args.lens_ctx_conductor,
+            mlp_disabled=mlp_disabled,
+            log_attention_entropy=args.log_metrics,
+        )
+        ra_cfg = lens_cfg  # Alias for compatibility
+
+    elif (
         args.enable_mla
         or args.ra_alpha > 0.0
         or args.mlp_attn_gate
         or args.mlp_cross_token
         or args.mlp_latent_recip
         or getattr(args, "ra_cross_token", False)
-        or args.mlp_expansion_ratio != 4.0  # Non-standard MLP size (e.g., golden ratio)
-    )
-
-    if needs_patch:
+        or args.mlp_expansion_ratio != 4.0
+    ):
+        # === Legacy RA+MLA Architecture (Complex) ===
         print(f"Applying RA+MLA patch:")
         print(
             f"  latent_dim={args.latent_dim}, ra_window={args.ra_window}, ra_alpha={args.ra_alpha}"
@@ -1429,11 +1591,22 @@ def main():
 
         # Print progress (only master process)
         if master_process and iter_num % args.log_interval == 0:
-            print(
-                f"Iter {iter_num:6d} | loss {total_loss:.4f} | time {dt:.1f}ms | lr {lr:.2e}"
-            )
+            # Log route gate if lens-gated
+            if use_lens and use_route_gate:
+                mean_g = get_mean_route_gate(model.module if ddp else model)
+                print(
+                    f"Iter {iter_num:6d} | loss {total_loss:.4f} | time {dt:.1f}ms | lr {lr:.2e} | route_gate {mean_g:.3f}"
+                )
+            else:
+                print(
+                    f"Iter {iter_num:6d} | loss {total_loss:.4f} | time {dt:.1f}ms | lr {lr:.2e}"
+                )
 
         iter_num += 1
+
+        # Apply route gate annealing (lens-gated architecture only)
+        if use_lens and use_route_gate:
+            apply_route_annealing(model.module if ddp else model, iter_num, lens_cfg)
 
     # Save final checkpoint (only master process in DDP mode)
     if master_process:
