@@ -72,8 +72,8 @@
 #   - Lens gates: 3*H params (~36 for GPT-2)
 #   - Discoverability u_h: H*D params (~768 for GPT-2)
 #   - Route gate: 1 param per block
-#   - MLP gating: E + 4*E^2 params (fc_gate layer)
-#   - Overhead: <0.1% parameter increase
+#   - Low-rank MLP context (optional): E*R + R*mult*E (491K with R=128)
+#   - Overhead: 0.01% (mechanisms 1-4), 7% with low-rank context
 #
 # Compute overhead: ZERO extra GEMMs beyond standard transformer
 #
@@ -318,9 +318,8 @@ class GatedMLP(nn.Module):
         E = cfg.d_model
         mult = int(cfg.mlp_expansion_ratio)
 
-        # Standard MLP dimensions (compute-neutral)
+        # Standard MLP dimensions (compute-neutral, matches GPT-2)
         self.fc1 = nn.Linear(E, mult * E)
-        self.fc_gate = nn.Linear(E, mult * E)  # Channel gating
         self.fc2 = nn.Linear(mult * E, E)
 
         # Optional: LOW-RANK context projection (parameter efficient!)
@@ -358,9 +357,9 @@ class GatedMLP(nn.Module):
         Returns:
             mlp_out: [B, T, E]
         """
-        # Standard MLP forward (token-wise)
+        # Standard MLP forward (token-wise, matches GPT-2)
         h = self.fc1(H)  # [B, T, mult*E]
-        g = torch.sigmoid(self.fc_gate(H))  # [B, T, mult*E] - gates
+        h = F.gelu(h)  # Standard GELU activation (no gating)
 
         # Optional: blend in attention context (low-rank projection)
         if (
@@ -382,8 +381,7 @@ class GatedMLP(nn.Module):
                 alpha = self.ctx_alpha.clamp(0.0, 1.0)  # Keep in [0,1]
                 h = (1 - alpha) * h + alpha * ctx_h
 
-        # Gated activation and output
-        h = F.gelu(h) * g
+        # Output projection
         return self.fc2(h)
 
 
@@ -928,19 +926,11 @@ def patch_gpt2_with_lens_attention(
             copy_input_dim = E  # We can only copy the base embedding part
             copy_hidden_dim = min(orig_hidden_dim, new_hidden_dim)
 
-            # Copy fc1 (input -> hidden) - only the embedding part, not context summary part
+            # Copy fc1 (input -> hidden)
             lens_mlp.fc1.weight[:copy_hidden_dim, :copy_input_dim].copy_(
                 original_mlp.c_fc.weight[:copy_hidden_dim, :]
             )
             lens_mlp.fc1.bias[:copy_hidden_dim].copy_(
-                original_mlp.c_fc.bias[:copy_hidden_dim]
-            )
-
-            # Initialize fc_gate similarly (for channel gating)
-            lens_mlp.fc_gate.weight[:copy_hidden_dim, :copy_input_dim].copy_(
-                original_mlp.c_fc.weight[:copy_hidden_dim, :]
-            )
-            lens_mlp.fc_gate.bias[:copy_hidden_dim].copy_(
                 original_mlp.c_fc.bias[:copy_hidden_dim]
             )
 
