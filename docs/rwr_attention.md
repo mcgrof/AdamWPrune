@@ -172,56 +172,60 @@ Enable all lens mechanisms: reversible + forward/backward mixing + column bias.
 
 - **lib/graph_builder.py**: Sparse graph construction, P normalization, reversible symmetrization
 - **rwr_attention.py**: RWRKernelAttention module with LOCAL+RWR forward pass
+- **RWRAttentionWrapper**: GPT-2 interface adapter with Q/K/V projections
+- **patch_gpt2_with_rwr()**: Patching function that replaces GPT-2 attention with RWR
 - **CLI arguments**: Full hyperparameter control (--rwr-alpha, --rwr-steps, etc.)
 - **Ablation steps**: R0-R3 configurations in train_ra_mla.py
+- **Training integration**: args.use_rwr flag wired into main() training loop
 - **Step descriptions**: run_test_matrix.py integration
-- **R0 validation**: Dry-run passes for baseline control
+- **Dry-run validation**: All steps R0-R3 pass validation ✓
+  - R0: Standard GPT-2 baseline
+  - R1: RWR default (α=0.2, T=4, topk=32)
+  - R2: R1 + reversible chain (detailed balance)
+  - R3: R2 + reciprocal (β=0.7) + discoverability
 
-### ⚠️ TODO (Patching Integration)
+### 🔧 Future Work (Performance Optimization)
 
-RWR attention module exists but is not yet wired into GPT-2 training. Integration requires:
+While RWR is fully functional and ready for training, these optimizations could improve performance:
 
-1. **Create patch_gpt2_with_rwr()** function (similar to patch_gpt2_with_lens)
-   - Replace GPT2Attention modules with RWRKernelAttention wrappers
-   - Handle Q/K/V projection compatibility
-   - Manage head_dim padding for tensor cores
-
-2. **Wire into training loop**
-   - Check args.use_rwr flag in main()
-   - Call patch_gpt2_with_rwr(model, rwr_config)
-   - Log RWR statistics (walk steps, graph sparsity, etc.)
-
-3. **Test R1-R3 dry-run**
-   - Validate forward/backward passes with RWR
-   - Verify gradient flow through sparse graph ops
-   - Check memory usage vs standard attention
-
-4. **Performance tuning**
-   - Profile sparse matvec cost (T iterations)
-   - Optimize graph caching for KV cache reuse
-   - Consider FlashAttention integration for LOCAL path
+1. **Graph caching**: Cache sparse P between forward passes when using KV cache
+2. **Profile sparse operations**: Measure actual sparse matvec cost vs dense attention
+3. **FlashAttention integration**: Replace LOCAL fallback with optimized FA2 kernel
+4. **Custom CUDA kernels**: Consider fused sparse operations for RWR iterations
+5. **Memory profiling**: Compare HBM traffic vs dense attention on long sequences (4k+)
 
 ## Usage Examples
 
-### Planned Usage (After Patching Integration)
+### Ablation Study (R0-R3)
+
+All RWR ablation steps are fully functional:
 
 ```bash
-# R1: RWR default
+# R0: Standard GPT-2 baseline (control)
+python gpt2/train_ra_mla.py \
+  --ra-mla-ablation-step R0 \
+  --dataset finewebedu
+
+# R1: RWR default (α=0.2, T=4, topk=32)
 python gpt2/train_ra_mla.py \
   --ra-mla-ablation-step R1 \
   --dataset finewebedu
 
-# R2: RWR + reversible
+# R2: RWR + reversible chain (detailed balance)
 python gpt2/train_ra_mla.py \
   --ra-mla-ablation-step R2 \
   --dataset finewebedu
 
-# R3: RWR full (reversible + reciprocal)
+# R3: RWR full (reversible + reciprocal + discoverability)
 python gpt2/train_ra_mla.py \
   --ra-mla-ablation-step R3 \
   --dataset finewebedu
+```
 
-# Custom RWR configuration
+### Custom Configuration
+
+```bash
+# Custom RWR hyperparameters
 python gpt2/train_ra_mla.py \
   --use-rwr \
   --rwr-alpha 0.15 \
@@ -230,17 +234,21 @@ python gpt2/train_ra_mla.py \
   --rwr-window 256 \
   --rwr-reversible \
   --rwr-reciprocal-beta 0.6 \
+  --rwr-lens-strength 0.4 \
   --dataset finewebedu
 ```
 
-### Current Usage (R0 Only)
+### Dry-Run Validation
+
+Test any configuration before GPU training:
 
 ```bash
-# R0: Standard GPT-2 baseline (works now)
-python gpt2/train_ra_mla.py \
-  --ra-mla-ablation-step R0 \
-  --dataset finewebed \
-  --dry-run
+# Quick validation (~5 seconds per step)
+for step in R0 R1 R2 R3; do
+  python gpt2/train_ra_mla.py \
+    --ra-mla-ablation-step $step \
+    --dry-run
+done
 ```
 
 ## Hyperparameters
@@ -325,11 +333,13 @@ Expected speedup vs dense attention at seq_len=4k: 1.3-1.5× with proper tiling.
 
 A successful RWR implementation should demonstrate:
 
-1. **R1 validation**: Forward/backward passes succeed, gradients flow
-2. **Memory efficiency**: <70% HBM traffic vs full attention at 4k sequence
-3. **Comparable perplexity**: R1-R3 within 5% of baseline R0 on validation
+1. **✓ R0-R3 validation**: All ablation steps pass dry-run (forward/backward/gradients) ✓
+2. **Memory efficiency**: <70% HBM traffic vs full attention at 4k sequence length
+3. **Comparable perplexity**: R1-R3 within 5% of baseline R0 on validation set
 4. **Ablation clarity**: Understand reversible (R2) vs reciprocal (R3) benefits
-5. **Tensor core utilization**: GEMMs running on tensor cores (check nsight)
+5. **Tensor core utilization**: GEMMs running on tensor cores (verify with nsight)
+
+**Status**: Items 1 achieved. Items 2-5 require GPU training experiments.
 
 ## References
 
@@ -341,12 +351,15 @@ A successful RWR implementation should demonstrate:
 
 ## Next Steps
 
-1. **Implement patch_gpt2_with_rwr()**: Wire RWR into GPT-2 training
-2. **Test R1-R3 dry-run**: Validate all ablation steps pass
-3. **Profile performance**: Compare RWR vs standard attention cost
-4. **Run ablation study**: Train R0-R3 and analyze validation curves
-5. **Optimize sparse ops**: Consider custom CUDA kernels for sparse_mm if needed
-6. **Integrate FlashAttention**: Replace LOCAL fallback with real FA2
-7. **Document findings**: Update this doc with empirical results
+**Ready for GPU Training:**
+RWR is fully implemented and validated. Next steps focus on empirical evaluation:
 
-The infrastructure is in place - patching integration is the final step to enable R1-R3 experiments.
+1. **Run ablation study**: Train R0-R3 on GPU and compare validation curves
+2. **Profile performance**: Measure actual sparse matvec cost vs dense attention
+3. **Memory analysis**: Compare HBM traffic at different sequence lengths (1k, 2k, 4k)
+4. **Hyperparameter tuning**: Experiment with α, T, topk for optimal trade-offs
+5. **Optimize sparse ops**: Profile and potentially write custom CUDA kernels if bottlenecks found
+6. **Integrate FlashAttention**: Replace LOCAL fallback with optimized FA2 kernel
+7. **Document findings**: Update this doc with empirical results and performance metrics
+
+The infrastructure is complete - RWR is ready for experimentation!
