@@ -1561,33 +1561,49 @@ def main():
         if args.log_metrics and iter_num % args.log_interval == 0:
             metrics.log(iter_num, model, dt)
 
-            # Log RA-specific metrics to trackers (only master process)
-            if tracker_names and master_process and len(metrics.attention_entropy) > 0:
-                ra_metrics = {
-                    "iteration": iter_num,
-                    "train_loss_step": total_loss,
-                    "learning_rate": lr,
-                    "forward_time_ms": dt,
-                    "memory_mb": (
-                        metrics.memory_allocated[-1] if metrics.memory_allocated else 0
-                    ),
-                }
+        # Log to trackers (only master process)
+        if tracker_names and master_process and iter_num % args.log_interval == 0:
+            # Build metrics dictionary
+            ra_metrics = {
+                "iteration": iter_num,
+                "train_loss_step": total_loss,
+                "learning_rate": lr,
+                "forward_time_ms": dt,
+            }
 
-                # Add RA-specific metrics if available
+            # Add RA-specific metrics if available
+            if args.log_metrics and len(metrics.attention_entropy) > 0:
+                ra_metrics["memory_mb"] = (
+                    metrics.memory_allocated[-1] if metrics.memory_allocated else 0
+                )
                 if metrics.attention_entropy:
                     ra_metrics["attention_entropy"] = metrics.attention_entropy[-1]
                 if metrics.reciprocity_score:
                     ra_metrics["reciprocity_score"] = metrics.reciprocity_score[-1]
 
-                if "trackio" in tracker_names:
-                    import trackio
+            # Add route gate if lens-gated architecture (always track this!)
+            if use_lens and use_route_gate:
+                from ra_lens_gpt2 import analyze_route_gates
 
-                    trackio.log(ra_metrics)
+                mean_g = get_mean_route_gate(model.module if ddp else model)
+                ra_metrics["route_gate_mean"] = mean_g
 
-                if "wandb" in tracker_names:
-                    import wandb
+                # Also log per-layer gates for detailed analysis
+                gate_stats = analyze_route_gates(model.module if ddp else model)
+                if gate_stats:
+                    ra_metrics["route_gate_min"] = gate_stats["min_route_gate"]
+                    ra_metrics["route_gate_max"] = gate_stats["max_route_gate"]
+                    ra_metrics["route_gate_std"] = gate_stats["std_route_gate"]
 
-                    wandb.log(ra_metrics)
+            if "trackio" in tracker_names:
+                import trackio
+
+                trackio.log(ra_metrics)
+
+            if "wandb" in tracker_names:
+                import wandb
+
+                wandb.log(ra_metrics)
 
         # Print progress (only master process)
         if master_process and iter_num % args.log_interval == 0:
