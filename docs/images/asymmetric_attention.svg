@@ -1,15 +1,15 @@
-<svg width="600" height="280" viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg">
-    <text x="300" y="25" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">Standard Attention: Asymmetric Graph</text>
+<svg width="600" height="320" viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg">
+    <text x="300" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">Standard Attention: Asymmetric Graph</text>
 
     <!-- Tokens -->
-    <circle cx="100" cy="125" r="35" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
-    <text x="100" y="133" text-anchor="middle" fill="white" font-size="20" font-weight="bold">i</text>
+    <circle cx="100" cy="140" r="35" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
+    <text x="100" y="148" text-anchor="middle" fill="white" font-size="20" font-weight="bold">i</text>
 
-    <circle cx="300" cy="125" r="35" fill="#5da5a5" stroke="#334d5c" stroke-width="3"/>
-    <text x="300" y="133" text-anchor="middle" fill="white" font-size="20" font-weight="bold">j</text>
+    <circle cx="300" cy="140" r="35" fill="#5da5a5" stroke="#334d5c" stroke-width="3"/>
+    <text x="300" y="148" text-anchor="middle" fill="white" font-size="20" font-weight="bold">j</text>
 
-    <circle cx="500" cy="125" r="35" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
-    <text x="500" y="133" text-anchor="middle" fill="white" font-size="20" font-weight="bold">k</text>
+    <circle cx="500" cy="140" r="35" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="500" y="148" text-anchor="middle" fill="white" font-size="20" font-weight="bold">k</text>
 
     <!-- Asymmetric edges -->
     <defs>
@@ -19,25 +19,25 @@
     </defs>
 
     <!-- i -> j (strong) -->
-    <path d="M 135 105 L 265 105" stroke="#d17a4f" stroke-width="6" marker-end="url(#arrow-asym)"/>
-    <text x="200" y="90" text-anchor="middle" fill="#d17a4f" font-size="14" font-weight="bold">S[i,j] = 0.8</text>
+    <path d="M 135 120 L 265 120" stroke="#d17a4f" stroke-width="6" marker-end="url(#arrow-asym)"/>
+    <text x="200" y="105" text-anchor="middle" fill="#d17a4f" font-size="14" font-weight="bold">S[i,j] = 0.8</text>
 
     <!-- j -> i (weak) -->
-    <path d="M 265 145 L 135 145" stroke="#5da5a5" stroke-width="2" marker-end="url(#arrow-asym)"/>
-    <text x="200" y="175" text-anchor="middle" fill="#5da5a5" font-size="14">S[j,i] = 0.1</text>
+    <path d="M 265 160 L 135 160" stroke="#5da5a5" stroke-width="2" marker-end="url(#arrow-asym)"/>
+    <text x="200" y="190" text-anchor="middle" fill="#5da5a5" font-size="14">S[j,i] = 0.1</text>
 
     <!-- j -> k (medium) -->
-    <path d="M 335 105 L 465 105" stroke="#5da5a5" stroke-width="4" marker-end="url(#arrow-asym)"/>
-    <text x="400" y="90" text-anchor="middle" fill="#5da5a5" font-size="14">S[j,k] = 0.4</text>
+    <path d="M 335 120 L 465 120" stroke="#5da5a5" stroke-width="4" marker-end="url(#arrow-asym)"/>
+    <text x="400" y="105" text-anchor="middle" fill="#5da5a5" font-size="14">S[j,k] = 0.4</text>
 
     <!-- k -> j (medium-weak) -->
-    <path d="M 465 145 L 335 145" stroke="#7a8a99" stroke-width="3" marker-end="url(#arrow-asym)"/>
-    <text x="400" y="175" text-anchor="middle" fill="#7a8a99" font-size="14">S[k,j] = 0.3</text>
+    <path d="M 465 160 L 335 160" stroke="#7a8a99" stroke-width="3" marker-end="url(#arrow-asym)"/>
+    <text x="400" y="190" text-anchor="middle" fill="#7a8a99" font-size="14">S[k,j] = 0.3</text>
 
-    <text x="300" y="230" text-anchor="middle" fill="#c0392b" font-size="16" font-weight="bold">
+    <text x="300" y="250" text-anchor="middle" fill="#c0392b" font-size="16" font-weight="bold">
         ⚠ Asymmetric: S[i,j] ≠ S[j,i]
     </text>
-    <text x="300" y="255" text-anchor="middle" fill="#c0392b" font-size="13">
+    <text x="300" y="280" text-anchor="middle" fill="#c0392b" font-size="13">
         No detailed balance • Inefficient diffusion • Unstable RWR
     </text>
 </svg>

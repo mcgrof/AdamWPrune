@@ -1,27 +1,27 @@
-<svg width="800" height="350" viewBox="0 0 800 350" xmlns="http://www.w3.org/2000/svg">
+<svg width="800" height="400" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
     <!-- PageRank side -->
-    <text x="200" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">PageRank: Global Ranking</text>
+    <text x="200" y="35" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">PageRank: Global Ranking</text>
 
     <!-- Nodes -->
-    <circle cx="200" cy="80" r="25" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
-    <text x="200" y="88" text-anchor="middle" fill="white" font-size="18" font-weight="bold">A</text>
-    <text x="200" y="120" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.35</text>
+    <circle cx="200" cy="90" r="25" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
+    <text x="200" y="98" text-anchor="middle" fill="white" font-size="18" font-weight="bold">A</text>
+    <text x="200" y="130" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.35</text>
 
-    <circle cx="120" cy="170" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
-    <text x="120" y="177" text-anchor="middle" fill="white" font-size="16" font-weight="bold">B</text>
-    <text x="120" y="205" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.15</text>
+    <circle cx="120" cy="185" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="120" y="192" text-anchor="middle" fill="white" font-size="16" font-weight="bold">B</text>
+    <text x="120" y="220" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.15</text>
 
-    <circle cx="280" cy="170" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
-    <text x="280" y="177" text-anchor="middle" fill="white" font-size="16" font-weight="bold">C</text>
-    <text x="280" y="205" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.15</text>
+    <circle cx="280" cy="185" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="280" y="192" text-anchor="middle" fill="white" font-size="16" font-weight="bold">C</text>
+    <text x="280" y="220" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.15</text>
 
-    <circle cx="150" cy="255" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
-    <text x="150" y="262" text-anchor="middle" fill="white" font-size="16" font-weight="bold">D</text>
-    <text x="150" y="290" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.20</text>
+    <circle cx="150" cy="280" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="150" y="287" text-anchor="middle" fill="white" font-size="16" font-weight="bold">D</text>
+    <text x="150" y="315" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.20</text>
 
-    <circle cx="230" cy="255" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
-    <text x="230" y="262" text-anchor="middle" fill="white" font-size="16" font-weight="bold">E</text>
-    <text x="230" y="290" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.15</text>
+    <circle cx="230" cy="280" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="230" y="287" text-anchor="middle" fill="white" font-size="16" font-weight="bold">E</text>
+    <text x="230" y="315" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.15</text>
 
     <!-- Edges -->
     <defs>
@@ -30,42 +30,42 @@
         </marker>
     </defs>
 
-    <path d="M 185 90 L 135 160" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
-    <path d="M 215 90 L 265 160" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
-    <path d="M 128 192 L 143 233" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
-    <path d="M 272 192 L 237 233" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
-    <path d="M 172 253 L 208 253" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
-    <path d="M 155 233 L 195 100" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
-    <path d="M 225 233 L 205 100" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 185 100 L 135 175" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 215 100 L 265 175" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 128 207 L 143 258" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 272 207 L 237 258" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 172 278 L 208 278" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 155 258 L 195 110" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 225 258 L 205 110" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
 
-    <text x="200" y="320" text-anchor="middle" fill="#666" font-size="12">Same importance everywhere</text>
+    <text x="200" y="360" text-anchor="middle" fill="#666" font-size="12">Same importance everywhere</text>
 
     <!-- Divider -->
-    <line x1="400" y1="0" x2="400" y2="350" stroke="#ccc" stroke-width="2" stroke-dasharray="5,5"/>
+    <line x1="400" y1="0" x2="400" y2="400" stroke="#ccc" stroke-width="2" stroke-dasharray="5,5"/>
 
     <!-- RWR side -->
-    <text x="600" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">RWR: Personalized from B</text>
+    <text x="600" y="35" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">RWR: Personalized from B</text>
 
     <!-- Nodes -->
-    <circle cx="600" cy="80" r="25" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
-    <text x="600" y="88" text-anchor="middle" fill="white" font-size="18" font-weight="bold">A</text>
-    <text x="600" y="120" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.25</text>
+    <circle cx="600" cy="90" r="25" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="600" y="98" text-anchor="middle" fill="white" font-size="18" font-weight="bold">A</text>
+    <text x="600" y="130" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.25</text>
 
-    <circle cx="520" cy="170" r="25" fill="#5da5a5" stroke="#334d5c" stroke-width="4"/>
-    <text x="520" y="178" text-anchor="middle" fill="white" font-size="18" font-weight="bold">B</text>
-    <text x="520" y="205" text-anchor="middle" fill="#5da5a5" font-size="13" font-weight="bold">QUERY</text>
+    <circle cx="520" cy="185" r="25" fill="#5da5a5" stroke="#334d5c" stroke-width="4"/>
+    <text x="520" y="193" text-anchor="middle" fill="white" font-size="18" font-weight="bold">B</text>
+    <text x="520" y="220" text-anchor="middle" fill="#5da5a5" font-size="13" font-weight="bold">QUERY</text>
 
-    <circle cx="680" cy="170" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
-    <text x="680" y="177" text-anchor="middle" fill="white" font-size="16" font-weight="bold">C</text>
-    <text x="680" y="205" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.10</text>
+    <circle cx="680" cy="185" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="680" y="192" text-anchor="middle" fill="white" font-size="16" font-weight="bold">C</text>
+    <text x="680" y="220" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.10</text>
 
-    <circle cx="550" cy="255" r="25" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
-    <text x="550" y="263" text-anchor="middle" fill="white" font-size="18" font-weight="bold">D</text>
-    <text x="550" y="290" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.40</text>
+    <circle cx="550" cy="280" r="25" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
+    <text x="550" y="288" text-anchor="middle" fill="white" font-size="18" font-weight="bold">D</text>
+    <text x="550" y="315" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.40</text>
 
-    <circle cx="630" cy="255" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
-    <text x="630" y="262" text-anchor="middle" fill="white" font-size="16" font-weight="bold">E</text>
-    <text x="630" y="290" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.25</text>
+    <circle cx="630" cy="280" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="630" y="287" text-anchor="middle" fill="white" font-size="16" font-weight="bold">E</text>
+    <text x="630" y="315" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.25</text>
 
     <!-- Edges with heat map coloring -->
     <defs>
@@ -74,17 +74,17 @@
         </marker>
     </defs>
 
-    <path d="M 585 90 L 535 160" stroke="#334d5c" stroke-width="2" opacity="0.3"/>
-    <path d="M 615 90 L 665 160" stroke="#334d5c" stroke-width="2" opacity="0.3"/>
-    <path d="M 528 192 L 543 233" stroke="#d17a4f" stroke-width="4" marker-end="url(#arrow-rwr)"/>
-    <path d="M 672 192 L 637 233" stroke="#334d5c" stroke-width="2" opacity="0.3"/>
-    <path d="M 572 253 L 608 253" stroke="#d17a4f" stroke-width="3" opacity="0.6"/>
-    <path d="M 555 233 L 595 100" stroke="#d17a4f" stroke-width="3" opacity="0.5"/>
-    <path d="M 625 233 L 605 100" stroke="#d17a4f" stroke-width="3" opacity="0.5"/>
+    <path d="M 585 100 L 535 175" stroke="#334d5c" stroke-width="2" opacity="0.3"/>
+    <path d="M 615 100 L 665 175" stroke="#334d5c" stroke-width="2" opacity="0.3"/>
+    <path d="M 528 207 L 543 258" stroke="#d17a4f" stroke-width="4" marker-end="url(#arrow-rwr)"/>
+    <path d="M 672 207 L 637 258" stroke="#334d5c" stroke-width="2" opacity="0.3"/>
+    <path d="M 572 278 L 608 278" stroke="#d17a4f" stroke-width="3" opacity="0.6"/>
+    <path d="M 555 258 L 595 110" stroke="#d17a4f" stroke-width="3" opacity="0.5"/>
+    <path d="M 625 258 L 605 110" stroke="#d17a4f" stroke-width="3" opacity="0.5"/>
 
     <!-- Restart arrow -->
-    <path d="M 505 180 Q 480 170 490 155" stroke="#5da5a5" stroke-width="3" fill="none" marker-end="url(#arrow-rwr)" stroke-dasharray="4,4"/>
-    <text x="470" y="165" text-anchor="middle" fill="#5da5a5" font-size="11" font-weight="bold">restart</text>
+    <path d="M 505 195 Q 480 185 490 170" stroke="#5da5a5" stroke-width="3" fill="none" marker-end="url(#arrow-rwr)" stroke-dasharray="4,4"/>
+    <text x="470" y="180" text-anchor="middle" fill="#5da5a5" font-size="11" font-weight="bold">restart</text>
 
-    <text x="600" y="320" text-anchor="middle" fill="#666" font-size="12">Personalized to query B</text>
+    <text x="600" y="360" text-anchor="middle" fill="#666" font-size="12">Personalized to query B</text>
 </svg>
