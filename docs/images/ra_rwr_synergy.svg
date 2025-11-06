@@ -53,10 +53,10 @@
     <text x="500" y="303" font-size="13" fill="#555">• 50-70% reduction via MLP</text>
 
     <!-- Bottom summary -->
-    <text x="425" y="370" text-anchor="middle" font-size="16" font-weight="bold" fill="#334d5c">
+    <text x="425" y="370" text-anchor="middle" font-size="16" font-weight="bold" fill="white" stroke="#334d5c" stroke-width="0.5">
         RA makes RWR mathematically clean. RWR makes attention computationally cheap.
     </text>
-    <text x="425" y="400" text-anchor="middle" font-size="15" fill="#666">
+    <text x="425" y="400" text-anchor="middle" font-size="15" fill="white" stroke="#666" stroke-width="0.5">
         Together: Better models, smaller memory, faster inference.
     </text>
 </svg>
