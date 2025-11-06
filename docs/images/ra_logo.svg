@@ -49,8 +49,8 @@
     <!-- Magnifying glass handle -->
     <line x1="235" y1="235" x2="270" y2="270" stroke="#334d5c" stroke-width="8" stroke-linecap="round"/>
 
-    <!-- Legend text -->
-    <text x="200" y="370" text-anchor="middle" font-size="16" font-weight="bold" fill="#334d5c">
+    <!-- Legend text moved outside circle -->
+    <text x="200" y="395" text-anchor="middle" font-size="20" font-weight="bold" fill="white" stroke="#334d5c" stroke-width="0.5">
         Reciprocal Attention
     </text>
 </svg>
