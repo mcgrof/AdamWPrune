@@ -36,7 +36,7 @@
     <path d="M 375 255 L 470 255" stroke="#334d5c" stroke-width="3" marker-end="url(#arrow-flow)"/>
 
     <!-- Benefits box -->
-    <rect x="470" y="75" width="310" height="230" fill="#f0f9e8" stroke="#27ae60" stroke-width="3" rx="8"/>
+    <rect x="470" y="75" width="310" height="250" fill="#f0f9e8" stroke="#27ae60" stroke-width="3" rx="8"/>
     <text x="625" y="110" text-anchor="middle" font-size="18" font-weight="bold" fill="#27ae60">
         Combined Benefits
     </text>
