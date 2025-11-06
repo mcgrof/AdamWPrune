@@ -131,6 +131,10 @@ class LensConfig:
     init_gate_rec: float = 0.6  # Reciprocity starts small
     init_gate_disc: float = 0.1  # Discoverability starts very small
 
+    # K/V compression (MLA-style) for parameter efficiency
+    use_kv_compression: bool = False  # Compress K/V via low-rank factorization
+    kv_latent_dim: int = 128  # Latent dimension for K/V compression
+
     # Windowing
     causal: bool = True
     ra_window: Optional[int] = None  # Optional local attention band
@@ -184,10 +188,30 @@ class LensGatedAttention(nn.Module):
         self.n_head = H
         self.head_dim = D
 
-        # Standard Q/K/V projections
-        self.q_proj = nn.Linear(E, H * D, bias=False)
-        self.k_proj = nn.Linear(E, H * D, bias=False)
-        self.v_proj = nn.Linear(E, H * D, bias=False)
+        # Q/K/V projections (optionally compressed for parameter efficiency)
+        self.q_proj = nn.Linear(E, H * D, bias=False)  # Q always full rank
+
+        if cfg.use_kv_compression:
+            # Compressed K/V via low-rank factorization (MLA-style)
+            # Saves params: 2*E*H*D -> 2*(E*R + R*H*D)
+            # Example: 2*768*768 = 1.18M -> 2*(768*128 + 128*768) = 392K
+            # Savings: 788K per layer (9.5M total for 12 layers)
+            R = cfg.kv_latent_dim
+            self.k_down = nn.Linear(E, R, bias=False)  # E -> R
+            self.k_up = nn.Linear(R, H * D, bias=False)  # R -> H*D
+            self.v_down = nn.Linear(E, R, bias=False)
+            self.v_up = nn.Linear(R, H * D, bias=False)
+            self.k_proj = None  # Mark as compressed
+            self.v_proj = None
+        else:
+            # Standard full-rank K/V
+            self.k_proj = nn.Linear(E, H * D, bias=False)
+            self.v_proj = nn.Linear(E, H * D, bias=False)
+            self.k_down = None
+            self.k_up = None
+            self.v_down = None
+            self.v_up = None
+
         self.o_proj = nn.Linear(H * D, E, bias=False)
 
         # Per-head lens gates: [w_std, w_rec, w_disc]
@@ -248,8 +272,15 @@ class LensGatedAttention(nn.Module):
 
         # Projections: [B, T, E] -> [B, H, T, D]
         Q = self.q_proj(hidden_states).view(B, T, H, D).transpose(1, 2)
-        K = self.k_proj(hidden_states).view(B, T, H, D).transpose(1, 2)
-        V = self.v_proj(hidden_states).view(B, T, H, D).transpose(1, 2)
+
+        if self.cfg.use_kv_compression:
+            # Compressed K/V: E -> R -> H*D
+            K = self.k_up(self.k_down(hidden_states)).view(B, T, H, D).transpose(1, 2)
+            V = self.v_up(self.v_down(hidden_states)).view(B, T, H, D).transpose(1, 2)
+        else:
+            # Standard full-rank K/V
+            K = self.k_proj(hidden_states).view(B, T, H, D).transpose(1, 2)
+            V = self.v_proj(hidden_states).view(B, T, H, D).transpose(1, 2)
 
         # Base scores (single GEMM)
         S = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(D)  # [B, H, T, T]
@@ -811,6 +842,8 @@ def patch_gpt2_with_lens_attention(
     model,
     use_reciprocity: bool = True,
     use_discoverability: bool = True,
+    use_kv_compression: bool = False,
+    kv_latent_dim: int = 128,
     use_route_gate: bool = True,
     mlp_use_ctx_summary: bool = True,
     mlp_ctx_detach: bool = True,
@@ -832,6 +865,8 @@ def patch_gpt2_with_lens_attention(
         model: HuggingFace GPT-2 model
         use_reciprocity: Enable reciprocal attention (S + w_rec*S^T)
         use_discoverability: Enable column bias from u_h vectors
+        use_kv_compression: Compress K/V via low-rank factorization (parameter-neutral)
+        kv_latent_dim: Latent dimension for K/V compression (default 128)
         use_route_gate: Enable route gating (learn attention vs MLP ratio)
         mlp_use_ctx_summary: Feed attention output to MLP
         mlp_ctx_detach: Stop gradient on context summary
@@ -861,6 +896,8 @@ def patch_gpt2_with_lens_attention(
         head_dim=head_dim,
         use_reciprocity=use_reciprocity,
         use_discoverability=use_discoverability,
+        use_kv_compression=use_kv_compression,
+        kv_latent_dim=kv_latent_dim,
         use_route_gate=use_route_gate,
         mlp_use_ctx_summary=mlp_use_ctx_summary,
         mlp_ctx_detach=mlp_ctx_detach,
@@ -897,10 +934,36 @@ def patch_gpt2_with_lens_attention(
             Wqkv = original_attn.c_attn.weight.data  # [3*n_embd, n_embd]
             E = n_embd
 
-            # Copy Q, K, V projections
+            # Copy Q projection (always full-rank)
             lens_attn.q_proj.weight.copy_(Wqkv[:E, :])  # Q slice
-            lens_attn.k_proj.weight.copy_(Wqkv[E : 2 * E, :])  # K slice
-            lens_attn.v_proj.weight.copy_(Wqkv[2 * E :, :])  # V slice
+
+            if cfg.use_kv_compression:
+                # Compressed K/V: Initialize via SVD factorization of original weights
+                Wk = Wqkv[E : 2 * E, :]  # [E, E]
+                Wv = Wqkv[2 * E :, :]  # [E, E]
+                R = cfg.kv_latent_dim
+
+                # SVD: W ≈ U @ S @ V^T, keep top R components
+                # For W = [E, E], low-rank factorization: W ≈ U[:, :R] @ S[:R, :R] @ V^T[:R, :]
+                Uk, Sk, Vk = torch.svd(Wk)
+                Uv, Sv, Vv = torch.svd(Wv)
+
+                # k_down: [R, E], k_up: [E, R]
+                # SVD: W = U @ S @ V^T ≈ U[:,:R] @ S[:R,:R] @ V[:,:R]^T
+                # Split: W ≈ (U[:,:R] @ sqrt(S)) @ (sqrt(S) @ V[:,:R]^T)
+                lens_attn.k_down.weight.copy_(
+                    (Sk[:R].sqrt().unsqueeze(1) * Vk[:, :R].T)
+                )  # [R, E]
+                lens_attn.k_up.weight.copy_(
+                    (Uk[:, :R] * Sk[:R].sqrt())
+                )  # [E, R]
+
+                lens_attn.v_down.weight.copy_((Sv[:R].sqrt().unsqueeze(1) * Vv[:, :R].T))
+                lens_attn.v_up.weight.copy_((Uv[:, :R] * Sv[:R].sqrt()))
+            else:
+                # Standard full-rank K/V
+                lens_attn.k_proj.weight.copy_(Wqkv[E : 2 * E, :])  # K slice
+                lens_attn.v_proj.weight.copy_(Wqkv[2 * E :, :])  # V slice
 
             # Copy output projection
             lens_attn.o_proj.weight.copy_(original_attn.c_proj.weight.data)

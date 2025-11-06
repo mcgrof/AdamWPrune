@@ -134,25 +134,27 @@ CONFIG_OUTPUT_DIR="test_matrix_results_lens_ablation"
 #     - Route gate learns attention vs MLP balance
 #     - Annealing: g: 0.9 → 0.3 (attention-heavy to MLP-heavy)
 #
-# L6: Full lens with low-rank MLP context
-#     - All mechanisms enabled
+# L6: Full lens + K/V compression (PARAMETER-NEUTRAL!)
+#     - All mechanisms + K/V compression via low-rank factorization
+#     - use_kv_compression=True, kv_latent_dim=128
 #     - mlp_use_ctx_summary=True, mlp_ctx_rank=128
-#     - Low-rank factorization: E→R→mult*E (491K params/layer)
-#     - Parameter-efficient: 5× reduction vs full-rank
+#     - K/V compression saves: ~9.5M params (788K/layer × 12)
+#     - MLP context adds: ~5.9M params (491K/layer × 12)
+#     - NET SAVINGS: 3.6M params vs baseline (2% reduction!)
 #
-# L7: Full lens with conductor mode
-#     - Context only when MLP-heavy (route_gate < 0.5)
+# L7: Full lens + K/V compression + conductor (PARAMETER-NEUTRAL!)
+#     - Same as L6 but context only when MLP-heavy (route_gate < 0.5)
 #     - mlp_ctx_conductor=True
 #     - Adaptive: context usage scales with route gate
-#     - Most parameter-efficient + memory-efficient
+#     - Most memory-efficient during inference
 #
 # Parameter overhead summary:
-# - L0: 85.0M (baseline)
-# - L1-L3: 85.0M + 9,444 params (0.01% increase)
-# - L4: 85.0M + 9,444 - MLP params (attention-only)
-# - L5: 85.0M + 9,444 params (0.01% increase)
-# - L6: 90.9M (7% increase, low-rank context)
-# - L7: 90.9M (7% increase, conductor mode)
+# - L0: 124.4M (baseline with wrapper overhead)
+# - L1-L3: 124.4M + 9,444 params (0.01% increase)
+# - L4: 124.4M - MLP params (attention-only, smaller)
+# - L5: 124.4M + 9,444 params (0.01% increase)
+# - L6: 120.9M (2.8M SAVINGS vs baseline, parameter-neutral!)
+# - L7: 120.9M (2.8M SAVINGS vs baseline, parameter-neutral!)
 #
 # Route gate annealing schedule (L5-L7):
 # - Step 0-2000: g ≈ 0.69 (attention-heavy warmup)
@@ -162,3 +164,5 @@ CONFIG_OUTPUT_DIR="test_matrix_results_lens_ablation"
 # Victory condition: L6 or L7 achieves comparable validation loss
 # to baseline L0 while learning route_gate ≈ 0.3, demonstrating
 # successful shift to MLP-heavy computation for KV cache reduction.
+# Bonus: L6/L7 have 2% fewer parameters than baseline while adding
+# enhanced mechanisms (parameter-neutral design via K/V compression).

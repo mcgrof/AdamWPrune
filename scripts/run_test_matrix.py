@@ -2119,8 +2119,8 @@ def main():
                         "L3": "Lens reciprocity + discoverability",
                         "L4": "Lens attention-only (MLP disabled)",
                         "L5": "Lens full without MLP context (route gate annealing)",
-                        "L6": "Lens full + low-rank MLP context (R=128, 7% overhead)",
-                        "L7": "Lens full + conductor mode (adaptive context)",
+                        "L6": "Lens full + K/V compression (parameter-neutral, 2% savings)",
+                        "L7": "Lens full + K/V compression + conductor (parameter-neutral)",
                     }
                     step_desc = step_descriptions.get(
                         ablation_step, f"Step {ablation_step}"

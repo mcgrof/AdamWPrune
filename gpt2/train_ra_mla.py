@@ -213,6 +213,18 @@ parser.add_argument(
     help="Use lens-gated architecture (reciprocity, discoverability, route gate) instead of complex RA+MLA",
 )
 parser.add_argument(
+    "--lens-kv-compression",
+    action="store_true",
+    default=False,
+    help="Enable K/V compression for parameter-neutral design (lens mode only)",
+)
+parser.add_argument(
+    "--lens-kv-latent-dim",
+    type=int,
+    default=128,
+    help="Latent dimension for K/V compression (lens mode only)",
+)
+parser.add_argument(
     "--lens-ctx-rank",
     type=int,
     default=128,
@@ -713,19 +725,23 @@ if args.ra_mla_ablation_step is not None:
         # use_reciprocity=True, use_discoverability=True, use_route_gate=True
         # mlp_use_ctx_summary=False
     elif step == "L6":
-        # L6: Full lens + low-rank MLP context (R=128)
+        # L6: Full lens + low-rank MLP context (R=128) + K/V compression (parameter-neutral)
         args.use_lens = True
         args.ra_alpha = 0.3
         args.mlp_expansion_ratio = 4.0
         args.lens_ctx_rank = 128
+        args.lens_kv_compression = True  # Parameter-neutral design
+        args.lens_kv_latent_dim = 128
         # use_reciprocity=True, use_discoverability=True, use_route_gate=True
-        # mlp_use_ctx_summary=True, mlp_ctx_rank=128
+        # mlp_use_ctx_summary=True, mlp_ctx_rank=128, use_kv_compression=True
     elif step == "L7":
-        # L7: Full lens + conductor mode (adaptive context)
+        # L7: Full lens + conductor mode + K/V compression (parameter-neutral)
         args.use_lens = True
         args.ra_alpha = 0.3
         args.mlp_expansion_ratio = 4.0
         args.lens_ctx_rank = 128
+        args.lens_kv_compression = True  # Parameter-neutral design
+        args.lens_kv_latent_dim = 128
         args.lens_ctx_conductor = True
         # mlp_ctx_conductor=True (context only when route_gate < 0.5)
     else:
@@ -1124,6 +1140,9 @@ def main():
         print("Applying Lens-Gated Architecture:")
         print(f"  Reciprocity (S^T):     {use_reciprocity}")
         print(f"  Discoverability (d):   {use_discoverability}")
+        print(f"  K/V Compression:       {args.lens_kv_compression}")
+        if args.lens_kv_compression:
+            print(f"    Latent dimension:    R={args.lens_kv_latent_dim}")
         print(f"  Route Gate:            {use_route_gate}")
         print(f"  MLP Context Summary:   {mlp_use_ctx_summary}")
         if mlp_use_ctx_summary:
@@ -1137,6 +1156,8 @@ def main():
             model,
             use_reciprocity=use_reciprocity,
             use_discoverability=use_discoverability,
+            use_kv_compression=args.lens_kv_compression,
+            kv_latent_dim=args.lens_kv_latent_dim,
             use_route_gate=use_route_gate,
             mlp_use_ctx_summary=mlp_use_ctx_summary,
             mlp_ctx_detach=True,
