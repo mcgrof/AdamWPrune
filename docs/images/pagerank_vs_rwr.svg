@@ -53,7 +53,7 @@
 
     <circle cx="520" cy="185" r="25" fill="#5da5a5" stroke="#334d5c" stroke-width="4"/>
     <text x="520" y="193" text-anchor="middle" fill="white" font-size="18" font-weight="bold">B</text>
-    <text x="520" y="220" text-anchor="middle" fill="white" stroke="#5da5a5" stroke-width="0.5" font-size="13" font-weight="bold">QUERY</text>
+    <text x="520" y="240" text-anchor="middle" fill="white" stroke="#5da5a5" stroke-width="0.5" font-size="13" font-weight="bold">QUERY</text>
 
     <circle cx="680" cy="185" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
     <text x="680" y="192" text-anchor="middle" fill="white" font-size="16" font-weight="bold">C</text>
