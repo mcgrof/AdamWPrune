@@ -5,7 +5,7 @@
     <!-- Nodes -->
     <circle cx="200" cy="90" r="25" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
     <text x="200" y="98" text-anchor="middle" fill="white" font-size="18" font-weight="bold">A</text>
-    <text x="200" y="130" text-anchor="middle" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="13">PR: 0.35</text>
+    <text x="200" y="58" text-anchor="middle" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="13">PR: 0.35</text>
 
     <circle cx="120" cy="185" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
     <text x="120" y="192" text-anchor="middle" fill="white" font-size="16" font-weight="bold">B</text>
@@ -49,7 +49,7 @@
     <!-- Nodes -->
     <circle cx="600" cy="90" r="25" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
     <text x="600" y="98" text-anchor="middle" fill="white" font-size="18" font-weight="bold">A</text>
-    <text x="600" y="130" text-anchor="middle" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="13">r: 0.25</text>
+    <text x="600" y="58" text-anchor="middle" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="13">r: 0.25</text>
 
     <circle cx="520" cy="185" r="25" fill="#5da5a5" stroke="#334d5c" stroke-width="4"/>
     <text x="520" y="193" text-anchor="middle" fill="white" font-size="18" font-weight="bold">B</text>
