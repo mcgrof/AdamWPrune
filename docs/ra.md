@@ -14,7 +14,11 @@
 
 ## Acknowledgment: Relationship to Doubly-Stochastic Attention
 
-Reciprocal Attention draws conceptual inspiration from Doubly-Stochastic Attention (DSA) methods, particularly **Sinkformer** and **ESPFormer**, which use Sinkhorn iterations to enforce strict doubly-stochastic constraints (row sums = 1 AND column sums = 1). However, RA takes a fundamentally different approach:
+Reciprocal Attention draws conceptual inspiration from Doubly-Stochastic Attention (DSA) methods, particularly:
+- **Sinkformer** [[Sinkhorn Attention (arXiv:2110.11773)](https://arxiv.org/pdf/2110.11773)]
+- **ESPFormer** [[Extremely Sparse Attention (arXiv:2502.07962)](https://arxiv.org/pdf/2502.07962)]
+
+These methods use Sinkhorn iterations to enforce strict doubly-stochastic constraints (row sums = 1 AND column sums = 1). However, RA takes a fundamentally different approach:
 
 ### Key Differences from Sinkformer/DSA
 
@@ -130,7 +134,7 @@ The implementation supports systematic ablation studies:
 
 ## SinkGD Optimizer
 
-Beyond architecture, we provide SinkGD optimizer that applies Sinkhorn-like gradient normalization:
+Beyond architecture, we provide SinkGD optimizer [[SinkGD: Optimal Transport for Gradient Descent (arXiv:2502.06742)](https://arxiv.org/pdf/2502.06742)] that applies Sinkhorn-like gradient normalization:
 
 ```python
 # Iterative row/column normalization with temperature scaling
@@ -354,3 +358,11 @@ All ablation steps pass dry-run validation. The implementations are ready for GP
 Improve attention quality through reciprocity and discoverability while learning to shift computation from attention to MLP. The result: better model quality with smaller KV cache at inference (target 50-70% reduction).
 
 The route gate explicitly learns this trade-off rather than assuming a fixed ratio. Annealing from attention-heavy to MLP-heavy gives the model time to develop cross-token MLP capabilities before reducing attention reliance.
+
+## References
+
+- **Sinkformer**: Michael E. Sander, Pierre Ablin, Mathieu Blondel, Gabriel Peyré. "Sinkhorn Attention." arXiv:2110.11773, 2021. [PDF](https://arxiv.org/pdf/2110.11773)
+
+- **SinkGD**: Mathieu Blondel, Marco Cuturi. "SinkGD: Optimal Transport for Gradient Descent." arXiv:2502.06742, 2025. [PDF](https://arxiv.org/pdf/2502.06742)
+
+- **ESPFormer**: Anonymous. "Extremely Sparse Attention." arXiv:2502.07962, 2025. [PDF](https://arxiv.org/pdf/2502.07962)
