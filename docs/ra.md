@@ -12,6 +12,39 @@
 
 **Bidirectional Information Flow for Efficient Attention**
 
+## Acknowledgment: Relationship to Doubly-Stochastic Attention
+
+Reciprocal Attention draws conceptual inspiration from Doubly-Stochastic Attention (DSA) methods, particularly **Sinkformer** and **ESPFormer**, which use Sinkhorn iterations to enforce strict doubly-stochastic constraints (row sums = 1 AND column sums = 1). However, RA takes a fundamentally different approach:
+
+### Key Differences from Sinkformer/DSA
+
+**Sinkformer/ESPFormer approach**:
+- Replace softmax with Sinkhorn/ESP normalization
+- Iteratively balance rows and columns: `K_ij ← K_ij / (row_sum_i * col_sum_j)`
+- Result: Doubly-stochastic matrix K (both row and column sums = 1)
+- Computational cost: O(n² × iterations) where iterations ≈ 5-10
+
+**RA approach**:
+- Modify input scores before normalization: `logits = w_std·S + w_rec·S^T + w_disc·d`
+- Apply standard softmax (single pass, non-iterative)
+- Result: Row-stochastic matrix (row sums = 1, column sums generally ≠ 1)
+- Computational cost: O(n²) for transpose + weighted sum, then standard softmax
+
+### Philosophical Distinction
+
+**Sinkformer**: Enforces symmetric importance by replacing the normalization operator. The Sinkhorn algorithm alternately balances rows and columns, implicitly operating on both the matrix and its transpose structure to guarantee strict doubly-stochastic properties.
+
+**RA**: Incorporates reciprocity directly into the scoring mechanism through `S^T`, guided by learned weight `w_rec`. This conceptually aligns with the balance sought by DSA (equal treatment of source and destination importance), but achieves it through score modification rather than normalization replacement.
+
+### Why RA's Approach
+
+1. **Computational efficiency**: Single softmax pass vs iterative Sinkhorn (5-10x faster)
+2. **Learned balance**: `w_rec` allows the model to learn how much reciprocity to apply per head, rather than enforcing strict 1:1 balance
+3. **Compatibility**: Works with standard attention infrastructure (FlashAttention, KV caching)
+4. **Approximate symmetry**: Sufficient for RWR convergence without the overhead of strict doubly-stochastic constraints
+
+The transpose `S^T` captures the essence of bidirectional flow needed for reversible Markov chains, while maintaining the efficiency of standard attention mechanisms.
+
 ## Core Idea
 
 Standard attention uses a forward scoring matrix S. We enhance it with three zero-cost or near-zero-cost mechanisms to improve attention quality and enable efficient KV cache reduction.
