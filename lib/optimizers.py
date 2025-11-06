@@ -841,15 +841,16 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                 else:
                     importance = torch.abs(module.weight.data)
             elif variant == "bitter7":
-                # Bitter lesson variant 7: Second-moment (variance) based
-                # Uses exp_avg_sq to capture gradient variance/uncertainty
+                # Bitter lesson variant 7: Conservative variance-based
+                # Uses fourth root of second moment for stable pruning signal
                 state = optimizer.state.get(module.weight, {})
                 if "exp_avg_sq" in state:
-                    # High variance = uncertain/noisy gradients = less important
-                    # Low variance = consistent gradients = more important
+                    # Variance accumulates slowly (beta2=0.999)
+                    # Fourth root makes it even more conservative
+                    # Finds parameters with consistently small gradients
                     v = state["exp_avg_sq"]
-                    stability = 1.0 / (torch.sqrt(v) + 1e-6)  # Inverse of std
-                    importance = torch.abs(module.weight.data) * stability
+                    variance_importance = (torch.abs(v) + 1e-8) ** 0.25
+                    importance = torch.abs(module.weight.data) * variance_importance
                 else:
                     importance = torch.abs(module.weight.data)
             elif variant == "bitter8":
@@ -994,8 +995,8 @@ def update_adamprune_masks(optimizer, adamprune_state, train_loader, step):
                         elif variant == "bitter7":
                             if "exp_avg_sq" in state:
                                 v = state["exp_avg_sq"]
-                                stability = 1.0 / (torch.sqrt(v) + 1e-6)
-                                importance = torch.abs(module.weight.data) * stability
+                                variance_importance = (torch.abs(v) + 1e-8) ** 0.25
+                                importance = torch.abs(module.weight.data) * variance_importance
                             else:
                                 importance = torch.abs(module.weight.data)
                         elif variant == "bitter8":

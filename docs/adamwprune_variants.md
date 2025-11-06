@@ -15,7 +15,7 @@ AdamWPrune implements several pruning variants following the "bitter lesson" phi
 | bitter4 | Gradient-magnitude + layer-adaptive | Cubic | 13,000 iters (+30%) | ~40-42 |
 | bitter5 | Movement-to-zero | TBD | TBD | TBD |
 | bitter6 | Coherence-weighted | TBD | TBD | TBD |
-| bitter7 | Inverse variance (stability) | TBD | TBD | TBD |
+| bitter7 | Conservative variance-based | TBD | TBD | TBD |
 | bitter8 | Bias-corrected gradient-magnitude | TBD | TBD | TBD |
 | bitter9 | Hybrid multi-signal | TBD | TBD | TBD |
 
@@ -84,16 +84,16 @@ AdamWPrune implements several pruning variants following the "bitter lesson" phi
   - Low coherence = oscillatory gradients = less important
 - **Status**: Implemented but not extensively tested
 
-### bitter7: Inverse Variance (Stability-Based)
-- **Algorithm**: Uses inverse of gradient variance
-- **Importance Score**: `|w| / sqrt(exp_avg_sq)`
-- **Philosophy**: High variance = uncertain/noisy = less important
+### bitter7: Conservative Variance-Based
+- **Algorithm**: Uses fourth root of second moment for stable pruning
+- **Importance Score**: `|w| * (exp_avg_sq^0.25 + eps)`
+- **Philosophy**: Variance accumulates slowly (beta2=0.999), making it conservative
 - **Key Features**:
-  - Inverts second moment to reward stability
-  - High variance gradients indicate less important parameters
-  - Low variance gradients indicate consistent, important updates
-- **Status**: Implemented but not extensively tested
-- **Note**: Conflicts with RATIO variant (v^0.25) from ratio-pruning-variants.md
+  - Fourth root (`^0.25`) provides additional damping
+  - Finds parameters with consistently small gradients over long history
+  - Less susceptible to recent noise compared to momentum-based methods
+  - Most stable pruning signal for long-term low activity detection
+- **Status**: Implemented, high potential for original AdamWPrune goals
 
 ### bitter8: Bias-Corrected Gradient-Magnitude
 - **Algorithm**: Applies Adam's bias correction before scoring
@@ -151,9 +151,9 @@ if "exp_avg" in state and "exp_avg_sq" in state:
     coherence = sqrt(exp_avg**2 / (exp_avg_sq + eps))
     importance = abs(weight) * sqrt(abs(exp_avg) + eps) * coherence
 
-# bitter7: Inverse variance (stability)
+# bitter7: Conservative variance-based
 if "exp_avg_sq" in state:
-    importance = abs(weight) / (sqrt(exp_avg_sq) + eps)
+    importance = abs(weight) * (abs(exp_avg_sq) + eps) ** 0.25
 
 # bitter8: Bias-corrected
 if "exp_avg" in state:
@@ -222,11 +222,3 @@ All variants achieve similar memory savings:
 - **For experimental**: Try bitter5-9 (various Adam state signals, not extensively tested)
 - **Avoid**: bitter0 (overly complex) and bitter2 (no clear benefit)
 
-## Conflict Note: bitter7 Variants
-
-There are TWO different bitter7 definitions:
-
-1. **Implemented in lib/optimizers.py**: `|w| / sqrt(exp_avg_sq)` - Inverse variance (high variance = prune)
-2. **From ratio-pruning-variants.md**: `|w| * (exp_avg_sq^0.25)` - Fourth root variance (low variance = prune)
-
-These produce OPPOSITE pruning decisions. The implemented version rewards stability (low variance = important). The RATIO version from ratio-pruning-variants.md was designed for different goals (golden ratio preservation). User clarification needed on which approach to keep or whether to rename one as bitter10+.
