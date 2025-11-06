@@ -3,11 +3,158 @@
 import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.optimizer import Optimizer
 from collections import deque
 import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# ======================== SinkGD Optimizer ========================
+
+
+class SinkGD(Optimizer):
+    """
+    Sinkhorn-like Gradient Descent (SinkGD).
+
+    Applies entropic optimal transport-inspired normalization to gradients
+    before parameter updates. The gradient transform uses iterative
+    row/column normalization with temperature scaling to encourage
+    structured, balanced updates.
+
+    This can improve optimization geometry in settings where vanilla
+    adaptive methods (Adam/AdamW) exhibit noisy or over-adaptive behavior.
+
+    Args:
+        params: Iterable of parameters to optimize
+        lr: Learning rate (default: 3e-4)
+        weight_decay: Decoupled weight decay (L2 penalty) (default: 0.1)
+        tau: Temperature for Sinkhorn-like smoothing (default: 0.1)
+        n_iter: Number of normalization iterations (default: 5)
+        eps: Numerical stability epsilon (default: 1e-8)
+
+    Reference: Based on Sinkhorn gradient transport concepts for
+    balanced optimization dynamics.
+    """
+
+    def __init__(
+        self,
+        params,
+        lr=3e-4,
+        weight_decay=0.1,
+        tau=0.1,
+        n_iter=5,
+        eps=1e-8,
+    ):
+        if not 0.0 <= lr:
+            raise ValueError(f"Invalid learning rate: {lr}")
+        if not 0.0 <= weight_decay:
+            raise ValueError(f"Invalid weight_decay: {weight_decay}")
+        if not 0.0 < tau:
+            raise ValueError(f"Invalid tau: {tau}")
+        if not 0 <= n_iter:
+            raise ValueError(f"Invalid n_iter: {n_iter}")
+        if not 0.0 < eps:
+            raise ValueError(f"Invalid epsilon: {eps}")
+
+        defaults = dict(
+            lr=lr, weight_decay=weight_decay, tau=tau, n_iter=n_iter, eps=eps
+        )
+        super().__init__(params, defaults)
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        """Perform a single optimization step."""
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+
+        for group in self.param_groups:
+            lr = group["lr"]
+            wd = group["weight_decay"]
+            tau = group["tau"]
+            n_iter = int(group["n_iter"])
+            eps = group["eps"]
+
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+
+                g = p.grad
+
+                # Decoupled weight decay (AdamW-style)
+                if wd != 0.0:
+                    p.add_(p, alpha=-wd * lr)
+
+                # Sinkhorn-like gradient transform
+                g_tilde = _sinkhorn_like_transform(g, tau=tau, n_iter=n_iter, eps=eps)
+
+                # Parameter update
+                p.add_(g_tilde, alpha=-lr)
+
+        return loss
+
+
+def _sinkhorn_like_transform(g, tau=0.1, n_iter=5, eps=1e-8):
+    """
+    Apply Sinkhorn-inspired iterative normalization to gradient tensor.
+
+    This performs alternating row/column normalization with temperature
+    scaling to produce a balanced, entropy-regularized gradient.
+
+    Args:
+        g: Gradient tensor (any shape)
+        tau: Temperature for smoothing (smaller = sharper)
+        n_iter: Number of normalization iterations
+        eps: Numerical stability constant
+
+    Returns:
+        Transformed gradient in original dtype
+    """
+    if n_iter == 0:
+        # Degenerate case: just return normalized gradient
+        return g / (g.abs().mean() + eps)
+
+    orig_dtype = g.dtype
+    orig_device = g.device
+
+    # Work in fp32 for numerical stability
+    v = g.detach().float()
+
+    # Handle scalar and 1D tensors (no row/col structure)
+    if v.ndim < 2:
+        # Simple normalization for 1D
+        v = v / (v.abs().sum().clamp_min(eps))
+        v = torch.tanh(v / max(eps, tau))
+        return v.to(orig_dtype)
+
+    # For 2D+ tensors: iterative row/col normalization
+    # Treat last dim as "columns", second-to-last as "rows"
+    for _ in range(n_iter):
+        # Row normalization (normalize across last dimension)
+        row_norm = v.abs().sum(dim=-1, keepdim=True).clamp_min(eps)
+        v = v / row_norm
+
+        # Column normalization (normalize across second-to-last dimension)
+        if v.ndim >= 2:
+            col_norm = v.abs().sum(dim=-2, keepdim=True).clamp_min(eps)
+            v = v / col_norm
+
+        # Temperature-based smoothing (bounded activation)
+        v = torch.tanh(v / max(eps, tau))
+
+    # Restore scale (optional: preserve gradient magnitude)
+    # Here we use a simple rescaling to match original RMS
+    orig_rms = (g.pow(2).mean().sqrt() + eps).item()
+    curr_rms = (v.pow(2).mean().sqrt() + eps).item()
+    v = v * (orig_rms / curr_rms)
+
+    return v.to(dtype=orig_dtype, device=orig_device)
+
+
+# ======================== Utility Functions ========================
 
 
 def param_groups_for_weight_decay(model, model_type="resnet"):
@@ -371,6 +518,31 @@ def create_optimizer(
         else:
             adamprune_state = None
             logger.info("  - Pruning: Disabled")
+
+    elif optimizer_type == "sinkgd":
+        # SinkGD optimizer with Sinkhorn-like gradient transport
+        sinkgd_lr = getattr(args, "sinkgd_lr", None) if args else None
+        sinkgd_lr = sinkgd_lr if sinkgd_lr is not None else learning_rate
+        sinkgd_wd = getattr(args, "sinkgd_weight_decay", None) if args else None
+        sinkgd_wd = sinkgd_wd if sinkgd_wd is not None else weight_decay
+        sinkgd_tau = getattr(args, "sinkgd_tau", 0.1) if args else 0.1
+        sinkgd_iters = getattr(args, "sinkgd_iters", 5) if args else 5
+        sinkgd_eps = getattr(args, "sinkgd_eps", 1e-8) if args else 1e-8
+
+        optimizer = SinkGD(
+            model.parameters(),
+            lr=sinkgd_lr,
+            weight_decay=sinkgd_wd,
+            tau=sinkgd_tau,
+            n_iter=sinkgd_iters,
+            eps=sinkgd_eps,
+        )
+        logger.info("Using SinkGD optimizer with:")
+        logger.info(f"  - Learning rate: {sinkgd_lr}")
+        logger.info(f"  - Weight decay: {sinkgd_wd}")
+        logger.info(f"  - Temperature (tau): {sinkgd_tau}")
+        logger.info(f"  - Sinkhorn iterations: {sinkgd_iters}")
+        logger.info(f"  - Epsilon: {sinkgd_eps}")
 
     else:  # Default to SGD
         optimizer = torch.optim.SGD(param_groups, lr=learning_rate, momentum=0.9)
