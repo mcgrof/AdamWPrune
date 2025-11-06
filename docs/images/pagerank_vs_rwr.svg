@@ -9,11 +9,11 @@
 
     <circle cx="120" cy="185" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
     <text x="120" y="192" text-anchor="middle" fill="white" font-size="16" font-weight="bold">B</text>
-    <text x="120" y="220" text-anchor="middle" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="13">PR: 0.15</text>
+    <text x="70" y="190" text-anchor="end" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="13">PR: 0.15</text>
 
     <circle cx="280" cy="185" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
     <text x="280" y="192" text-anchor="middle" fill="white" font-size="16" font-weight="bold">C</text>
-    <text x="280" y="220" text-anchor="middle" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="13">PR: 0.15</text>
+    <text x="330" y="190" text-anchor="start" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="13">PR: 0.15</text>
 
     <circle cx="150" cy="280" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
     <text x="150" y="287" text-anchor="middle" fill="white" font-size="16" font-weight="bold">D</text>
