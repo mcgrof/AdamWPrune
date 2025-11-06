@@ -1,0 +1,90 @@
+<svg width="800" height="300" viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg">
+    <!-- PageRank side -->
+    <text x="200" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">PageRank: Global Ranking</text>
+
+    <!-- Nodes -->
+    <circle cx="200" cy="70" r="25" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
+    <text x="200" y="78" text-anchor="middle" fill="white" font-size="18" font-weight="bold">A</text>
+    <text x="200" y="110" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.35</text>
+
+    <circle cx="120" cy="150" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="120" y="157" text-anchor="middle" fill="white" font-size="16" font-weight="bold">B</text>
+    <text x="120" y="185" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.15</text>
+
+    <circle cx="280" cy="150" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="280" y="157" text-anchor="middle" fill="white" font-size="16" font-weight="bold">C</text>
+    <text x="280" y="185" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.15</text>
+
+    <circle cx="150" cy="230" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="150" y="237" text-anchor="middle" fill="white" font-size="16" font-weight="bold">D</text>
+    <text x="150" y="260" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.20</text>
+
+    <circle cx="230" cy="230" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="230" y="237" text-anchor="middle" fill="white" font-size="16" font-weight="bold">E</text>
+    <text x="230" y="260" text-anchor="middle" fill="#334d5c" font-size="13">PR: 0.15</text>
+
+    <!-- Edges -->
+    <defs>
+        <marker id="arrow-pr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#334d5c" />
+        </marker>
+    </defs>
+
+    <path d="M 185 80 L 135 140" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 215 80 L 265 140" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 128 172 L 143 208" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 272 172 L 237 208" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 172 228 L 208 228" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 155 208 L 195 90" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+    <path d="M 225 208 L 205 90" stroke="#334d5c" stroke-width="2" marker-end="url(#arrow-pr)"/>
+
+    <text x="200" y="285" text-anchor="middle" fill="#666" font-size="12">Same importance everywhere</text>
+
+    <!-- Divider -->
+    <line x1="400" y1="0" x2="400" y2="300" stroke="#ccc" stroke-width="2" stroke-dasharray="5,5"/>
+
+    <!-- RWR side -->
+    <text x="600" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">RWR: Personalized from B</text>
+
+    <!-- Nodes -->
+    <circle cx="600" cy="70" r="25" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="600" y="78" text-anchor="middle" fill="white" font-size="18" font-weight="bold">A</text>
+    <text x="600" y="110" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.25</text>
+
+    <circle cx="520" cy="150" r="25" fill="#5da5a5" stroke="#334d5c" stroke-width="4"/>
+    <text x="520" y="158" text-anchor="middle" fill="white" font-size="18" font-weight="bold">B</text>
+    <text x="520" y="185" text-anchor="middle" fill="#5da5a5" font-size="13" font-weight="bold">QUERY</text>
+
+    <circle cx="680" cy="150" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="680" y="157" text-anchor="middle" fill="white" font-size="16" font-weight="bold">C</text>
+    <text x="680" y="185" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.10</text>
+
+    <circle cx="550" cy="230" r="25" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
+    <text x="550" y="238" text-anchor="middle" fill="white" font-size="18" font-weight="bold">D</text>
+    <text x="550" y="260" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.40</text>
+
+    <circle cx="630" cy="230" r="22" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="630" y="237" text-anchor="middle" fill="white" font-size="16" font-weight="bold">E</text>
+    <text x="630" y="260" text-anchor="middle" fill="#334d5c" font-size="13">r: 0.25</text>
+
+    <!-- Edges with heat map coloring -->
+    <defs>
+        <marker id="arrow-rwr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#d17a4f" />
+        </marker>
+    </defs>
+
+    <path d="M 585 80 L 535 140" stroke="#334d5c" stroke-width="2" opacity="0.3"/>
+    <path d="M 615 80 L 665 140" stroke="#334d5c" stroke-width="2" opacity="0.3"/>
+    <path d="M 528 172 L 543 208" stroke="#d17a4f" stroke-width="4" marker-end="url(#arrow-rwr)"/>
+    <path d="M 672 172 L 637 208" stroke="#334d5c" stroke-width="2" opacity="0.3"/>
+    <path d="M 572 228 L 608 228" stroke="#d17a4f" stroke-width="3" opacity="0.6"/>
+    <path d="M 555 208 L 595 90" stroke="#d17a4f" stroke-width="3" opacity="0.5"/>
+    <path d="M 625 208 L 605 90" stroke="#d17a4f" stroke-width="3" opacity="0.5"/>
+
+    <!-- Restart arrow -->
+    <path d="M 505 160 Q 480 150 490 135" stroke="#5da5a5" stroke-width="3" fill="none" marker-end="url(#arrow-rwr)" stroke-dasharray="4,4"/>
+    <text x="470" y="145" text-anchor="middle" fill="#5da5a5" font-size="11" font-weight="bold">restart</text>
+
+    <text x="600" y="285" text-anchor="middle" fill="#666" font-size="12">Personalized to query B</text>
+</svg>

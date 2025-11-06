@@ -1,0 +1,53 @@
+<svg width="600" height="300" viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg">
+    <text x="300" y="25" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">Reciprocal Attention: Symmetric Graph (Reversible)</text>
+
+    <!-- Tokens -->
+    <circle cx="100" cy="150" r="35" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
+    <text x="100" y="158" text-anchor="middle" fill="white" font-size="20" font-weight="bold">i</text>
+
+    <circle cx="300" cy="150" r="35" fill="#5da5a5" stroke="#334d5c" stroke-width="3"/>
+    <text x="300" y="158" text-anchor="middle" fill="white" font-size="20" font-weight="bold">j</text>
+
+    <circle cx="500" cy="150" r="35" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="500" y="158" text-anchor="middle" fill="white" font-size="20" font-weight="bold">k</text>
+
+    <!-- Bidirectional edges -->
+    <defs>
+        <marker id="arrow-bidir-fwd" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <polygon points="0 0, 10 3, 0 6" fill="#d17a4f" />
+        </marker>
+        <marker id="arrow-bidir-rev" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <polygon points="0 0, 10 3, 0 6" fill="#5da5a5" />
+        </marker>
+    </defs>
+
+    <!-- i <-> j -->
+    <path d="M 135 130 L 265 130" stroke="#d17a4f" stroke-width="5" marker-end="url(#arrow-bidir-fwd)"/>
+    <text x="200" y="120" text-anchor="middle" fill="#d17a4f" font-size="13" font-weight="bold">S[i,j] = 0.8</text>
+
+    <path d="M 265 170 L 135 170" stroke="#5da5a5" stroke-width="5" marker-end="url(#arrow-bidir-rev)"/>
+    <text x="200" y="195" text-anchor="middle" fill="#5da5a5" font-size="13" font-weight="bold">S[j,i] = 0.8</text>
+
+    <!-- j <-> k -->
+    <path d="M 335 130 L 465 130" stroke="#5da5a5" stroke-width="4" marker-end="url(#arrow-bidir-fwd)"/>
+    <text x="400" y="120" text-anchor="middle" fill="#5da5a5" font-size="13">S[j,k] = 0.5</text>
+
+    <path d="M 465 170 L 335 170" stroke="#7a8a99" stroke-width="4" marker-end="url(#arrow-bidir-rev)"/>
+    <text x="400" y="195" text-anchor="middle" fill="#7a8a99" font-size="13">S[k,j] = 0.5</text>
+
+    <!-- Combined weight annotation -->
+    <text x="200" y="230" text-anchor="middle" fill="#334d5c" font-size="14">
+        w_std·S[i,j] + w_rec·S[j,i] → symmetric
+    </text>
+
+    <text x="400" y="230" text-anchor="middle" fill="#334d5c" font-size="14">
+        w_std·S[j,k] + w_rec·S[k,j] → symmetric
+    </text>
+
+    <text x="300" y="270" text-anchor="middle" fill="#27ae60" font-size="16" font-weight="bold">
+        ✓ Reversible: Forward and Backward Flows Balanced
+    </text>
+    <text x="300" y="290" text-anchor="middle" fill="#27ae60" font-size="13">
+        Detailed balance • Efficient diffusion • Fast RWR convergence
+    </text>
+</svg>

@@ -1,25 +1,14 @@
 # Reciprocal Attention (RA)
 
-```
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║        ┌───┐                                                ║
-║        │ Q │ ◄─────── Forward Attention (Q·K^T)            ║
-║        └─┬─┘                                                ║
-║          │                                                  ║
-║     ┌────▼────┐         ┌─────────┐                        ║
-║     │    RA   │ ◄──────►│   RWR   │                        ║
-║     │  Core   │         │ Diffuse │                        ║
-║     └────┬────┘         └─────────┘                        ║
-║          │                                                  ║
-║        ┌─▼─┐                                                ║
-║        │ K │ ◄─────── Reciprocal (K·Q^T = S^T)             ║
-║        └───┘                                                ║
-║          ⇅                                                  ║
-║     Discoverability (broadcast important tokens)            ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
-```
+<p align="center">
+  <img src="./images/ra_logo.svg" alt="Reciprocal Attention Logo" width="400"/>
+</p>
+
+<p align="center">
+  <strong style="color: #d17a4f;">●</strong> Forward Attention (Q·K<sup>T</sup>) &nbsp;&nbsp;
+  <strong style="color: #5da5a5;">●</strong> Reciprocal Attention (S<sup>T</sup>) &nbsp;&nbsp;
+  <strong style="color: #5da5a5;">⚬</strong> Discoverability Broadcast
+</p>
 
 **Bidirectional Information Flow for Efficient Attention**
 
@@ -53,35 +42,7 @@ Combined overhead: 9,444 parameters (0.01% of GPT-2 124M).
 
 ## Why Bidirectional Flow Matters
 
-### Standard Attention: Asymmetric Graph
-
-```
-Token i ──────────────> Token j    (S[i,j] = 0.8)
-         strong flow
-
-Token i <────────────── Token j    (S[j,i] = 0.1)
-         weak flow
-
-⚠ Problem: Asymmetric (S[i,j] ≠ S[j,i])
-  - No detailed balance
-  - Information flows unevenly
-  - Poor for diffusion processes
-```
-
-### Reciprocal Attention: Symmetric Graph
-
-```
-Token i ══════════════> Token j    (w_std·S[i,j])
-        <=============
-         (w_rec·S[j,i])
-
-✓ Solution: Symmetric bidirectional flow
-  - Detailed balance satisfied
-  - Even information diffusion
-  - Reversible Markov chain
-```
-
-The combination of S and S^T creates **reversibility**: information flows equally well in both directions, like physical diffusion.
+The combination of S and S^T creates **reversibility**: information flows equally well in both directions, like physical diffusion. This is critical for enabling efficient multi-step reasoning through Random Walk with Restart (RWR).
 
 ## Route Gate: Learning the Ratio
 
@@ -159,59 +120,23 @@ This encourages structured, balanced gradient updates. Ablation steps S0-S3 test
 
 Understanding the difference between PageRank and Random Walk with Restart (RWR) is crucial to understanding why RWR is the natural extension of Reciprocal Attention.
 
+![PageRank vs RWR Comparison](./images/pagerank_vs_rwr.svg)
+
 #### PageRank: Global Importance
 
 PageRank answers: **"How important is this page?"**
 
-```
-┌─────────────────────────────────────┐
-│  PageRank: One Global Score         │
-├─────────────────────────────────────┤
-│  Node A ────────────┐               │
-│    ↑                ↓               │
-│  Node B ──→ Node D  Node C          │
-│    ↑         ↓                      │
-│  Node E ←────┘                      │
-│                                     │
-│  Output: [PR(A)=0.35, PR(B)=0.15,  │
-│           PR(C)=0.15, PR(D)=0.20,  │
-│           PR(E)=0.15]               │
-│                                     │
-│  Same importance everywhere!        │
-└─────────────────────────────────────┘
-
-Stationary: π = αPπ + (1-α)e/n  (uniform teleport)
-```
-
-**Key characteristic**: Computes a **single global score** for each node. PageRank(A) is the same whether you're at node B or node E.
+- **Stationary**: π = αPπ + (1-α)e/n (uniform teleport)
+- **Output**: Single vector π ∈ ℝ^n
+- **Key characteristic**: Computes a **single global score** for each node. PageRank(A) is the same whether you're at node B or node E.
 
 #### RWR: Personalized Relevance
 
 RWR answers: **"How relevant is this page to ME?"**
 
-```
-┌─────────────────────────────────────┐
-│  RWR: Personalized from Query B     │
-├─────────────────────────────────────┤
-│  Node A (r=0.25)                    │
-│    ↑                                │
-│  Node B (QUERY) ════════════════    │
-│    ║                            ║   │
-│    ║  Heavy walks               ║   │
-│    ↓  to neighbors              ↓   │
-│  Node D (r=0.40) ──→ Node E (r=0.25)│
-│                                     │
-│  Output: Personalized to B!         │
-│  [r(B→A)=0.25, r(B→D)=0.40,        │
-│   r(B→E)=0.25, r(B→C)=0.10]       │
-│                                     │
-│  Different query = different scores!│
-└─────────────────────────────────────┘
-
-Stationary: r = αPr + (1-α)e_q  (restart at query q)
-```
-
-**Key characteristic**: Each query node gets its own **personalized view**. Node D scores 0.40 from B's perspective, but would have a different score from A's perspective.
+- **Stationary**: r = αPr + (1-α)e_q (restart at query q)
+- **Output**: Query-specific vector r_q ∈ ℝ^n
+- **Key characteristic**: Each query node gets its own **personalized view**. Node D scores 0.40 from B's perspective, but would have a different score from A's perspective.
 
 #### The Critical Difference
 
@@ -244,23 +169,7 @@ RWR turns RA's reciprocal flow into a diffusion-based, O(n) scalable attention m
 
 Standard attention computes `S = Q @ K.T`, which creates a **directed graph** where edges are asymmetric:
 
-```
-Example: Token Attention Graph
-
-Token i ──────────────> Token j
-       (S[i,j] = 0.8)
-        strong flow
-
-Token i <────────────── Token j
-       (S[j,i] = 0.1)
-        weak flow
-
-Similarly for Token j and Token k:
-Token j ──────────────> Token k    (S[j,k] = 0.4)
-Token j <────────────── Token k    (S[k,j] = 0.3)
-
-⚠ Problem: Asymmetric edges (S[i,j] ≠ S[j,i])
-```
+![Asymmetric Attention Graph](./images/asymmetric_attention.svg)
 
 **Why asymmetry is bad for RWR**:
 
@@ -284,24 +193,7 @@ Token j <────────────── Token k    (S[k,j] = 0.3)
 
 RA adds the transpose `S_rec = S.T` to the attention mechanism. This creates **symmetric bidirectional edges**:
 
-```
-Reciprocal Attention: Balanced Flow
-
-Token i ══════════════> Token j
-       (w_std·S[i,j] = 0.8)
-        <═════════════
-       (w_rec·S[j,i] = 0.8)
-
-Now: Forward flow (i→j) = Backward flow (j→i)
-
-Similarly for Token j and Token k:
-Token j ══════════════> Token k
-       (combined = 0.5)
-        <═════════════
-       (combined = 0.5)
-
-✓ Solution: Symmetric edges satisfy detailed balance
-```
+![Reciprocal Attention Symmetric Graph](./images/reciprocal_attention_symmetric.svg)
 
 **Why this is perfect for RWR**:
 
@@ -363,25 +255,14 @@ r = (1-α)e_q + α * A @ r     # iterative solver
 
 ### The Synergy
 
-```
-┌──────────────────────────────┐
-│ Reciprocal Attention (RA)    │
-│ S + S^T + discoverability    │
-│ → Reversible Markov Chain    │
-└──────────┬───────────────────┘
-           │
-           ▼
-┌──────────────────────────────┐      ┌────────────────────────┐
-│ Random Walk with Restart     │      │  Combined Benefits     │
-│ Multi-step diffusion         │ ───► │  • Bidirectional flow  │
-│ r = αPr + (1-α)e_q          │      │  • O(n) not O(n²)      │
-│ → Sparse O(n) attention      │      │  • 50-70% KV cache ↓   │
-└──────────────────────────────┘      └────────────────────────┘
-```
+![RA + RWR Synergy Diagram](./images/ra_rwr_synergy.svg)
 
 **RA provides reversibility** → RWR converges fast and stably
+
 **RWR provides sparsity** → Reduces O(n²) to O(n) memory
+
 **Together they tile beautifully** → FlashAttention-style SRAM reuse + sparse matvecs
+
 **Route gate shifts to MLP** → Further reduces KV cache pressure
 
 Result: Better quality (multi-hop reasoning) + better efficiency (sparse diffusion) + smaller cache (MLP context).

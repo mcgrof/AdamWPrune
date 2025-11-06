@@ -1,0 +1,43 @@
+<svg width="600" height="250" viewBox="0 0 600 250" xmlns="http://www.w3.org/2000/svg">
+    <text x="300" y="25" text-anchor="middle" font-size="18" font-weight="bold" fill="#334d5c">Standard Attention: Asymmetric Graph</text>
+
+    <!-- Tokens -->
+    <circle cx="100" cy="125" r="35" fill="#d17a4f" stroke="#334d5c" stroke-width="3"/>
+    <text x="100" y="133" text-anchor="middle" fill="white" font-size="20" font-weight="bold">i</text>
+
+    <circle cx="300" cy="125" r="35" fill="#5da5a5" stroke="#334d5c" stroke-width="3"/>
+    <text x="300" y="133" text-anchor="middle" fill="white" font-size="20" font-weight="bold">j</text>
+
+    <circle cx="500" cy="125" r="35" fill="#7a8a99" stroke="#334d5c" stroke-width="3"/>
+    <text x="500" y="133" text-anchor="middle" fill="white" font-size="20" font-weight="bold">k</text>
+
+    <!-- Asymmetric edges -->
+    <defs>
+        <marker id="arrow-asym" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <polygon points="0 0, 10 3, 0 6" fill="#334d5c" />
+        </marker>
+    </defs>
+
+    <!-- i -> j (strong) -->
+    <path d="M 135 110 L 265 110" stroke="#d17a4f" stroke-width="6" marker-end="url(#arrow-asym)"/>
+    <text x="200" y="100" text-anchor="middle" fill="#d17a4f" font-size="14" font-weight="bold">S[i,j] = 0.8</text>
+
+    <!-- j -> i (weak) -->
+    <path d="M 265 140 L 135 140" stroke="#5da5a5" stroke-width="2" marker-end="url(#arrow-asym)"/>
+    <text x="200" y="165" text-anchor="middle" fill="#5da5a5" font-size="14">S[j,i] = 0.1</text>
+
+    <!-- j -> k (medium) -->
+    <path d="M 335 110 L 465 110" stroke="#5da5a5" stroke-width="4" marker-end="url(#arrow-asym)"/>
+    <text x="400" y="100" text-anchor="middle" fill="#5da5a5" font-size="14">S[j,k] = 0.4</text>
+
+    <!-- k -> j (medium-weak) -->
+    <path d="M 465 140 L 335 140" stroke="#7a8a99" stroke-width="3" marker-end="url(#arrow-asym)"/>
+    <text x="400" y="165" text-anchor="middle" fill="#7a8a99" font-size="14">S[k,j] = 0.3</text>
+
+    <text x="300" y="220" text-anchor="middle" fill="#c0392b" font-size="16" font-weight="bold">
+        ⚠ Asymmetric: S[i,j] ≠ S[j,i]
+    </text>
+    <text x="300" y="240" text-anchor="middle" fill="#c0392b" font-size="13">
+        No detailed balance • Inefficient diffusion • Unstable RWR
+    </text>
+</svg>
