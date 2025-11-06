@@ -13,7 +13,11 @@ AdamWPrune implements several pruning variants following the "bitter lesson" phi
 | bitter2 | Pure magnitude | Linear | 12,100 iters (+21%) | ~46.07 |
 | bitter3 | Gradient-magnitude | Cubic | 13,000 iters (+30%) | ~42-44 |
 | bitter4 | Gradient-magnitude + layer-adaptive | Cubic | 13,000 iters (+30%) | ~40-42 |
-| bitter7 | Variance-based (conservative) | TBD | TBD | TBD |
+| bitter5 | Movement-to-zero | TBD | TBD | TBD |
+| bitter6 | Coherence-weighted | TBD | TBD | TBD |
+| bitter7 | Inverse variance (stability) | TBD | TBD | TBD |
+| bitter8 | Bias-corrected gradient-magnitude | TBD | TBD | TBD |
+| bitter9 | Hybrid multi-signal | TBD | TBD | TBD |
 
 ## Detailed Variant Descriptions
 
@@ -62,16 +66,53 @@ AdamWPrune implements several pruning variants following the "bitter lesson" phi
   - More aggressive pruning in redundant later layers
   - Better overall perplexity with same total sparsity
 
-### bitter7: Conservative Variance-Based
-- **Algorithm**: Uses second moment with conservative damping
-- **Importance Score**: `|w| * (exp_avg_sq^0.25 + eps)`
-- **Philosophy**: Variance accumulates slowly (beta2=0.999), making it a conservative signal
+### bitter5: Movement-to-Zero
+- **Algorithm**: Identifies weights Adam is actively pushing toward zero
+- **Importance Score**: `-sign(w) * exp_avg / sqrt(exp_avg_sq) + 0.1 * |w|`
+- **Philosophy**: Prune weights where gradient direction opposes current value
 - **Key Features**:
-  - Fourth root (`^0.25`) provides additional damping
-  - Finds parameters with consistently small gradients over long history
-  - Less susceptible to recent noise compared to momentum-based methods
-  - Most stable pruning signal for long-term low activity detection
-- **When to use**: Very stable pruning that only removes parameters with long-term low activity
+  - Positive movement score = moving toward zero (candidate for pruning)
+  - Blends with small magnitude component for stability
+- **Status**: Implemented but not extensively tested
+
+### bitter6: Coherence-Weighted Gradient-Magnitude
+- **Algorithm**: Penalizes oscillatory gradients using coherence signal
+- **Importance Score**: `|w| * sqrt(|exp_avg|) * sqrt(exp_avg^2 / exp_avg_sq)`
+- **Philosophy**: Coherence (m²/v) measures gradient consistency
+- **Key Features**:
+  - High coherence = consistent gradient direction = important
+  - Low coherence = oscillatory gradients = less important
+- **Status**: Implemented but not extensively tested
+
+### bitter7: Inverse Variance (Stability-Based)
+- **Algorithm**: Uses inverse of gradient variance
+- **Importance Score**: `|w| / sqrt(exp_avg_sq)`
+- **Philosophy**: High variance = uncertain/noisy = less important
+- **Key Features**:
+  - Inverts second moment to reward stability
+  - High variance gradients indicate less important parameters
+  - Low variance gradients indicate consistent, important updates
+- **Status**: Implemented but not extensively tested
+- **Note**: Conflicts with RATIO variant (v^0.25) from ratio-pruning-variants.md
+
+### bitter8: Bias-Corrected Gradient-Magnitude
+- **Algorithm**: Applies Adam's bias correction before scoring
+- **Importance Score**: `|w| * sqrt(|exp_avg / (1 - beta1^t)|)`
+- **Philosophy**: Account for initialization bias in early training
+- **Key Features**:
+  - Uses bias-corrected momentum m_hat
+  - More accurate in early training steps
+- **Status**: Implemented but not extensively tested
+
+### bitter9: Hybrid Multi-Signal
+- **Algorithm**: Combines magnitude, gradient, and movement signals
+- **Importance Score**: `|w| * sqrt(|exp_avg|) - 0.1 * movement_to_zero`
+- **Philosophy**: Robust scoring from multiple complementary signals
+- **Key Features**:
+  - Magnitude: static weight importance
+  - Gradient: dynamic activity importance
+  - Movement: directional update importance
+- **Status**: Implemented but not extensively tested
 
 ## Implementation Details
 
@@ -98,13 +139,31 @@ progress = progress ** 3  # Cubic instead of linear
 current_sparsity = target_sparsity * progress
 ```
 
-### Variance-Based Scoring (bitter7)
+### Variance-Based Scoring (bitter5-9)
 ```python
+# bitter5: Movement to zero
+if "exp_avg" in state and "exp_avg_sq" in state:
+    movement = -(weight.sign() * exp_avg) / (sqrt(exp_avg_sq) + eps)
+    importance = -movement + abs(weight) * 0.1
+
+# bitter6: Coherence-weighted
+if "exp_avg" in state and "exp_avg_sq" in state:
+    coherence = sqrt(exp_avg**2 / (exp_avg_sq + eps))
+    importance = abs(weight) * sqrt(abs(exp_avg) + eps) * coherence
+
+# bitter7: Inverse variance (stability)
 if "exp_avg_sq" in state:
-    variance_importance = (abs(exp_avg_sq) + eps) ** 0.25
-    importance = abs(weight) * variance_importance
-else:
-    importance = abs(weight)
+    importance = abs(weight) / (sqrt(exp_avg_sq) + eps)
+
+# bitter8: Bias-corrected
+if "exp_avg" in state:
+    m_hat = exp_avg / (1 - beta1**step + eps)
+    importance = abs(weight) * sqrt(abs(m_hat) + eps)
+
+# bitter9: Hybrid
+if "exp_avg" in state and "exp_avg_sq" in state:
+    movement = -(weight.sign() * exp_avg) / (sqrt(exp_avg_sq) + eps)
+    importance = abs(weight) * sqrt(abs(exp_avg) + eps) - 0.1 * movement
 ```
 
 ## Usage Examples
@@ -129,11 +188,12 @@ python train.py \
     --max-iters 10000  # Auto-adjusted to 13,000
 ```
 
-### Training with bitter7
+### Training with bitter5-9
 ```bash
+# Any of bitter5, bitter6, bitter7, bitter8, bitter9
 python train.py \
     --optimizer adamwprune \
-    --adamwprune-variant bitter7 \
+    --adamwprune-variant bitter5 \
     --pruning-method state \
     --target-sparsity 0.5 \
     --max-iters 10000
@@ -159,5 +219,14 @@ All variants achieve similar memory savings:
 - **For simplicity**: Use bitter1 (pure magnitude)
 - **For best perplexity**: Use bitter4 (gradient-magnitude + layer-adaptive)
 - **For balanced approach**: Use bitter3 (gradient-magnitude only)
-- **For stable pruning**: Use bitter7 (variance-based, conservative)
+- **For experimental**: Try bitter5-9 (various Adam state signals, not extensively tested)
 - **Avoid**: bitter0 (overly complex) and bitter2 (no clear benefit)
+
+## Conflict Note: bitter7 Variants
+
+There are TWO different bitter7 definitions:
+
+1. **Implemented in lib/optimizers.py**: `|w| / sqrt(exp_avg_sq)` - Inverse variance (high variance = prune)
+2. **From ratio-pruning-variants.md**: `|w| * (exp_avg_sq^0.25)` - Fourth root variance (low variance = prune)
+
+These produce OPPOSITE pruning decisions. The implemented version rewards stability (low variance = important). The RATIO version from ratio-pruning-variants.md was designed for different goals (golden ratio preservation). User clarification needed on which approach to keep or whether to rename one as bitter10+.
