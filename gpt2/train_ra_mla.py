@@ -212,6 +212,15 @@ parser.add_argument(
     default=False,
     help="Use lens-gated architecture (reciprocity, discoverability, route gate) instead of complex RA+MLA",
 )
+
+# RWR (Random Walk with Restart) attention option
+parser.add_argument(
+    "--use-rwr",
+    action="store_true",
+    default=False,
+    help="Use RWR attention (LOCAL+RWR factorization with random walk long-range)",
+)
+
 parser.add_argument(
     "--lens-kv-compression",
     action="store_true",
@@ -424,6 +433,52 @@ parser.add_argument(
 )
 parser.add_argument(
     "--sinkgd-eps", type=float, default=1e-8, help="SinkGD numerical stability epsilon"
+)
+
+# RWR (Random Walk with Restart) Attention configuration
+parser.add_argument(
+    "--rwr-alpha", type=float, default=0.2, help="RWR restart probability"
+)
+parser.add_argument(
+    "--rwr-steps", type=int, default=4, help="RWR number of walk iterations"
+)
+parser.add_argument(
+    "--rwr-topk", type=int, default=32, help="RWR top-k neighbors per query"
+)
+parser.add_argument(
+    "--rwr-threshold", type=float, default=0.0, help="RWR minimum similarity threshold"
+)
+parser.add_argument(
+    "--rwr-reversible", action="store_true", help="Enable RWR reversible chain"
+)
+parser.add_argument(
+    "--rwr-reciprocal-beta",
+    type=float,
+    default=0.5,
+    help="RWR reciprocal mixing (forward/backward saliency)",
+)
+parser.add_argument(
+    "--rwr-lens-strength",
+    type=float,
+    default=0.3,
+    help="RWR lens blending factor γ",
+)
+parser.add_argument(
+    "--rwr-window", type=int, default=128, help="RWR local attention window"
+)
+parser.add_argument(
+    "--rwr-block-size", type=int, default=128, help="RWR SRAM tile size"
+)
+parser.add_argument(
+    "--rwr-head-dim-pad",
+    type=int,
+    default=64,
+    help="RWR head dimension padding multiple",
+)
+parser.add_argument(
+    "--rwr-use-discoverability",
+    action="store_true",
+    help="Enable RWR lens column bias",
 )
 
 # Test matrix compatibility arguments (accepted but ignored for RA+MLA)
@@ -823,9 +878,79 @@ if args.ra_mla_ablation_step is not None:
         args.sinkgd_tau = 0.2
         args.sinkgd_iters = 3
         # SinkGD: softer (higher tau), fewer iterations
+    elif step == "R0":
+        # R0: Standard GPT-2 baseline (control for RWR experiments)
+        # No RWR, no RA, no MLA - pure baseline
+        args.use_lens = False
+        args.use_rwr = False
+        args.enable_mla = False
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.ra_cross_token = False
+        args.mlp_expansion_ratio = 4.0
+        # Control: standard attention for RWR comparison
+    elif step == "R1":
+        # R1: RWR attention default (α=0.2, T=4, topk=32)
+        # Test basic RWR with local + long-range factorization
+        args.use_lens = False
+        args.use_rwr = True
+        args.enable_mla = False
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.ra_cross_token = False
+        args.mlp_expansion_ratio = 4.0
+        args.rwr_alpha = 0.2
+        args.rwr_steps = 4
+        args.rwr_topk = 32
+        args.rwr_window = 128
+        args.rwr_reversible = False
+        args.rwr_reciprocal_beta = 0.5  # Not used unless reversible
+        args.rwr_lens_strength = 0.3
+        # RWR: basic random walk with restart
+    elif step == "R2":
+        # R2: RWR + reversible chain (detailed balance)
+        # Enable P_rev for symmetric walks
+        args.use_lens = False
+        args.use_rwr = True
+        args.enable_mla = False
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.ra_cross_token = False
+        args.mlp_expansion_ratio = 4.0
+        args.rwr_alpha = 0.2
+        args.rwr_steps = 4
+        args.rwr_topk = 32
+        args.rwr_window = 128
+        args.rwr_reversible = True
+        args.rwr_reciprocal_beta = 0.5
+        args.rwr_lens_strength = 0.3
+        # RWR: reversible Markov chain (detailed balance)
+    elif step == "R3":
+        # R3: RWR + reversible + reciprocal (full bidirectional)
+        # Enable P_rev + forward/backward saliency mixing
+        args.use_lens = False
+        args.use_rwr = True
+        args.enable_mla = False
+        args.ra_alpha = 0.0
+        args.mlp_attn_gate = False
+        args.mlp_cross_token = False
+        args.ra_cross_token = False
+        args.mlp_expansion_ratio = 4.0
+        args.rwr_alpha = 0.2
+        args.rwr_steps = 4
+        args.rwr_topk = 32
+        args.rwr_window = 128
+        args.rwr_reversible = True
+        args.rwr_reciprocal_beta = 0.7  # Higher weight on forward
+        args.rwr_lens_strength = 0.3
+        args.rwr_use_discoverability = True  # Enable column bias
+        # RWR: full lens (reversible + reciprocal + discoverability)
     else:
         raise ValueError(
-            f"Invalid ablation step: {step}. Must be 0-18, L0-L7, or S0-S3."
+            f"Invalid ablation step: {step}. Must be 0-18, L0-L7, S0-S3, or R0-R3."
         )
 
 # Override RA+MLA config from config.py if available (for test matrix integration)
