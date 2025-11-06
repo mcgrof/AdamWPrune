@@ -157,19 +157,73 @@ This encourages structured, balanced gradient updates. Ablation steps S0-S3 test
 
 ### PageRank vs RWR: The Foundation
 
-**PageRank**: Global importance (one score per node)
+Understanding the difference between PageRank and Random Walk with Restart (RWR) is crucial to understanding why RWR is the natural extension of Reciprocal Attention.
+
+#### PageRank: Global Importance
+
+PageRank answers: **"How important is this page?"**
+
 ```
-Question: "How important is this page?"
-Output: Single vector π ∈ ℝ^n
+┌─────────────────────────────────────┐
+│  PageRank: One Global Score         │
+├─────────────────────────────────────┤
+│  Node A ────────────┐               │
+│    ↑                ↓               │
+│  Node B ──→ Node D  Node C          │
+│    ↑         ↓                      │
+│  Node E ←────┘                      │
+│                                     │
+│  Output: [PR(A)=0.35, PR(B)=0.15,  │
+│           PR(C)=0.15, PR(D)=0.20,  │
+│           PR(E)=0.15]               │
+│                                     │
+│  Same importance everywhere!        │
+└─────────────────────────────────────┘
+
 Stationary: π = αPπ + (1-α)e/n  (uniform teleport)
 ```
 
-**RWR** (Random Walk with Restart): Personalized relevance
+**Key characteristic**: Computes a **single global score** for each node. PageRank(A) is the same whether you're at node B or node E.
+
+#### RWR: Personalized Relevance
+
+RWR answers: **"How relevant is this page to ME?"**
+
 ```
-Question: "How relevant is this page to ME?"
-Output: Query-specific vector r_q ∈ ℝ^n
+┌─────────────────────────────────────┐
+│  RWR: Personalized from Query B     │
+├─────────────────────────────────────┤
+│  Node A (r=0.25)                    │
+│    ↑                                │
+│  Node B (QUERY) ════════════════    │
+│    ║                            ║   │
+│    ║  Heavy walks               ║   │
+│    ↓  to neighbors              ↓   │
+│  Node D (r=0.40) ──→ Node E (r=0.25)│
+│                                     │
+│  Output: Personalized to B!         │
+│  [r(B→A)=0.25, r(B→D)=0.40,        │
+│   r(B→E)=0.25, r(B→C)=0.10]       │
+│                                     │
+│  Different query = different scores!│
+└─────────────────────────────────────┘
+
 Stationary: r = αPr + (1-α)e_q  (restart at query q)
 ```
+
+**Key characteristic**: Each query node gets its own **personalized view**. Node D scores 0.40 from B's perspective, but would have a different score from A's perspective.
+
+#### The Critical Difference
+
+| Aspect | PageRank | RWR |
+|--------|----------|-----|
+| **Question** | "How important?" | "How relevant to ME?" |
+| **Output** | One vector π for all | Query-specific r_q |
+| **Random Walk** | Teleport to any random page | Always restart at query |
+| **Context** | Global, context-free | Local, query-dependent |
+| **Attention Analogy** | Global token importance | Query-specific attention weights |
+
+**Why this matters for attention**: Standard attention IS query-specific (like RWR), not global (like PageRank). Each query token computes its own attention distribution. RWR is the natural mathematical framework!
 
 ### Why RWR Complements RA
 
@@ -186,15 +240,86 @@ Together they form a reversible Markov chain over tokens. This is computationall
 
 RWR turns RA's reciprocal flow into a diffusion-based, O(n) scalable attention mechanism that fits perfectly into modern GPU memory hierarchies.
 
-### Why Asymmetry is Bad for RWR
+### The Problem: Standard Attention Creates Asymmetric Graphs
 
-Standard attention creates an asymmetric graph where S[i,j] ≠ S[j,i]:
+Standard attention computes `S = Q @ K.T`, which creates a **directed graph** where edges are asymmetric:
 
-- **No Detailed Balance**: Markov chain can't guarantee convergence to nice stationary distribution
-- **Inefficient Diffusion**: Information flows more easily in one direction than the other
-- **Unstable Iterations**: Power iteration for solving r = αPr + (1-α)e_q can oscillate
+```
+Example: Token Attention Graph
 
-RA fixes this by adding S^T, creating symmetric edges that satisfy detailed balance.
+Token i ──────────────> Token j
+       (S[i,j] = 0.8)
+        strong flow
+
+Token i <────────────── Token j
+       (S[j,i] = 0.1)
+        weak flow
+
+Similarly for Token j and Token k:
+Token j ──────────────> Token k    (S[j,k] = 0.4)
+Token j <────────────── Token k    (S[k,j] = 0.3)
+
+⚠ Problem: Asymmetric edges (S[i,j] ≠ S[j,i])
+```
+
+**Why asymmetry is bad for RWR**:
+
+1. **No Detailed Balance**: The Markov chain defined by these asymmetric edges doesn't satisfy the detailed balance condition: `π_i·P_ij ≠ π_j·P_ji`. This means:
+   - No guarantee of convergence to a nice stationary distribution
+   - The stationary distribution may not even exist or be unique
+   - Even if it exists, finding it numerically is unstable
+
+2. **Inefficient Diffusion**: Information flows more easily in one direction than the other:
+   - Token i strongly attends to j (0.8) but j barely attends back to i (0.1)
+   - This creates "attention sinks" where information flows in but doesn't flow back out
+   - Multi-hop reasoning becomes directionally biased
+
+3. **Unstable Power Iteration**: The iterative solver for RWR becomes unreliable:
+   ```python
+   r = (1-α)e_q + α * P @ r  # May oscillate or diverge!
+   ```
+   Without reversibility, this iteration can oscillate between different distributions instead of converging smoothly.
+
+### The Solution: Reciprocal Attention Creates Reversibility
+
+RA adds the transpose `S_rec = S.T` to the attention mechanism. This creates **symmetric bidirectional edges**:
+
+```
+Reciprocal Attention: Balanced Flow
+
+Token i ══════════════> Token j
+       (w_std·S[i,j] = 0.8)
+        <═════════════
+       (w_rec·S[j,i] = 0.8)
+
+Now: Forward flow (i→j) = Backward flow (j→i)
+
+Similarly for Token j and Token k:
+Token j ══════════════> Token k
+       (combined = 0.5)
+        <═════════════
+       (combined = 0.5)
+
+✓ Solution: Symmetric edges satisfy detailed balance
+```
+
+**Why this is perfect for RWR**:
+
+1. **Detailed Balance Satisfied**: The combined transition matrix satisfies:
+   ```
+   π_i · [w_std·S[i,j] + w_rec·S[j,i]] = π_j · [w_std·S[j,i] + w_rec·S[i,j]]
+   ```
+   This guarantees a well-behaved stationary distribution.
+
+2. **Reversible Markov Chain**: Forward and backward flows are balanced, making the chain reversible. This is like physical diffusion where particles flow equally in both directions until equilibrium.
+
+3. **Fast, Stable Convergence**: Power iteration for RWR becomes provably stable:
+   ```python
+   r = (1-α)e_q + α * P_reversible @ r  # Converges exponentially fast!
+   ```
+   Reversible chains have exponential convergence guarantees.
+
+4. **Natural Diffusion**: Information diffuses evenly through the token graph, enabling true multi-hop reasoning without directional bias.
 
 ### The Mathematical Connection
 

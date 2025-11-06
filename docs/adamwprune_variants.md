@@ -99,7 +99,7 @@ AdamWPrune implements several pruning variants following the "bitter lesson" phi
 
 The choice of beta2=0.999 (variance) over beta1=0.9 (momentum) is crucial for stable pruning:
 
-![Gradient EMA Comparison](images/gradient_ema_comparison.png)
+![Gradient EMA Comparison](./images/gradient_ema_comparison.png)
 
 **Key observations from the visualization**:
 
