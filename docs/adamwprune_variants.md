@@ -95,6 +95,37 @@ AdamWPrune implements several pruning variants following the "bitter lesson" phi
   - Most stable pruning signal for long-term low activity detection
 - **Status**: Implemented, high potential for original AdamWPrune goals
 
+#### Why Beta2 Matters for bitter7
+
+The choice of beta2=0.999 (variance) over beta1=0.9 (momentum) is crucial for stable pruning:
+
+![Gradient EMA Comparison](images/gradient_ema_comparison.png)
+
+**Key observations from the visualization**:
+
+1. **Raw gradients are extremely noisy** (gray spikes): Using raw gradients for pruning decisions would be unstable
+
+2. **Beta1=0.8-0.9 (momentum)** tracks recent changes quickly but still shows significant oscillation
+
+3. **Beta2=0.999 (variance)** provides the smoothest signal, filtering out short-term noise while preserving long-term trends
+
+**Why this matters for pruning**:
+- Pruning is an **irreversible decision** - you can't easily recover pruned parameters
+- Momentum (beta1=0.9) responds to ~10 recent steps, making it susceptible to temporary gradient spikes
+- Variance (beta2=0.999) accumulates over ~1000 steps, capturing true long-term parameter activity
+- The fourth root (`^0.25`) further dampens the signal, ensuring only parameters with consistently low gradients are pruned
+
+**Mathematical intuition**:
+```python
+# Momentum: tracks ~10 steps (beta1=0.9)
+# 0.9^10 ≈ 0.35  (35% weight from 10 steps ago)
+
+# Variance: tracks ~1000 steps (beta2=0.999)
+# 0.999^1000 ≈ 0.37  (37% weight from 1000 steps ago!)
+```
+
+This makes bitter7 ideal for production pruning where stability and confidence in pruning decisions is critical.
+
 ### bitter8: Bias-Corrected Gradient-Magnitude
 - **Algorithm**: Applies Adam's bias correction before scoring
 - **Importance Score**: `|w| * sqrt(|exp_avg / (1 - beta1^t)|)`
