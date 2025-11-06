@@ -100,7 +100,24 @@ This encourages structured, balanced gradient updates. Ablation steps S0-S3 test
 
 ## RWR Attention
 
-We also provide an alternative attention mechanism based on Random Walk with Restart that factorizes attention into LOCAL + RWR components:
+### Why RWR Complements RA
+
+Reciprocal attention defines bidirectional information flow between tokens. This implicitly forms a Markov process where each token can walk forward (via Q·K^T) or backward (via K·Q^T). Random Walk with Restart is the natural mathematical extension: it computes how influence diffuses through this bidirectional graph over multiple steps until equilibrium.
+
+**RA provides**: Reversible edges (forward + reverse attention)
+**RWR provides**: Diffusion rule (multi-step propagation with restarts)
+
+Together they form a reversible Markov chain over tokens. This is computationally ideal because:
+
+1. RWR uses iterative sparse matvecs instead of full dense n² attention → O(n) memory/compute
+2. RA's symmetry keeps the chain reversible → stable convergence and easy normalization
+3. FlashAttention-style tiling lets both local walks and sparse RWR steps reuse SRAM-resident tiles and tensor-core-sized GEMMs
+
+RWR turns RA's reciprocal flow into a diffusion-based, O(n) scalable attention mechanism that fits perfectly into modern GPU memory hierarchies.
+
+### Implementation
+
+RWR factorizes attention into LOCAL + RWR components:
 
 ```
 A(q_i) ≈ LOCAL(i) + γ * RWR(i)
