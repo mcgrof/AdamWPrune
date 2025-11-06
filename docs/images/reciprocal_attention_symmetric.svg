@@ -36,11 +36,11 @@
     <text x="400" y="195" text-anchor="middle" fill="#7a8a99" font-size="13">S[k,j] = 0.5</text>
 
     <!-- Combined weight annotation -->
-    <text x="200" y="230" text-anchor="middle" fill="#334d5c" font-size="14">
+    <text x="200" y="230" text-anchor="middle" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="14">
         w_std·S[i,j] + w_rec·S[j,i] → symmetric
     </text>
 
-    <text x="400" y="230" text-anchor="middle" fill="#334d5c" font-size="14">
+    <text x="400" y="230" text-anchor="middle" fill="white" stroke="#334d5c" stroke-width="0.5" font-size="14">
         w_std·S[j,k] + w_rec·S[k,j] → symmetric
     </text>
 
