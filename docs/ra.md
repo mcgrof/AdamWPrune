@@ -1,5 +1,28 @@
 # Reciprocal Attention (RA)
 
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║        ┌───┐                                                ║
+║        │ Q │ ◄─────── Forward Attention (Q·K^T)            ║
+║        └─┬─┘                                                ║
+║          │                                                  ║
+║     ┌────▼────┐         ┌─────────┐                        ║
+║     │    RA   │ ◄──────►│   RWR   │                        ║
+║     │  Core   │         │ Diffuse │                        ║
+║     └────┬────┘         └─────────┘                        ║
+║          │                                                  ║
+║        ┌─▼─┐                                                ║
+║        │ K │ ◄─────── Reciprocal (K·Q^T = S^T)             ║
+║        └───┘                                                ║
+║          ⇅                                                  ║
+║     Discoverability (broadcast important tokens)            ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+**Bidirectional Information Flow for Efficient Attention**
+
 ## Core Idea
 
 Standard attention uses a forward scoring matrix S. We enhance it with three zero-cost or near-zero-cost mechanisms to improve attention quality and enable efficient KV cache reduction.
@@ -27,6 +50,38 @@ The three mechanisms:
 3. **Lens gates**: Softmax over [w_std, w_rec, w_disc] ensures scale stability and learns per-head mixing. Costs 36 parameters.
 
 Combined overhead: 9,444 parameters (0.01% of GPT-2 124M).
+
+## Why Bidirectional Flow Matters
+
+### Standard Attention: Asymmetric Graph
+
+```
+Token i ──────────────> Token j    (S[i,j] = 0.8)
+         strong flow
+
+Token i <────────────── Token j    (S[j,i] = 0.1)
+         weak flow
+
+⚠ Problem: Asymmetric (S[i,j] ≠ S[j,i])
+  - No detailed balance
+  - Information flows unevenly
+  - Poor for diffusion processes
+```
+
+### Reciprocal Attention: Symmetric Graph
+
+```
+Token i ══════════════> Token j    (w_std·S[i,j])
+        <=============
+         (w_rec·S[j,i])
+
+✓ Solution: Symmetric bidirectional flow
+  - Detailed balance satisfied
+  - Even information diffusion
+  - Reversible Markov chain
+```
+
+The combination of S and S^T creates **reversibility**: information flows equally well in both directions, like physical diffusion.
 
 ## Route Gate: Learning the Ratio
 
@@ -100,6 +155,22 @@ This encourages structured, balanced gradient updates. Ablation steps S0-S3 test
 
 ## RWR Attention
 
+### PageRank vs RWR: The Foundation
+
+**PageRank**: Global importance (one score per node)
+```
+Question: "How important is this page?"
+Output: Single vector π ∈ ℝ^n
+Stationary: π = αPπ + (1-α)e/n  (uniform teleport)
+```
+
+**RWR** (Random Walk with Restart): Personalized relevance
+```
+Question: "How relevant is this page to ME?"
+Output: Query-specific vector r_q ∈ ℝ^n
+Stationary: r = αPr + (1-α)e_q  (restart at query q)
+```
+
 ### Why RWR Complements RA
 
 Reciprocal attention defines bidirectional information flow between tokens. This implicitly forms a Markov process where each token can walk forward (via Q·K^T) or backward (via K·Q^T). Random Walk with Restart is the natural mathematical extension: it computes how influence diffuses through this bidirectional graph over multiple steps until equilibrium.
@@ -114,6 +185,81 @@ Together they form a reversible Markov chain over tokens. This is computationall
 3. FlashAttention-style tiling lets both local walks and sparse RWR steps reuse SRAM-resident tiles and tensor-core-sized GEMMs
 
 RWR turns RA's reciprocal flow into a diffusion-based, O(n) scalable attention mechanism that fits perfectly into modern GPU memory hierarchies.
+
+### Why Asymmetry is Bad for RWR
+
+Standard attention creates an asymmetric graph where S[i,j] ≠ S[j,i]:
+
+- **No Detailed Balance**: Markov chain can't guarantee convergence to nice stationary distribution
+- **Inefficient Diffusion**: Information flows more easily in one direction than the other
+- **Unstable Iterations**: Power iteration for solving r = αPr + (1-α)e_q can oscillate
+
+RA fixes this by adding S^T, creating symmetric edges that satisfy detailed balance.
+
+### The Mathematical Connection
+
+In standard attention:
+```python
+A = softmax(Q @ K.T / sqrt(d))  # attention weights
+out = A @ V                      # weighted sum of values
+```
+
+This is equivalent to **one step** of a random walk on the token graph.
+
+With Reciprocal Attention:
+```python
+S = Q @ K.T
+S_rec = S.T
+logits = w_std * S + w_rec * S_rec + w_disc * d
+A = softmax(logits / sqrt(d))
+```
+
+Now A represents a **reversible Markov chain** because:
+- Forward flow (i→j) via S is balanced by reverse flow (j→i) via S^T
+- Learned weights w_std and w_rec control bidirectional mixing
+- Satisfies detailed balance: π_i·A_ij = π_j·A_ji
+
+RWR extends this to multi-step diffusion:
+```python
+# RWR stationary distribution for query q
+r = (1-α)e_q + α * A @ r     # iterative solver
+# Converges FAST because A is reversible!
+```
+
+### Computational Benefits
+
+| Aspect | Standard Attention | RA + RWR |
+|--------|-------------------|----------|
+| QK^T Complexity | O(n²d) - full matrix | O(nkd) - local + sparse (k≪n) |
+| Memory | O(n²) for attention matrix | O(nk) for local + sparse graph |
+| Long-range | Direct QK^T scoring | Multi-hop diffusion via RWR |
+| KV Cache | Full history: O(nd) | Reduced via MLP context: 50-70% savings |
+| Convergence | N/A (single pass) | Fast (reversible chain) |
+
+### The Synergy
+
+```
+┌──────────────────────────────┐
+│ Reciprocal Attention (RA)    │
+│ S + S^T + discoverability    │
+│ → Reversible Markov Chain    │
+└──────────┬───────────────────┘
+           │
+           ▼
+┌──────────────────────────────┐      ┌────────────────────────┐
+│ Random Walk with Restart     │      │  Combined Benefits     │
+│ Multi-step diffusion         │ ───► │  • Bidirectional flow  │
+│ r = αPr + (1-α)e_q          │      │  • O(n) not O(n²)      │
+│ → Sparse O(n) attention      │      │  • 50-70% KV cache ↓   │
+└──────────────────────────────┘      └────────────────────────┘
+```
+
+**RA provides reversibility** → RWR converges fast and stably
+**RWR provides sparsity** → Reduces O(n²) to O(n) memory
+**Together they tile beautifully** → FlashAttention-style SRAM reuse + sparse matvecs
+**Route gate shifts to MLP** → Further reduces KV cache pressure
+
+Result: Better quality (multi-hop reasoning) + better efficiency (sparse diffusion) + smaller cache (MLP context).
 
 ### Implementation
 
