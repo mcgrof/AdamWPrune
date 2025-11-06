@@ -322,7 +322,7 @@ Improve attention quality through reciprocity and discoverability while learning
 
 The route gate explicitly learns this trade-off rather than assuming a fixed ratio. Annealing from attention-heavy to MLP-heavy gives the model time to develop cross-token MLP capabilities before reducing attention reliance.
 
-## Acknowledgment: Relationship to Doubly-Stochastic Attention
+## Relationship to Doubly-Stochastic Attention
 
 Reciprocal Attention draws conceptual inspiration from Doubly-Stochastic Attention (DSA) methods, particularly:
 - **Sinkformer** [[Sinkhorn Attention (arXiv:2110.11773)](https://arxiv.org/pdf/2110.11773)]

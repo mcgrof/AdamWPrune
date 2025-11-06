@@ -1,4 +1,4 @@
-<svg width="800" height="400" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+<svg width="850" height="450" viewBox="0 0 850 450" xmlns="http://www.w3.org/2000/svg">
     <defs>
         <marker id="arrow-flow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" fill="#334d5c" />
@@ -6,57 +6,57 @@
     </defs>
 
     <!-- RA Layer -->
-    <rect x="50" y="50" width="300" height="100" fill="#ffe6e6" stroke="#d17a4f" stroke-width="3" rx="8"/>
-    <text x="200" y="85" text-anchor="middle" font-size="18" font-weight="bold" fill="#d17a4f">
+    <rect x="75" y="75" width="300" height="100" fill="#ffe6e6" stroke="#d17a4f" stroke-width="3" rx="8"/>
+    <text x="225" y="110" text-anchor="middle" font-size="18" font-weight="bold" fill="#d17a4f">
         Reciprocal Attention (RA)
     </text>
-    <text x="200" y="110" text-anchor="middle" font-size="14" fill="#333">
+    <text x="225" y="135" text-anchor="middle" font-size="14" fill="#333">
         S + S^T + discoverability
     </text>
-    <text x="200" y="130" text-anchor="middle" font-size="13" fill="#666">
+    <text x="225" y="155" text-anchor="middle" font-size="13" fill="#666">
         → Reversible Markov Chain
     </text>
 
     <!-- Arrow down -->
-    <path d="M 200 150 L 200 180" stroke="#334d5c" stroke-width="3" marker-end="url(#arrow-flow)"/>
+    <path d="M 225 175 L 225 205" stroke="#334d5c" stroke-width="3" marker-end="url(#arrow-flow)"/>
 
     <!-- RWR Layer -->
-    <rect x="50" y="180" width="300" height="100" fill="#e0f2f7" stroke="#5da5a5" stroke-width="3" rx="8"/>
-    <text x="200" y="215" text-anchor="middle" font-size="18" font-weight="bold" fill="#5da5a5">
+    <rect x="75" y="205" width="300" height="100" fill="#e0f2f7" stroke="#5da5a5" stroke-width="3" rx="8"/>
+    <text x="225" y="240" text-anchor="middle" font-size="18" font-weight="bold" fill="#5da5a5">
         Random Walk with Restart (RWR)
     </text>
-    <text x="200" y="240" text-anchor="middle" font-size="14" fill="#333">
+    <text x="225" y="265" text-anchor="middle" font-size="14" fill="#333">
         Multi-step diffusion: r = αPr + (1-α)e_q
     </text>
-    <text x="200" y="260" text-anchor="middle" font-size="13" fill="#666">
+    <text x="225" y="285" text-anchor="middle" font-size="13" fill="#666">
         → Sparse O(n) attention
     </text>
 
     <!-- Arrow right -->
-    <path d="M 350 230 L 440 230" stroke="#334d5c" stroke-width="3" marker-end="url(#arrow-flow)"/>
+    <path d="M 375 255 L 470 255" stroke="#334d5c" stroke-width="3" marker-end="url(#arrow-flow)"/>
 
     <!-- Benefits box -->
-    <rect x="440" y="50" width="310" height="230" fill="#f0f9e8" stroke="#27ae60" stroke-width="3" rx="8"/>
-    <text x="595" y="85" text-anchor="middle" font-size="18" font-weight="bold" fill="#27ae60">
+    <rect x="470" y="75" width="310" height="230" fill="#f0f9e8" stroke="#27ae60" stroke-width="3" rx="8"/>
+    <text x="625" y="110" text-anchor="middle" font-size="18" font-weight="bold" fill="#27ae60">
         Combined Benefits
     </text>
 
-    <text x="460" y="120" font-size="14" fill="#333" font-weight="bold">✓ Quality:</text>
-    <text x="470" y="140" font-size="13" fill="#555">• Bidirectional flow</text>
-    <text x="470" y="158" font-size="13" fill="#555">• Multi-hop reasoning</text>
+    <text x="490" y="145" font-size="14" fill="#333" font-weight="bold">✓ Quality:</text>
+    <text x="500" y="165" font-size="13" fill="#555">• Bidirectional flow</text>
+    <text x="500" y="183" font-size="13" fill="#555">• Multi-hop reasoning</text>
 
-    <text x="460" y="190" font-size="14" fill="#333" font-weight="bold">✓ Efficiency:</text>
-    <text x="470" y="210" font-size="13" fill="#555">• O(n) memory not O(n²)</text>
-    <text x="470" y="228" font-size="13" fill="#555">• Fast convergence</text>
+    <text x="490" y="215" font-size="14" fill="#333" font-weight="bold">✓ Efficiency:</text>
+    <text x="500" y="235" font-size="13" fill="#555">• O(n) memory not O(n²)</text>
+    <text x="500" y="253" font-size="13" fill="#555">• Fast convergence</text>
 
-    <text x="460" y="260" font-size="14" fill="#333" font-weight="bold">✓ KV Cache:</text>
-    <text x="470" y="278" font-size="13" fill="#555">• 50-70% reduction via MLP</text>
+    <text x="490" y="285" font-size="14" fill="#333" font-weight="bold">✓ KV Cache:</text>
+    <text x="500" y="303" font-size="13" fill="#555">• 50-70% reduction via MLP</text>
 
     <!-- Bottom summary -->
-    <text x="400" y="340" text-anchor="middle" font-size="16" font-weight="bold" fill="#334d5c">
+    <text x="425" y="370" text-anchor="middle" font-size="16" font-weight="bold" fill="#334d5c">
         RA makes RWR mathematically clean. RWR makes attention computationally cheap.
     </text>
-    <text x="400" y="365" text-anchor="middle" font-size="15" fill="#666">
+    <text x="425" y="400" text-anchor="middle" font-size="15" fill="#666">
         Together: Better models, smaller memory, faster inference.
     </text>
 </svg>
