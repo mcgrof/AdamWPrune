@@ -319,3 +319,173 @@ def analyze_rwr_stats(model: nn.Module) -> dict:
         stats["avg_lens_strength"] /= count
 
     return stats
+
+
+# ======================== GPT-2 Patching ========================
+
+
+class RWRAttentionWrapper(nn.Module):
+    """
+    Wrapper that adapts RWRKernelAttention to GPT-2 attention interface.
+
+    Handles Q/K/V projections and output projection to match GPT-2 API.
+    """
+
+    def __init__(
+        self,
+        n_embd: int,
+        n_head: int,
+        rwr_attn: RWRKernelAttention,
+        original_attn,
+    ):
+        super().__init__()
+        self.n_embd = n_embd
+        self.n_head = n_head
+        self.head_dim = n_embd // n_head
+
+        # RWR attention core
+        self.rwr_attn = rwr_attn
+
+        # Q/K/V projections (copy from original)
+        self.c_attn = original_attn.c_attn  # [3*n_embd, n_embd]
+        self.c_proj = original_attn.c_proj  # [n_embd, n_embd]
+
+        # Dropout (copy config)
+        self.attn_dropout = original_attn.attn_dropout
+        self.resid_dropout = original_attn.resid_dropout
+
+        # Config
+        self.bias = getattr(original_attn, "bias", None)  # Causal mask buffer
+
+    def forward(
+        self,
+        hidden_states,
+        layer_past=None,
+        attention_mask=None,
+        head_mask=None,
+        use_cache=False,
+        output_attentions=False,
+    ):
+        """GPT-2 compatible forward pass."""
+        B, T, E = hidden_states.shape
+
+        # Project Q, K, V
+        qkv = self.c_attn(hidden_states)  # [B, T, 3*E]
+        q, k, v = qkv.split(self.n_embd, dim=-1)  # Each [B, T, E]
+
+        # Reshape to [B, H, T, D]
+        q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+        k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+        v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+
+        # Handle KV cache
+        if layer_past is not None:
+            past_key, past_value = layer_past
+            k = torch.cat([past_key, k], dim=-2)
+            v = torch.cat([past_value, v], dim=-2)
+
+        present = (k, v) if use_cache else None
+
+        # RWR attention
+        causal_mask = True  # GPT-2 is always causal
+        attn_output = self.rwr_attn(q, k, v, causal_mask=causal_mask)  # [B, H, T, D]
+
+        # Reshape back to [B, T, E]
+        attn_output = attn_output.transpose(1, 2).contiguous().view(B, T, E)
+
+        # Output projection
+        attn_output = self.c_proj(attn_output)
+        attn_output = self.resid_dropout(attn_output)
+
+        # Match original GPT-2 interface: just return tensor if no cache/attentions
+        if not use_cache and not output_attentions:
+            return attn_output
+
+        outputs = (attn_output, present)
+        if output_attentions:
+            outputs += (None,)  # RWR doesn't return attention weights
+
+        return outputs
+
+
+def patch_gpt2_with_rwr(
+    model,
+    rwr_alpha: float = 0.2,
+    rwr_steps: int = 4,
+    rwr_topk: int = 32,
+    rwr_threshold: float = 0.0,
+    reversible: bool = False,
+    reciprocal_beta: float = 0.5,
+    lens_strength: float = 0.3,
+    window: int = 128,
+    block_size: int = 128,
+    head_dim_pad: int = 64,
+    use_discoverability: bool = False,
+):
+    """
+    Patch GPT-2 model with RWR attention.
+
+    Args:
+        model: HuggingFace GPT-2 model
+        rwr_alpha: Restart probability (default: 0.2)
+        rwr_steps: Walk iterations T (default: 4)
+        rwr_topk: Top-k neighbors per query (default: 32)
+        rwr_threshold: Minimum similarity threshold (default: 0.0)
+        reversible: Enable reversible chain P_rev (default: False)
+        reciprocal_beta: Forward/backward mixing (default: 0.5)
+        lens_strength: RWR blending γ (default: 0.3)
+        window: Local attention window (default: 128)
+        block_size: SRAM tile size (default: 128)
+        head_dim_pad: Head dimension padding (default: 64)
+        use_discoverability: Enable column bias (default: False)
+
+    Returns:
+        model: Patched model with RWR attention
+    """
+    n_embd = model.config.n_embd
+    n_head = model.config.n_head
+    head_dim = n_embd // n_head
+
+    print("Patching GPT-2 with RWR attention:")
+    print(f"  - Alpha (restart): {rwr_alpha}")
+    print(f"  - Steps (T): {rwr_steps}")
+    print(f"  - Top-k: {rwr_topk}")
+    print(f"  - Window: {window}")
+    print(f"  - Reversible: {reversible}")
+    print(f"  - Reciprocal beta: {reciprocal_beta}")
+    print(f"  - Lens strength (γ): {lens_strength}")
+
+    # Patch each transformer block
+    for i, block in enumerate(model.transformer.h):
+        original_attn = block.attn
+
+        # Create RWR attention
+        rwr_attn = RWRKernelAttention(
+            dim_head=head_dim,
+            num_heads=n_head,
+            rwr_alpha=rwr_alpha,
+            rwr_steps=rwr_steps,
+            rwr_topk=rwr_topk,
+            rwr_threshold=rwr_threshold,
+            reversible=reversible,
+            reciprocal_beta=reciprocal_beta,
+            lens_strength=lens_strength,
+            window=window,
+            block_size=block_size,
+            head_dim_pad=head_dim_pad,
+            use_discoverability=use_discoverability,
+        )
+
+        # Wrap with GPT-2 interface
+        rwr_wrapper = RWRAttentionWrapper(n_embd, n_head, rwr_attn, original_attn)
+
+        # Replace attention
+        block.attn = rwr_wrapper
+
+    # Mark config
+    model.config.rwr_enabled = True
+    model.config.rwr_alpha = rwr_alpha
+    model.config.rwr_steps = rwr_steps
+
+    print(f"✓ Patched {len(model.transformer.h)} blocks with RWR attention")
+    return model

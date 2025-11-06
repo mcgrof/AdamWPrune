@@ -1375,6 +1375,38 @@ def main():
         )
         ra_cfg = lens_cfg  # Alias for compatibility
 
+    elif getattr(args, "use_rwr", False):
+        # === RWR (Random Walk with Restart) Attention ===
+        from rwr_attention import patch_gpt2_with_rwr
+
+        print("=" * 70)
+        print("Applying RWR Attention:")
+        print(f"  Restart probability (α):  {args.rwr_alpha}")
+        print(f"  Walk steps (T):           {args.rwr_steps}")
+        print(f"  Top-k neighbors:          {args.rwr_topk}")
+        print(f"  Local window:             {args.rwr_window}")
+        print(f"  Reversible chain:         {args.rwr_reversible}")
+        print(f"  Reciprocal beta:          {args.rwr_reciprocal_beta}")
+        print(f"  Lens strength (γ):        {args.rwr_lens_strength}")
+        print(f"  Discoverability:          {args.rwr_use_discoverability}")
+        print("=" * 70)
+
+        model = patch_gpt2_with_rwr(
+            model,
+            rwr_alpha=args.rwr_alpha,
+            rwr_steps=args.rwr_steps,
+            rwr_topk=args.rwr_topk,
+            rwr_threshold=args.rwr_threshold,
+            reversible=args.rwr_reversible,
+            reciprocal_beta=args.rwr_reciprocal_beta,
+            lens_strength=args.rwr_lens_strength,
+            window=args.rwr_window,
+            block_size=args.rwr_block_size,
+            head_dim_pad=args.rwr_head_dim_pad,
+            use_discoverability=args.rwr_use_discoverability,
+        )
+        ra_cfg = None  # RWR doesn't use RA config
+
     elif (
         args.enable_mla
         or args.ra_alpha > 0.0
