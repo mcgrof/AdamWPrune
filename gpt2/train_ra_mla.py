@@ -397,6 +397,35 @@ parser.add_argument(
     "--spam-enable-clip", action="store_true", help="Enable SPAM clipping"
 )
 
+# SinkGD configuration (for SinkGD optimizer)
+parser.add_argument(
+    "--sinkgd-lr",
+    type=float,
+    default=None,
+    help="SinkGD learning rate (defaults to --learning-rate)",
+)
+parser.add_argument(
+    "--sinkgd-weight-decay",
+    type=float,
+    default=None,
+    help="SinkGD weight decay (defaults to --weight-decay)",
+)
+parser.add_argument(
+    "--sinkgd-tau",
+    type=float,
+    default=0.1,
+    help="SinkGD temperature for Sinkhorn smoothing",
+)
+parser.add_argument(
+    "--sinkgd-iters",
+    type=int,
+    default=5,
+    help="SinkGD number of normalization iterations",
+)
+parser.add_argument(
+    "--sinkgd-eps", type=float, default=1e-8, help="SinkGD numerical stability epsilon"
+)
+
 # Test matrix compatibility arguments (accepted but ignored for RA+MLA)
 parser.add_argument(
     "--decay-lr",
@@ -744,8 +773,60 @@ if args.ra_mla_ablation_step is not None:
         args.lens_kv_latent_dim = 128
         args.lens_ctx_conductor = True
         # mlp_ctx_conductor=True (context only when route_gate < 0.5)
+    elif step == "S0":
+        # S0: Lens L6 baseline with AdamWSPAM (control for SinkGD experiments)
+        # Same architecture as L6, but using AdamWSPAM optimizer for comparison
+        args.use_lens = True
+        args.ra_alpha = 0.3
+        args.mlp_expansion_ratio = 4.0
+        args.lens_ctx_rank = 128
+        args.lens_kv_compression = True
+        args.lens_kv_latent_dim = 128
+        args.optimizer = "adamwspam"
+        # Control: L6 architecture with AdamWSPAM for SinkGD comparison
+    elif step == "S1":
+        # S1: Lens L6 + SinkGD default (tau=0.1, n_iter=5)
+        # Test SinkGD with balanced entropic smoothing
+        args.use_lens = True
+        args.ra_alpha = 0.3
+        args.mlp_expansion_ratio = 4.0
+        args.lens_ctx_rank = 128
+        args.lens_kv_compression = True
+        args.lens_kv_latent_dim = 128
+        args.optimizer = "sinkgd"
+        args.sinkgd_tau = 0.1
+        args.sinkgd_iters = 5
+        # SinkGD: balanced temperature and iterations
+    elif step == "S2":
+        # S2: Lens L6 + SinkGD sharper (tau=0.05, n_iter=10)
+        # Test sharper Sinkhorn smoothing with more iterations
+        args.use_lens = True
+        args.ra_alpha = 0.3
+        args.mlp_expansion_ratio = 4.0
+        args.lens_ctx_rank = 128
+        args.lens_kv_compression = True
+        args.lens_kv_latent_dim = 128
+        args.optimizer = "sinkgd"
+        args.sinkgd_tau = 0.05
+        args.sinkgd_iters = 10
+        # SinkGD: sharper (lower tau), more iterations
+    elif step == "S3":
+        # S3: Lens L6 + SinkGD softer (tau=0.2, n_iter=3)
+        # Test softer Sinkhorn smoothing with fewer iterations
+        args.use_lens = True
+        args.ra_alpha = 0.3
+        args.mlp_expansion_ratio = 4.0
+        args.lens_ctx_rank = 128
+        args.lens_kv_compression = True
+        args.lens_kv_latent_dim = 128
+        args.optimizer = "sinkgd"
+        args.sinkgd_tau = 0.2
+        args.sinkgd_iters = 3
+        # SinkGD: softer (higher tau), fewer iterations
     else:
-        raise ValueError(f"Invalid ablation step: {step}. Must be 0-18 or L0-L7.")
+        raise ValueError(
+            f"Invalid ablation step: {step}. Must be 0-18, L0-L7, or S0-S3."
+        )
 
 # Override RA+MLA config from config.py if available (for test matrix integration)
 # IMPORTANT: Skip config overrides when running ablation study - ablation step has full control
