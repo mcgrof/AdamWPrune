@@ -2094,6 +2094,7 @@ def main():
                     # Detailed RATIO ablation step descriptions (19 steps)
                     # Lens-gated architecture step descriptions (8 steps: L0-L7)
                     # SinkGD optimizer ablation step descriptions (4 steps: S0-S3)
+                    # RWR attention ablation step descriptions (4 steps: R0-R3)
                     step_descriptions = {
                         "0": "Baseline GPT-2 (ratio 1:2.0, standard attention)",
                         "1": "Baseline + SPAM pruning 50%",
@@ -2126,6 +2127,10 @@ def main():
                         "S1": "SinkGD default: Lens L6 + tau=0.1, n_iter=5 (balanced)",
                         "S2": "SinkGD sharper: Lens L6 + tau=0.05, n_iter=10 (precise)",
                         "S3": "SinkGD softer: Lens L6 + tau=0.2, n_iter=3 (smooth)",
+                        "R0": "RWR baseline: Standard GPT-2 attention (control)",
+                        "R1": "RWR default: LOCAL+RWR (α=0.2, T=4, topk=32)",
+                        "R2": "RWR reversible: R1 + detailed balance (P_rev)",
+                        "R3": "RWR full: R2 + reciprocal + discoverability",
                     }
                     step_desc = step_descriptions.get(
                         ablation_step, f"Step {ablation_step}"
