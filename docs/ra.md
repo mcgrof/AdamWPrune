@@ -359,6 +359,142 @@ These methods use Sinkhorn iterations to enforce strict doubly-stochastic constr
 
 The transpose `S^T` captures the essence of bidirectional flow needed for reversible Markov chains, while maintaining the efficiency of standard attention mechanisms.
 
+## Progressive Evaluation Strategy
+
+### Current Ablation Results (In Progress)
+
+Initial experiments with GPT-2 124M on FineWebEdu dataset (10,400 iterations):
+
+| Step | Configuration | Val Loss | Improvement | Status |
+|------|--------------|----------|-------------|--------|
+| L0 | Baseline (lens, no RA/Disc) | 3.5852 | baseline | ✅ Complete |
+| L1 | Reciprocity only (α=0.3) | 3.5756 | -0.0096 (-0.27%) | ✅ Complete |
+| L2 | Discoverability only | 3.6220* | +0.0368 | ⚠️ Training (iter 8000/10400) |
+| L3-L7 | Full configurations | - | - | ⏳ Pending |
+
+*L2 intermediate result; final validation loss pending completion.
+
+**Key Observation**: Reciprocity (L1) shows modest improvement over baseline, while discoverability alone (L2) appears to degrade performance when applied uniformly across all heads. This suggests that blanket application of RA/Disc mechanisms may be suboptimal.
+
+### Hypothesis: Geometry-Driven Selective Application
+
+Not all attention heads exhibit the same geometric properties. Different heads may benefit from different mechanisms based on their inherent structure:
+
+**Attention Geometry Metrics** (computed on score matrix S = QK^T before softmax):
+
+1. **Symmetry**: `1 - ||S - S^T||_F / ||S||_F`
+   - Measures how bidirectional the attention graph is
+   - High symmetry (>0.4) suggests RA will be effective
+
+2. **Hub Gini Coefficient**: Gini of column mass `c = Σ_i S_ij`
+   - Measures token broadcast inequality
+   - High hubness (>0.3) suggests discoverability will help
+
+3. **Spectral Gap**: `(λ₁ - λ₂)/λ₁` of symmetrized S
+   - Measures structural clarity in attention pattern
+   - Large gap (>0.15) indicates well-defined attention structure
+
+4. **Row Entropy**: Mean entropy of softmax(S) rows
+   - Measures query focus vs diffuseness
+   - Low entropy = peaky queries, high = diffuse
+
+**Per-Head Policy** (selective mechanism application):
+```python
+use_RA = (symmetry >= 0.4) AND (spectral_gap >= 0.15)
+use_Discoverability = (hub_gini >= 0.30)
+```
+
+Apply mechanisms only where geometry suggests benefit, rather than uniformly across all heads.
+
+### Proposed Phased Ablation Strategy
+
+#### Phase A: Diagnostic (Understand Geometry)
+Measure attention properties without modifying behavior:
+
+- **A0**: Baseline + log per-head metrics (symmetry, hub_gini, spectral_gap, row_entropy)
+- **A1**: Measure metrics at checkpoints (iters 1k, 3k, 5k, 10k)
+- **A2**: Analyze which heads/layers show high symmetry/hubness
+
+**Goal**: Build empirical understanding of where RA/Disc should help.
+
+#### Phase B: Selective Application
+Apply mechanisms only where geometry indicates benefit:
+
+- **B0**: Baseline (no RA/Disc)
+- **B1**: RA only on heads with `symmetry ≥ 0.4 AND spectral_gap ≥ 0.15`
+- **B2**: Disc only on heads with `hub_gini ≥ 0.30`
+- **B3**: Combined selective RA + Disc
+- **B4**: B3 restricted to top-half layers (6-11 for GPT-2 124M)
+- **B5**: B4 with per-head gate initialization from metrics
+
+**Goal**: Test if selective > blanket application.
+
+#### Phase C: Warmup/Annealing
+Test different training dynamics:
+
+- **C0**: Baseline (immediate application)
+- **C1**: Cosine anneal w_rec: 0→0.5 over first 1500 steps (~15%)
+- **C2**: Cosine anneal w_disc: 0→0.3 over first 1500 steps
+- **C3**: Combined annealing (both w_rec and w_disc)
+- **C4**: Slower ramp (over 2000 steps, ~20%)
+- **C5**: C3 + per-head gate init from metrics
+
+**Goal**: Find optimal warmup schedule to prevent early collapse.
+
+#### Phase D: Discoverability Forms
+Test different implementations:
+
+- **D0**: Additive: `logits = S + d`
+- **D1**: Multiplicative: `logits = S * (1 + d)`
+- **D2**: Hybrid: `logits = S + α·S·d`
+- **D3**: Temperature-scaled: `logits = S + d/τ`
+
+**Goal**: Find best discoverability formulation.
+
+#### Phase E: Integration
+Combine winners from phases B-D:
+
+- **E0**: Best selective policy + best warmup + best disc form
+- **E1**: E0 + independent gates (no sum-to-1 constraint)
+- **E2**: E1 + layer-specific hyperparameters
+- **E3**: E2 + numerical stabilization (stabilize_mix)
+
+**Goal**: Best overall RA configuration.
+
+### Enhanced Logging Requirements
+
+To support geometry-driven evaluation, we need comprehensive per-head tracking:
+
+**Per-Head Gate Weights** (log to W&B/tracker):
+- `w_std[layer][head]`: Standard attention weight
+- `w_rec[layer][head]`: Reciprocity weight
+- `w_disc[layer][head]`: Discoverability weight
+- Mean values across heads per layer
+
+**Per-Head Attention Values** (visualize distributions):
+- Standard attention contribution: `w_std · S`
+- Reciprocal contribution: `w_rec · S^T`
+- Discoverability contribution: `w_disc · d`
+- Final mixed logits after lens gating
+
+**Geometry Metrics** (computed periodically on S = QK^T):
+- Symmetry score per head
+- Hub Gini coefficient per head
+- Spectral gap per head
+- Row entropy per head
+
+This enables visualization of which heads prefer which mechanisms and how this evolves during training.
+
+### Next Steps
+
+1. **Complete L2-L7** baseline ablation to understand full lens architecture behavior
+2. **Implement metric logging** infrastructure for attention geometry
+3. **Run Phase A** diagnostic to identify heads with high symmetry/hubness
+4. **Design Phase B** selective application based on measured geometry
+5. **Iterate through C-E** with refined configurations
+
+The hypothesis is that selective, geometry-driven application will outperform uniform blanket application by allowing each head to use the mechanism that best matches its natural structure.
+
 ## References
 
 - **Sinkformer**: Michael E. Sander, Pierre Ablin, Mathieu Blondel, Gabriel Peyré. "Sinkhorn Attention." arXiv:2110.11773, 2021. [PDF](https://arxiv.org/pdf/2110.11773)
