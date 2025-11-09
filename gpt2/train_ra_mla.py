@@ -106,6 +106,7 @@ from ra_lens_gpt2 import (
     patch_gpt2_with_lens_attention,
     apply_route_annealing,
     get_mean_route_gate,
+    analyze_lens_gates,
 )
 
 # Import training utilities from base train.py
@@ -1737,9 +1738,23 @@ def main():
                 model, args.eval_samples, args.batch_size, args.block_size, device
             )
             if master_process:
-                print(
-                    f"Iter {iter_num:6d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | lr {lr:.2e}"
-                )
+                # Build validation output string
+                val_str = f"Iter {iter_num:6d} | train loss {losses['train']:.4f} | val loss {losses['val']:.4f} | lr {lr:.2e}"
+
+                # Add route gate if lens-gated
+                if use_lens and use_route_gate:
+                    mean_g = get_mean_route_gate(model.module if ddp else model)
+                    val_str += f" | route_gate {mean_g:.3f}"
+
+                # Add lens gates if using lens architecture
+                if use_lens:
+                    lens_stats = analyze_lens_gates(model.module if ddp else model)
+                    if lens_stats:
+                        val_str += f" | w_std {lens_stats['w_std_mean']:.3f}"
+                        val_str += f" | w_rec {lens_stats['w_rec_mean']:.3f}"
+                        val_str += f" | w_disc {lens_stats['w_disc_mean']:.3f}"
+
+                print(val_str)
 
             # Log evaluation metrics to trackers (only master process)
             if tracker_names and master_process:
@@ -1749,6 +1764,16 @@ def main():
                     "val_loss": losses["val"],
                     "learning_rate": lr,
                 }
+
+                # Add gate metrics to evaluation logging
+                if use_lens and use_route_gate:
+                    mean_g = get_mean_route_gate(model.module if ddp else model)
+                    eval_metrics["route_gate_mean"] = mean_g
+
+                if use_lens:
+                    lens_stats = analyze_lens_gates(model.module if ddp else model)
+                    if lens_stats:
+                        eval_metrics.update(lens_stats)
 
                 if "trackio" in tracker_names:
                     import trackio
@@ -1842,8 +1867,6 @@ def main():
 
             # Add route gate if lens-gated architecture (always track this!)
             if use_lens and use_route_gate:
-                from ra_lens_gpt2 import analyze_route_gates
-
                 mean_g = get_mean_route_gate(model.module if ddp else model)
                 ra_metrics["route_gate_mean"] = mean_g
 
@@ -1853,6 +1876,13 @@ def main():
                     ra_metrics["route_gate_min"] = gate_stats["min_route_gate"]
                     ra_metrics["route_gate_max"] = gate_stats["max_route_gate"]
                     ra_metrics["route_gate_std"] = gate_stats["std_route_gate"]
+
+            # Add lens gates (w_std, w_rec, w_disc) if using lens architecture
+            if use_lens:
+                lens_stats = analyze_lens_gates(model.module if ddp else model)
+                if lens_stats:
+                    # Log all lens gate statistics to tracker
+                    ra_metrics.update(lens_stats)
 
             if "trackio" in tracker_names:
                 import trackio
@@ -1866,16 +1896,23 @@ def main():
 
         # Print progress (only master process)
         if master_process and iter_num % args.log_interval == 0:
-            # Log route gate if lens-gated
+            # Build progress string
+            progress_str = f"Iter {iter_num:6d} | loss {total_loss:.4f} | time {dt:.1f}ms | lr {lr:.2e}"
+
+            # Add route gate if lens-gated
             if use_lens and use_route_gate:
                 mean_g = get_mean_route_gate(model.module if ddp else model)
-                print(
-                    f"Iter {iter_num:6d} | loss {total_loss:.4f} | time {dt:.1f}ms | lr {lr:.2e} | route_gate {mean_g:.3f}"
-                )
-            else:
-                print(
-                    f"Iter {iter_num:6d} | loss {total_loss:.4f} | time {dt:.1f}ms | lr {lr:.2e}"
-                )
+                progress_str += f" | route_gate {mean_g:.3f}"
+
+            # Add lens gates if using lens architecture
+            if use_lens:
+                lens_stats = analyze_lens_gates(model.module if ddp else model)
+                if lens_stats:
+                    progress_str += f" | w_std {lens_stats['w_std_mean']:.3f}"
+                    progress_str += f" | w_rec {lens_stats['w_rec_mean']:.3f}"
+                    progress_str += f" | w_disc {lens_stats['w_disc_mean']:.3f}"
+
+            print(progress_str)
 
         iter_num += 1
 

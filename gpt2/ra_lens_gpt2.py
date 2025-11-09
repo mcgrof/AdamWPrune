@@ -697,6 +697,59 @@ def analyze_route_gates(model) -> Dict[str, float]:
     }
 
 
+def analyze_lens_gates(model) -> Dict[str, float]:
+    """
+    Analyze lens gate values (w_std, w_rec, w_disc) across all layers.
+
+    Lens gates control per-head blending of attention mechanisms:
+    - w_std: Standard attention (Q @ K^T)
+    - w_rec: Reciprocity (S^T)
+    - w_disc: Discoverability (column bias d)
+
+    Returns:
+        dict with lens gate statistics (mean across all heads and layers)
+    """
+    w_std_list = []
+    w_rec_list = []
+    w_disc_list = []
+
+    for name, module in model.named_modules():
+        # Check for both LensGatedAttention and wrapped versions
+        if isinstance(module, LensGatedAttention):
+            # gates: [H, 3] - per-head softmax gates
+            with torch.no_grad():
+                w = F.softmax(module.gates, dim=-1)  # [H, 3]
+                w_std_list.extend(w[:, 0].cpu().tolist())  # Standard
+                w_rec_list.extend(w[:, 1].cpu().tolist())  # Reciprocity
+                w_disc_list.extend(w[:, 2].cpu().tolist())  # Discoverability
+
+    if not w_std_list:
+        return {}
+
+    # Compute statistics
+    w_std_tensor = torch.tensor(w_std_list)
+    w_rec_tensor = torch.tensor(w_rec_list)
+    w_disc_tensor = torch.tensor(w_disc_list)
+
+    return {
+        # Standard attention weights
+        "w_std_mean": w_std_tensor.mean().item(),
+        "w_std_std": w_std_tensor.std().item(),
+        "w_std_min": w_std_tensor.min().item(),
+        "w_std_max": w_std_tensor.max().item(),
+        # Reciprocity weights
+        "w_rec_mean": w_rec_tensor.mean().item(),
+        "w_rec_std": w_rec_tensor.std().item(),
+        "w_rec_min": w_rec_tensor.min().item(),
+        "w_rec_max": w_rec_tensor.max().item(),
+        # Discoverability weights
+        "w_disc_mean": w_disc_tensor.mean().item(),
+        "w_disc_std": w_disc_tensor.std().item(),
+        "w_disc_min": w_disc_tensor.min().item(),
+        "w_disc_max": w_disc_tensor.max().item(),
+    }
+
+
 def estimate_kv_cache_savings(
     route_gate: float, baseline_ratio: float = 4.0
 ) -> Dict[str, float]:
