@@ -237,6 +237,9 @@ class LensGatedAttention(nn.Module):
         self.flash_available = cfg.use_flash and hasattr(
             torch.nn.functional, "scaled_dot_product_attention"
         )
+        if self.flash_available:
+            print(f"⚠️  WARNING: Flash attention available but NOT IMPLEMENTED in lens-gated attention!")
+            print(f"    All configurations (including baseline L0) use open-coded attention.")
 
         # Cached masks
         self._cached_masks = {}
