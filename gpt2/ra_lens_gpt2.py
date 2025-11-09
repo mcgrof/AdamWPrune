@@ -557,16 +557,30 @@ def apply_route_annealing(model, step: int, cfg: LensConfig) -> None:
     """
     bias = compute_route_bias_for_step(step, cfg)
     for module in model.modules():
+        # Check for both LensBlock and LensBlockWrapper
         if isinstance(module, LensBlock):
             module.route_bias_add.fill_(bias)
+        elif isinstance(module, LensBlockWrapper):
+            # LensBlockWrapper stores route_bias_add in the MLP
+            if hasattr(module.mlp, "route_bias_add"):
+                module.mlp.route_bias_add.fill_(bias)
 
 
 def get_mean_route_gate(model) -> float:
     """Get mean route gate value across all blocks."""
     gates = []
     for module in model.modules():
+        # Check for both LensBlock and LensBlockWrapper
         if isinstance(module, LensBlock) and not module.cfg.mlp_disabled:
             gates.append(module.route_gate.item())
+        elif isinstance(module, LensBlockWrapper):
+            # LensBlockWrapper stores route_gate in the MLP
+            if (
+                hasattr(module.mlp, "get_route_gate")
+                and not module.lens_config.mlp_disabled
+            ):
+                g = module.mlp.get_route_gate()
+                gates.append(g.item() if isinstance(g, torch.Tensor) else g)
     return sum(gates) / len(gates) if gates else 0.0
 
 
@@ -657,9 +671,18 @@ def analyze_route_gates(model) -> Dict[str, float]:
     """
     route_gates = []
     for name, module in model.named_modules():
+        # Check for both LensBlock and LensBlockWrapper
         if isinstance(module, LensBlock):
             g = module.route_gate.item()
             route_gates.append(g)
+        elif isinstance(module, LensBlockWrapper):
+            # LensBlockWrapper stores route_gate in the MLP
+            if (
+                hasattr(module.mlp, "get_route_gate")
+                and not module.lens_config.mlp_disabled
+            ):
+                g = module.mlp.get_route_gate()
+                route_gates.append(g.item() if isinstance(g, torch.Tensor) else g)
 
     if not route_gates:
         return {}
@@ -954,11 +977,11 @@ def patch_gpt2_with_lens_attention(
                 lens_attn.k_down.weight.copy_(
                     (Sk[:R].sqrt().unsqueeze(1) * Vk[:, :R].T)
                 )  # [R, E]
-                lens_attn.k_up.weight.copy_(
-                    (Uk[:, :R] * Sk[:R].sqrt())
-                )  # [E, R]
+                lens_attn.k_up.weight.copy_((Uk[:, :R] * Sk[:R].sqrt()))  # [E, R]
 
-                lens_attn.v_down.weight.copy_((Sv[:R].sqrt().unsqueeze(1) * Vv[:, :R].T))
+                lens_attn.v_down.weight.copy_(
+                    (Sv[:R].sqrt().unsqueeze(1) * Vv[:, :R].T)
+                )
                 lens_attn.v_up.weight.copy_((Uv[:, :R] * Sv[:R].sqrt()))
             else:
                 # Standard full-rank K/V
