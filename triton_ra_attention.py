@@ -64,6 +64,10 @@ def _fwd_kernel_ra_attention(
     mask_t = offs_t < T
     q = tl.load(q_ptrs, mask=mask_t[:, None], other=0.0)
 
+    # Load keys at query positions for reciprocity [BLOCK_T, D]
+    k_at_q_ptrs = K + pid_b * stride_kb + pid_h * stride_kh + offs_t[:, None] * stride_kt + offs_d[None, :] * stride_kd
+    k_at_q = tl.load(k_at_q_ptrs, mask=mask_t[:, None], other=0.0)
+
     # Accumulator for attention output and online softmax stats
     acc = tl.zeros([BLOCK_T, BLOCK_D], dtype=tl.float32)
     m_prev = tl.full([BLOCK_T], float('-inf'), dtype=tl.float32)  # Running max
@@ -78,11 +82,18 @@ def _fwd_kernel_ra_attention(
         k_ptrs = K + pid_b * stride_kb + pid_h * stride_kh + k_offs[:, None] * stride_kt + offs_d[None, :] * stride_kd
         k = tl.load(k_ptrs, mask=mask_k[:, None], other=0.0)
 
+        # Load queries at key positions for reciprocity [BLOCK_T, D]
+        q_at_k_ptrs = Q + pid_b * stride_qb + pid_h * stride_qh + k_offs[:, None] * stride_qt + offs_d[None, :] * stride_qd
+        q_at_k = tl.load(q_at_k_ptrs, mask=mask_k[:, None], other=0.0)
+
         # Compute attention scores S = Q @ K^T [BLOCK_T_Q, BLOCK_T_K]
         s = tl.dot(q, tl.trans(k)) * scale  # [BLOCK_T, BLOCK_T]
 
-        # Compute reciprocity component: S^T
-        s_transpose = tl.trans(s)
+        # Compute reciprocity component: S^T[i,j] = S[j,i] = Q[j] @ K[i]^T
+        # q_at_k has Q at key positions [BLOCK_T_K, D]
+        # k_at_q has K at query positions [BLOCK_T_Q, D]
+        s_reciprocal = tl.dot(q_at_k, tl.trans(k_at_q)) * scale  # [BLOCK_T_K, BLOCK_T_Q]
+        s_transpose = tl.trans(s_reciprocal)  # [BLOCK_T_Q, BLOCK_T_K] to match s dimensions
 
         # Load discoverability bias
         d_ptrs = D_bias + pid_b * stride_db + pid_h * stride_dh + k_offs[:] * stride_dt
