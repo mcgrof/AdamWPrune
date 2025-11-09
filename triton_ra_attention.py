@@ -77,30 +77,35 @@ def _fwd_kernel_ra_attention(
         k = tl.load(k_ptrs, mask=mask_k[:, None], other=0.0)
 
         # Compute attention scores S = Q @ K^T [BLOCK_T_Q, BLOCK_T_K]
-        s = tl.dot(q, tl.trans(k)) * scale
+        s = tl.dot(q, tl.trans(k)) * scale  # [BLOCK_T, BLOCK_T]
+
+        # Apply per-head gate for standard attention
+        s_gated = w_std * s
 
         # Add reciprocity: w_rec * S^T
-        # S^T[i,j] = S[j,i], so we transpose indices
-        # For efficiency, compute S^T as separate dot product
-        s_transpose = tl.dot(k, tl.trans(q)) * scale  # [BLOCK_T_K, BLOCK_T_Q]
-        s = w_std * s + w_rec * tl.trans(s_transpose)
+        # S^T[i,j] = S[j,i] = (K[j] @ Q[i]^T)
+        # To get S^T without explicit transpose, compute K @ Q^T then transpose result
+        # But simpler: just transpose s directly
+        if w_rec != 0.0:
+            s_transpose = tl.trans(s)  # Transpose the score matrix
+            s_gated = s_gated + w_rec * s_transpose
 
         # Add discoverability column bias
         if w_disc != 0.0:
             d_ptrs = D_bias + pid_b * stride_db + pid_h * stride_dh + k_offs[:] * stride_dt
             d_bias = tl.load(d_ptrs, mask=mask_k, other=0.0)
             # Broadcast column bias: add same value to entire column
-            s = s + w_disc * d_bias[None, :]
+            s_gated = s_gated + w_disc * d_bias[None, :]
 
         # Apply causal mask: only attend to previous positions
         # Mask out positions where k_offs > offs_t
         causal_mask = k_offs[None, :] <= offs_t[:, None]
-        s = tl.where(causal_mask, s, float('-inf'))
+        s_gated = tl.where(causal_mask, s_gated, float('-inf'))
 
         # Softmax (numerically stable)
         # First, compute row-wise max for numerical stability
-        m = tl.max(s, axis=1)
-        s_exp = tl.exp(s - m[:, None])
+        m = tl.max(s_gated, axis=1)
+        s_exp = tl.exp(s_gated - m[:, None])
 
         # Compute row sums for normalization
         row_sum = tl.sum(s_exp, axis=1)
