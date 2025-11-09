@@ -79,33 +79,26 @@ def _fwd_kernel_ra_attention(
         # Compute attention scores S = Q @ K^T [BLOCK_T_Q, BLOCK_T_K]
         s = tl.dot(q, tl.trans(k)) * scale  # [BLOCK_T, BLOCK_T]
 
-        # Apply per-head gate for standard attention
-        s_gated = w_std * s
+        # Compute reciprocity component: S^T
+        s_transpose = tl.trans(s)
 
-        # Add reciprocity: w_rec * S^T
-        # S^T[i,j] = S[j,i] = (K[j] @ Q[i]^T)
-        # To get S^T without explicit transpose, compute K @ Q^T then transpose result
-        # But simpler: just transpose s directly
-        if w_rec != 0.0:
-            s_transpose = tl.trans(s)  # Transpose the score matrix
-            s_gated = s_gated + w_rec * s_transpose
+        # Load discoverability bias
+        d_ptrs = D_bias + pid_b * stride_db + pid_h * stride_dh + k_offs[:] * stride_dt
+        d_bias = tl.load(d_ptrs, mask=mask_k, other=0.0)
 
-        # Add discoverability column bias
-        if w_disc != 0.0:
-            d_ptrs = D_bias + pid_b * stride_db + pid_h * stride_dh + k_offs[:] * stride_dt
-            d_bias = tl.load(d_ptrs, mask=mask_k, other=0.0)
-            # Broadcast column bias: add same value to entire column
-            s_gated = s_gated + w_disc * d_bias[None, :]
+        # Combine all components with per-head gates
+        # logits = w_std * S + w_rec * S^T + w_disc * d
+        logits = w_std * s + w_rec * s_transpose + w_disc * d_bias[None, :]
 
         # Apply causal mask: only attend to previous positions
         # Mask out positions where k_offs > offs_t
         causal_mask = k_offs[None, :] <= offs_t[:, None]
-        s_gated = tl.where(causal_mask, s_gated, float('-inf'))
+        logits = tl.where(causal_mask, logits, float('-inf'))
 
         # Softmax (numerically stable)
         # First, compute row-wise max for numerical stability
-        m = tl.max(s_gated, axis=1)
-        s_exp = tl.exp(s_gated - m[:, None])
+        m = tl.max(logits, axis=1)
+        s_exp = tl.exp(logits - m[:, None])
 
         # Compute row sums for normalization
         row_sum = tl.sum(s_exp, axis=1)
