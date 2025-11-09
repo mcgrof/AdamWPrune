@@ -64,8 +64,10 @@ def _fwd_kernel_ra_attention(
     mask_t = offs_t < T
     q = tl.load(q_ptrs, mask=mask_t[:, None], other=0.0)
 
-    # Accumulator for attention output
+    # Accumulator for attention output and online softmax stats
     acc = tl.zeros([BLOCK_T, BLOCK_D], dtype=tl.float32)
+    m_prev = tl.full([BLOCK_T], float('-inf'), dtype=tl.float32)  # Running max
+    d_prev = tl.zeros([BLOCK_T], dtype=tl.float32)  # Running sum of exp
 
     # Loop over all key/value positions
     for k_start in range(0, T, BLOCK_T):
@@ -95,23 +97,39 @@ def _fwd_kernel_ra_attention(
         causal_mask = k_offs[None, :] <= offs_t[:, None]
         logits = tl.where(causal_mask, logits, float('-inf'))
 
-        # Softmax (numerically stable)
-        # First, compute row-wise max for numerical stability
-        m = tl.max(logits, axis=1)
-        s_exp = tl.exp(logits - m[:, None])
+        # Online softmax (Flash Attention algorithm)
+        # Compute max for current block
+        m_curr = tl.max(logits, axis=1)
 
-        # Compute row sums for normalization
-        row_sum = tl.sum(s_exp, axis=1)
+        # Update global max
+        m_new = tl.maximum(m_prev, m_curr)
 
-        # Normalize
-        attn = s_exp / row_sum[:, None]
+        # Compute exp with updated max
+        s_exp = tl.exp(logits - m_new[:, None])
+
+        # Rescale previous accumulator for new max
+        scale_factor = tl.exp(m_prev - m_new)
+        acc = acc * scale_factor[:, None]
+
+        # Rescale previous sum
+        d_prev = d_prev * scale_factor
 
         # Load values [BLOCK_T_K, D]
         v_ptrs = V + pid_b * stride_vb + pid_h * stride_vh + k_offs[:, None] * stride_vt + offs_d[None, :] * stride_vd
         v = tl.load(v_ptrs, mask=mask_k[:, None], other=0.0)
 
-        # Accumulate: out = attn @ V
-        acc += tl.dot(attn.to(v.dtype), v)
+        # Accumulate attention @ V (unnormalized)
+        acc += tl.dot(s_exp.to(v.dtype), v)
+
+        # Update running sum
+        d_curr = tl.sum(s_exp, axis=1)
+        d_prev = d_prev + d_curr
+
+        # Update running max
+        m_prev = m_new
+
+    # Final normalization
+    acc = acc / d_prev[:, None]
 
     # Store output
     out_ptrs = Out + pid_b * stride_ob + pid_h * stride_oh + offs_t[:, None] * stride_ot + offs_d[None, :] * stride_od
