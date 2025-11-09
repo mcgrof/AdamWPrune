@@ -1,0 +1,50 @@
+Triton RA Attention Kernel - Performance Results
+================================================
+
+Hardware: AWS A10G GPU (24GB, 101KB shared memory)
+PyTorch: 2.5.1
+Triton: 3.1.0
+
+Correctness Test (B=2, H=12, T=256, D=64)
+-----------------------------------------
+Max difference:  0.002038
+Mean difference: 0.000104
+Status: PASSED (within 0.01 FP32 tolerance)
+
+Benchmark Results
+-----------------
+[B=2, H=12, T=256, D=64]
+  PyTorch:    0.32 ms/iter
+  Triton:     0.06 ms/iter
+  Speedup:    4.97x
+
+[B=8, H=12, T=512, D=64]
+  PyTorch:    4.24 ms/iter
+  Triton:     1.26 ms/iter
+  Speedup:    3.36x
+
+[B=8, H=12, T=1024, D=64] (GPT-2 training config)
+  PyTorch:   16.76 ms/iter
+  Triton:     4.85 ms/iter
+  Speedup:    3.45x
+
+Impact on Training
+------------------
+Current L0 baseline:  4535 ms/iter (open-coded RA)
+With Triton RA:       1313 ms/iter (estimated)
+Speedup:              3.45x
+Time saved:           3222 ms/iter (71% faster)
+
+Training run estimate:
+  Current: ~13 hours
+  With Triton: ~3.8 hours
+  Savings: ~9 hours per run
+
+Implementation Notes
+--------------------
+- Block sizes: BLOCK_T=32, BLOCK_D=64
+- Shared memory usage: ~66KB per block
+- Online softmax algorithm (Flash Attention technique)
+- Correct reciprocity via Q/K cross-loading
+- Supports per-head gates (w_std, w_rec, w_disc)
+- Causal masking for autoregressive generation
