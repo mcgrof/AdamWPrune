@@ -30,6 +30,7 @@ def _fwd_kernel_ra_attention(
     stride_db, stride_dh, stride_dt,  # D_bias strides
     stride_wb, stride_wh,  # Weight strides [B, H] for per-head gates
     B, H, T, D,
+    scale: tl.constexpr,  # Pre-computed 1/sqrt(D)
     BLOCK_T: tl.constexpr,
     BLOCK_D: tl.constexpr,
 ):
@@ -62,9 +63,6 @@ def _fwd_kernel_ra_attention(
     q_ptrs = Q + pid_b * stride_qb + pid_h * stride_qh + offs_t[:, None] * stride_qt + offs_d[None, :] * stride_qd
     mask_t = offs_t < T
     q = tl.load(q_ptrs, mask=mask_t[:, None], other=0.0)
-
-    # Scaling factor
-    scale = 1.0 / math.sqrt(D)
 
     # Accumulator for attention output
     acc = tl.zeros([BLOCK_T, BLOCK_D], dtype=tl.float32)
@@ -147,6 +145,9 @@ class TritonRAAttention(torch.autograd.Function):
         # Allocate output
         Out = torch.empty_like(Q)
 
+        # Pre-compute scaling factor
+        scale = 1.0 / math.sqrt(D)
+
         # Launch kernel
         BLOCK_T = 64
         BLOCK_D = 64
@@ -164,6 +165,7 @@ class TritonRAAttention(torch.autograd.Function):
             d_bias.stride(0), d_bias.stride(1), d_bias.stride(2),
             w_std.stride(0), w_std.stride(1),
             B, H, T, D,
+            scale,
             BLOCK_T=BLOCK_T,
             BLOCK_D=BLOCK_D,
         )
