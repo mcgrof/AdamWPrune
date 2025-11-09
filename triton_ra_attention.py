@@ -176,8 +176,9 @@ class TritonRAAttention(torch.autograd.Function):
         scale = 1.0 / math.sqrt(D)
 
         # Launch kernel
-        BLOCK_T = 64
-        BLOCK_D = 64
+        # Reduced block sizes to fit within A10G shared memory limit (101KB)
+        BLOCK_T = 32  # Was 64, reduced by 2x
+        BLOCK_D = 64  # Keep D at 64 for efficient tensor core usage
 
         grid = (B, H, triton.cdiv(T, BLOCK_T))
 
