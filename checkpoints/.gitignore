@@ -1,0 +1,7 @@
+# Ignore all checkpoint files
+*.pt
+*.pth
+*.ckpt
+
+# But track .gitignore
+!.gitignore
